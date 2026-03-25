@@ -156,6 +156,36 @@ export interface FieldMapping {
   [field: string]: { type: string; fields?: Record<string, { type: string }> };
 }
 
+export interface AttackDiscoveryFinding {
+  id: string;
+  timestamp: string;
+  title: string;
+  summaryMarkdown: string;
+  detailsMarkdown?: string;
+  mitreTactics: string[];
+  alertIds: string[];
+  alertCount: number;
+  alertsContextCount: number;
+  riskScore: number;
+  confidence?: "high" | "moderate" | "low";
+  hosts?: string[];
+  users?: string[];
+  ruleNames?: string[];
+  signals?: {
+    alertDiversity: { alertCount: number; ruleCount: number; severities: string[] };
+    ruleFrequency: { ruleName: string; totalAlerts7d: number; hostCount: number }[];
+    entityRisk: { name: string; type: string; riskLevel: string; riskScore: number }[];
+  };
+}
+
+export interface DiscoveryDetail {
+  titleWithReplacements: string;
+  summaryWithReplacements: string;
+  detailsWithReplacements: string;
+  alerts: { id: string; ruleName: string; severity: string; host: string; user: string; timestamp: string; details?: Record<string, string> }[];
+  entityRisk: { name: string; type: string; level: string; score: number }[];
+}
+
 export type Severity = "low" | "medium" | "high" | "critical";
 
 export const SEVERITY_COLORS: Record<Severity, string> = {

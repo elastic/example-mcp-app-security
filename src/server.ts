@@ -4,6 +4,7 @@ import { registerCaseManagementTools } from "./tools/case-management.js";
 import { registerDetectionRuleTools } from "./tools/detection-rules.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
+import { registerAttackDiscoveryTools } from "./tools/attack-discovery.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -16,6 +17,7 @@ export function createServer(): McpServer {
   registerDetectionRuleTools(server);
   registerThreatHuntTools(server);
   registerSampleDataTools(server);
+  registerAttackDiscoveryTools(server);
 
   return server;
 }
