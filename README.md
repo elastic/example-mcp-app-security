@@ -354,8 +354,6 @@ All Kibana API calls include `elastic-api-version: 2023-10-31` headers and use c
 
 - [Elastic Agent Skills](https://github.com/elastic/agent-skills/tree/main/skills/security) — SOC triage methodology, case management workflows, detection rule tuning patterns
 - [MCP Apps Specification](https://modelcontextprotocol.io/extensions/apps/overview) — Interactive UI extensions for the Model Context Protocol
-- [Microsoft Sentinel Investigation Graph](https://learn.microsoft.com/en-us/azure/sentinel/investigate-cases) — Entity-centric investigation UX
-
 ## License
 
 Apache-2.0
