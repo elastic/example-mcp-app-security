@@ -43,6 +43,7 @@ function normalizeCase(raw: unknown): KibanaCase | null {
     return {
       id: String(c.id),
       version: String(c.version ?? ""),
+      incremental_id: typeof c.incremental_id === "number" ? c.incremental_id : undefined,
       title: String(c.title ?? ""),
       description: String(c.description ?? ""),
       status,
@@ -70,6 +71,7 @@ export function App() {
   const [viewMode, setViewMode] = useState<ViewMode>("browse");
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const paramsRef = useRef<CaseListParams>({ status: "open" });
   const [statusFilter, setStatusFilter] = useState("open");
 
@@ -298,8 +300,39 @@ export function App() {
           >
             + New case
           </button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => loadCases()} title="Refresh">
+            &#x21bb;
+          </button>
+          <button className="btn btn-sm btn-ghost" style={{ flexShrink: 0 }} onClick={() => {
+            const next = !isFullscreen;
+            try { appRef.current?.requestDisplayMode({ mode: next ? "fullscreen" : "inline" }); } catch {}
+            setIsFullscreen(next);
+          }} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+            {isFullscreen ? "\u2715" : "\u26F6"}
+          </button>
         </div>
       </header>
+
+      {!hasDetail && viewMode === "browse" && cases.length > 0 && (
+        <div className="case-summary-bar">
+          <div className="case-stat">
+            <span className="case-stat-value">{total}</span>
+            <span className="case-stat-label">Total</span>
+          </div>
+          <div className="case-stat">
+            <span className="case-stat-value" style={{ color: "var(--accent)" }}>{cases.filter(c => c.status === "open").length}</span>
+            <span className="case-stat-label">Open</span>
+          </div>
+          <div className="case-stat">
+            <span className="case-stat-value" style={{ color: "var(--severity-medium)" }}>{cases.filter(c => c.status === "in-progress").length}</span>
+            <span className="case-stat-label">In Progress</span>
+          </div>
+          <div className="case-stat">
+            <span className="case-stat-value" style={{ color: "var(--severity-critical)" }}>{cases.filter(c => c.severity === "critical" || c.severity === "high").length}</span>
+            <span className="case-stat-label">High/Critical</span>
+          </div>
+        </div>
+      )}
 
       <div className="app-body">
         <div className={`list-pane ${hasDetail || viewMode === "create" ? "narrow" : ""}`}>
@@ -354,6 +387,7 @@ export function App() {
                 }
                 onAddComment={(comment) => addComment(selectedCase.id, comment)}
                 timeAgo={timeAgo}
+                app={appRef.current!}
               />
             </div>
           ) : (

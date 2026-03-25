@@ -56,9 +56,9 @@ async function investigateUser(userName: string, timeRange: string): Promise<Inv
   const tc = buildTimeClause(timeRange);
 
   const [processes, hosts, alerts] = await Promise.all([
-    safeQuery(`FROM logs-endpoint.events.process-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY process.name, host.name | SORT count DESC | LIMIT 5`),
-    safeQuery(`FROM logs-endpoint.events.process-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY host.name | SORT count DESC | LIMIT 5`),
-    safeQuery(`FROM .alerts-security.alerts-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name, host.name | SORT count DESC | LIMIT 5`),
+    safeQuery(`FROM logs-endpoint.events.process-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY process.name, host.name | SORT count DESC | LIMIT 3`),
+    safeQuery(`FROM logs-endpoint.events.process-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY host.name | SORT count DESC | LIMIT 3`),
+    safeQuery(`FROM .alerts-security.alerts-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name, host.name | SORT count DESC | LIMIT 3`),
   ]);
 
   addResults(processes, nodes, edges, seen, nodes[0].id, [
@@ -84,10 +84,10 @@ async function investigateHost(hostName: string, timeRange: string): Promise<Inv
   const tc = buildTimeClause(timeRange);
 
   const [users, processes, network, alerts] = await Promise.all([
-    safeQuery(`FROM logs-endpoint.events.process-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY user.name | SORT count DESC | LIMIT 5`),
-    safeQuery(`FROM logs-endpoint.events.process-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY process.name | SORT count DESC | LIMIT 5`),
-    safeQuery(`FROM logs-endpoint.events.network-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY destination.ip | SORT count DESC | LIMIT 5`),
-    safeQuery(`FROM .alerts-security.alerts-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name | SORT count DESC | LIMIT 5`),
+    safeQuery(`FROM logs-endpoint.events.process-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY user.name | SORT count DESC | LIMIT 3`),
+    safeQuery(`FROM logs-endpoint.events.process-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY process.name | SORT count DESC | LIMIT 3`),
+    safeQuery(`FROM logs-endpoint.events.network-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY destination.ip | SORT count DESC | LIMIT 3`),
+    safeQuery(`FROM .alerts-security.alerts-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name | SORT count DESC | LIMIT 3`),
   ]);
 
   addResults(users, nodes, edges, seen, nodes[0].id, [
@@ -116,8 +116,8 @@ async function investigateIP(ip: string, timeRange: string): Promise<Investigati
   const tc = buildTimeClause(timeRange);
 
   const [hosts, processes] = await Promise.all([
-    safeQuery(`FROM logs-endpoint.events.network-* | WHERE destination.ip == "${esc(ip)}" ${tc} | STATS count=COUNT(*) BY host.name | SORT count DESC | LIMIT 5`),
-    safeQuery(`FROM logs-endpoint.events.network-* | WHERE destination.ip == "${esc(ip)}" ${tc} | STATS count=COUNT(*) BY process.name | SORT count DESC | LIMIT 5`),
+    safeQuery(`FROM logs-endpoint.events.network-* | WHERE destination.ip == "${esc(ip)}" ${tc} | STATS count=COUNT(*) BY host.name | SORT count DESC | LIMIT 3`),
+    safeQuery(`FROM logs-endpoint.events.network-* | WHERE destination.ip == "${esc(ip)}" ${tc} | STATS count=COUNT(*) BY process.name | SORT count DESC | LIMIT 3`),
   ]);
 
   addResults(hosts, nodes, edges, seen, nodes[0].id, [
@@ -138,10 +138,10 @@ async function investigateProcess(processName: string, timeRange: string): Promi
   const tc = buildTimeClause(timeRange);
 
   const [children, parents, hosts, network] = await Promise.all([
-    safeQuery(`FROM logs-endpoint.events.process-* | WHERE process.parent.name == "${esc(processName)}" ${tc} | STATS count=COUNT(*) BY process.name | SORT count DESC | LIMIT 5`),
-    safeQuery(`FROM logs-endpoint.events.process-* | WHERE process.name == "${esc(processName)}" ${tc} | STATS count=COUNT(*) BY process.parent.name | SORT count DESC | LIMIT 5`),
-    safeQuery(`FROM logs-endpoint.events.process-* | WHERE process.name == "${esc(processName)}" ${tc} | STATS count=COUNT(*) BY host.name | SORT count DESC | LIMIT 5`),
-    safeQuery(`FROM logs-endpoint.events.network-* | WHERE process.name == "${esc(processName)}" ${tc} | STATS count=COUNT(*) BY destination.ip | SORT count DESC | LIMIT 5`),
+    safeQuery(`FROM logs-endpoint.events.process-* | WHERE process.parent.name == "${esc(processName)}" ${tc} | STATS count=COUNT(*) BY process.name | SORT count DESC | LIMIT 3`),
+    safeQuery(`FROM logs-endpoint.events.process-* | WHERE process.name == "${esc(processName)}" ${tc} | STATS count=COUNT(*) BY process.parent.name | SORT count DESC | LIMIT 3`),
+    safeQuery(`FROM logs-endpoint.events.process-* | WHERE process.name == "${esc(processName)}" ${tc} | STATS count=COUNT(*) BY host.name | SORT count DESC | LIMIT 3`),
+    safeQuery(`FROM logs-endpoint.events.network-* | WHERE process.name == "${esc(processName)}" ${tc} | STATS count=COUNT(*) BY destination.ip | SORT count DESC | LIMIT 3`),
   ]);
 
   addResults(children, nodes, edges, seen, nodes[0].id, [

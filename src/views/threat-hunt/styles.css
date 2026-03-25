@@ -20,6 +20,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   margin-bottom: 12px;
+  position: relative;
   overflow: hidden;
   background: var(--bg-primary);
   position: relative;

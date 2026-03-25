@@ -55,7 +55,7 @@ export function ThreatClassifier({ alert, onAcknowledge, app }: ThreatClassifier
         ) || []),
       ];
 
-      await app.callServerTool({
+      const caseResult = await app.callServerTool({
         name: "create-case",
         arguments: {
           title: `[${cls.toUpperCase()}] ${src["kibana.alert.rule.name"]}`,
@@ -79,6 +79,28 @@ export function ThreatClassifier({ alert, onAcknowledge, app }: ThreatClassifier
       });
 
       setCaseCreated(true);
+
+      // Attach the alert to the created case
+      try {
+        const caseText = (caseResult.content as Array<{type: string; text?: string}>)?.find(c => c.type === "text");
+        if (caseText?.text) {
+          const caseData = JSON.parse(caseText.text);
+          if (caseData.id) {
+            const ruleId = src["kibana.alert.rule.uuid"] || "unknown";
+            const ruleName = src["kibana.alert.rule.name"] || "unknown";
+            await app.callServerTool({
+              name: "attach-alert-to-case",
+              arguments: {
+                caseId: caseData.id,
+                alertId: alert._id,
+                alertIndex: alert._index,
+                ruleId: String(ruleId),
+                ruleName: String(ruleName),
+              },
+            });
+          }
+        }
+      } catch { /* alert attachment is best-effort */ }
 
       await app.updateModelContext({
         content: [{

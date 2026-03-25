@@ -1,4 +1,4 @@
-import { kibanaRequest } from "./client.js";
+import { kibanaRequest, esRequest } from "./client.js";
 import type { KibanaCase } from "../shared/types.js";
 
 const CASES_API = "/api/cases";
@@ -106,4 +106,78 @@ export async function getCasesForAlert(alertId: string): Promise<{ id: string; t
     `${CASES_API}/alerts/${alertId}`,
     { apiVersion: API_VERSION }
   );
+}
+
+export interface CaseComment {
+  id: string;
+  type: string;
+  comment?: string;
+  created_at: string;
+  created_by: { username?: string; full_name?: string; email?: string | null };
+  updated_at?: string | null;
+}
+
+export async function getComments(caseId: string): Promise<{ comments: CaseComment[]; total: number }> {
+  return kibanaRequest<{ comments: CaseComment[]; total: number }>(
+    `${CASES_API}/${caseId}/comments/_find`,
+    { params: { perPage: "100", sortOrder: "asc" }, apiVersion: API_VERSION }
+  );
+}
+
+export interface UserAvatar {
+  color?: string;
+  initials?: string;
+  imageUrl?: string;
+}
+
+export async function getUserProfile(): Promise<{ username: string; avatar: UserAvatar }> {
+  const result = await kibanaRequest<{
+    user: { username: string };
+    data?: { avatar?: UserAvatar };
+  }>("/internal/security/user_profile", {
+    params: { dataPath: "avatar" },
+  });
+  return {
+    username: result.user?.username || "",
+    avatar: result.data?.avatar || {},
+  };
+}
+
+export interface CaseAlertAttachment {
+  id: string;
+  index: string;
+  attached_at: string;
+  rule?: string;
+  severity?: string;
+  host?: string;
+  user?: string;
+  reason?: string;
+}
+
+export async function getCaseAlerts(caseId: string): Promise<CaseAlertAttachment[]> {
+  const attachments = await kibanaRequest<{ id: string; index: string; attached_at: string }[]>(
+    `${CASES_API}/${caseId}/alerts`,
+    { apiVersion: API_VERSION }
+  );
+
+  const enriched: CaseAlertAttachment[] = [];
+  for (const a of attachments.slice(0, 20)) {
+    try {
+      const doc = await esRequest<{ _source: Record<string, unknown> }>(`/${a.index}/_doc/${a.id}`);
+      const src = doc._source;
+      enriched.push({
+        id: a.id,
+        index: a.index,
+        attached_at: a.attached_at,
+        rule: src["kibana.alert.rule.name"] as string | undefined,
+        severity: src["kibana.alert.severity"] as string | undefined,
+        host: (src.host as Record<string, unknown>)?.name as string | undefined,
+        user: (src.user as Record<string, unknown>)?.name as string | undefined,
+        reason: src["kibana.alert.reason"] as string | undefined,
+      });
+    } catch {
+      enriched.push({ id: a.id, index: a.index, attached_at: a.attached_at });
+    }
+  }
+  return enriched;
 }

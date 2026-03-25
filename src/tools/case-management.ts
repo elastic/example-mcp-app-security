@@ -179,6 +179,59 @@ export function registerCaseManagementTools(server: McpServer) {
     }
   );
 
+  registerAppTool(
+    server,
+    "get-case-alerts",
+    {
+      title: "Get Case Alerts",
+      description: "Fetch alerts attached to a case with their details",
+      inputSchema: { caseId: z.string() },
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    async ({ caseId }) => {
+      try {
+        const attachments = await cases.getCaseAlerts(caseId);
+        return { content: [{ type: "text" as const, text: JSON.stringify(attachments) }] };
+      } catch {
+        return { content: [{ type: "text" as const, text: JSON.stringify([]) }] };
+      }
+    }
+  );
+
+  registerAppTool(
+    server,
+    "get-case-comments",
+    {
+      title: "Get Case Comments",
+      description: "Fetch comments for a case",
+      inputSchema: { caseId: z.string() },
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    async ({ caseId }) => {
+      const result = await cases.getComments(caseId);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+    }
+  );
+
+  registerAppTool(
+    server,
+    "get-user-profile",
+    {
+      title: "Get User Profile",
+      description: "Fetch the current user's Kibana profile including avatar",
+      inputSchema: {},
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    async () => {
+      try {
+        const result = await cases.getUserProfile();
+        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+      } catch {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ username: "", avatar: {} }) }] };
+      }
+    }
+  );
+
   const viewPath = resolveViewPath("case-management");
   registerAppResource(server, RESOURCE_URI, RESOURCE_URI, { mimeType: RESOURCE_MIME_TYPE }, async () => {
     const html = fs.readFileSync(viewPath, "utf-8");

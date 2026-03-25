@@ -96,6 +96,7 @@ export interface AlertContext {
 export interface KibanaCase {
   id: string;
   version: string;
+  incremental_id?: number;
   title: string;
   description: string;
   status: "open" | "in-progress" | "closed";

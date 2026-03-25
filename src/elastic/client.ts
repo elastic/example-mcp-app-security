@@ -79,6 +79,7 @@ export async function kibanaRequest<T = unknown>(
     Authorization: `ApiKey ${config.kibanaApiKey}`,
     "Content-Type": "application/json",
     "kbn-xsrf": "true",
+    "x-elastic-internal-origin": "Kibana",
   };
 
   if (options.apiVersion) {

@@ -33,15 +33,20 @@ export async function fetchAlerts(options: {
       "file.name",
       "file.path",
     ];
-    const pattern = `*${query.toLowerCase()}*`;
-    must.push({
+    const terms = query.trim().split(/\s+/).filter(Boolean);
+    const termClauses = terms.map((term) => ({
       bool: {
         should: wildcardFields.map((field) => ({
-          wildcard: { [field]: { value: pattern, case_insensitive: true } },
+          wildcard: { [field]: { value: `*${term.toLowerCase()}*`, case_insensitive: true } },
         })),
         minimum_should_match: 1,
       },
-    });
+    }));
+    if (termClauses.length === 1) {
+      must.push(termClauses[0]);
+    } else if (termClauses.length > 1) {
+      must.push({ bool: { should: termClauses, minimum_should_match: 1 } });
+    }
   }
 
   const result = await esRequest<{

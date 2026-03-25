@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
-import { applyTheme } from "../../shared/theme";
+import { applyTheme, timeAgo } from "../../shared/theme";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
+import { SeverityBadge } from "../../shared/severity";
 import type { EsqlResult } from "../../shared/types";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
@@ -23,6 +24,9 @@ export function App() {
   const [graphEdges, setGraphEdges] = useState<GEdge[]>([]);
   const [graphActive, setGraphActive] = useState(false);
   const [graphView, setGraphView] = useState<"card" | "force">("card");
+  const [selectedNode, setSelectedNode] = useState<GNode | null>(null);
+  const [nodeDetail, setNodeDetail] = useState<Record<string, unknown> | null>(null);
+  const [nodeDetailLoading, setNodeDetailLoading] = useState(false);
 
   const executeQuery = useCallback(async (q: string) => {
     if (!appRef.current || !q.trim()) return;
@@ -42,15 +46,20 @@ export function App() {
     finally { setExecuting(false); }
   }, []);
 
-  const investigateEntity = useCallback(async (type: string, value: string) => {
-    if (!appRef.current) return;
+  const addEntityToGraph = useCallback((type: string, value: string) => {
     setGraphActive(true);
-
     const rootId = `${type}:${value}`;
     setGraphNodes((prev) => {
-      if (prev.some((n) => n.id === rootId)) return prev.map((n) => n.id === rootId ? { ...n, loading: true } : n);
-      return [...prev, { id: rootId, type: type as GNode["type"], value, loading: true }];
+      if (prev.some((n) => n.id === rootId)) return prev;
+      return [...prev, { id: rootId, type: type as GNode["type"], value }];
     });
+  }, []);
+
+  const expandEntity = useCallback(async (type: string, value: string) => {
+    if (!appRef.current) return;
+
+    const rootId = `${type}:${value}`;
+    setGraphNodes((prev) => prev.map((n) => n.id === rootId ? { ...n, loading: true } : n));
 
     try {
       const result = await appRef.current.callServerTool({
@@ -81,6 +90,22 @@ export function App() {
       console.error("Investigation failed:", e);
       setGraphNodes((prev) => prev.map((n) => n.id === rootId ? { ...n, loading: false } : n));
     }
+  }, []);
+
+  const selectNode = useCallback(async (node: GNode) => {
+    setSelectedNode(node);
+    setNodeDetail(null);
+    setNodeDetailLoading(true);
+    if (!appRef.current) { setNodeDetailLoading(false); return; }
+    try {
+      const result = await appRef.current.callServerTool({
+        name: "get-entity-detail",
+        arguments: { entityType: node.type, entityValue: node.value },
+      });
+      const text = extractCallResult(result);
+      if (text) setNodeDetail(JSON.parse(text));
+    } catch { /* ignore */ }
+    finally { setNodeDetailLoading(false); }
   }, []);
 
   const collapseEntity = useCallback((node: GNode) => {
@@ -117,7 +142,7 @@ export function App() {
       if (pendingEntity) {
         const e = pendingEntity;
         pendingEntity = null;
-        investigateEntity(e.type, e.value);
+        addEntityToGraph(e.type, e.value);
       }
       if (pendingQuery) {
         const q = pendingQuery;
@@ -151,7 +176,7 @@ export function App() {
     });
 
     return () => { app.close(); };
-  }, [executeQuery, investigateEntity]);
+  }, [executeQuery, addEntityToGraph]);
 
   if (!connected) {
     return <div className="app-layout"><div className="loading-state"><div className="loading-spinner" />Connecting...</div></div>;
@@ -168,21 +193,21 @@ export function App() {
 
   return (
     <div className="app-layout">
-      <header className="filter-bar" style={{ flexWrap: "wrap" }}>
-        <span className="filter-bar-title">Threat Hunt</span>
-        <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--accent)" }}>ES|QL</span>
+      <header className="filter-bar" style={{ flexWrap: "nowrap", gap: 8, overflow: "hidden" }}>
+        <span className="filter-bar-title" style={{ flexShrink: 0 }}>Threat Hunt</span>
+        <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--accent)", flexShrink: 0 }}>ES|QL</span>
         {graphActive && (
-          <>
-            <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>
-              {graphNodes.length} entities &middot; {graphEdges.length} connections
-              {alertNodeIds.size > 0 && <span style={{ color: "var(--severity-critical)", marginLeft: 6 }}>{alertNodeIds.size} alerts</span>}
-            </span>
-            <button className="btn btn-sm btn-ghost" onClick={() => { setGraphNodes([]); setGraphEdges([]); setGraphActive(false); }}>
-              Clear Graph
-            </button>
-          </>
+          <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0 }}>
+            {graphNodes.length} entities
+          </span>
         )}
-        <button className="btn btn-sm btn-ghost" style={{ flexShrink: 0, marginLeft: graphActive ? 0 : "auto" }} onClick={() => {
+        <span style={{ flex: 1 }} />
+        {graphActive && (
+          <button className="btn btn-sm btn-ghost" style={{ flexShrink: 0 }} onClick={() => { setGraphNodes([]); setGraphEdges([]); setGraphActive(false); }}>
+            Clear
+          </button>
+        )}
+        <button className="btn btn-sm btn-ghost" style={{ flexShrink: 0 }} onClick={() => {
           const next = !isFullscreen;
           try { appRef.current?.requestDisplayMode({ mode: next ? "fullscreen" : "inline" }); } catch {}
           setIsFullscreen(next);
@@ -202,13 +227,20 @@ export function App() {
             </div>
             {graphView === "card" ? (
               <CardGraph nodes={graphNodes} edges={graphEdges}
-                onExpand={(n) => investigateEntity(n.type, n.value)}
+                onExpand={(n) => expandEntity(n.type, n.value)}
+                onSelect={selectNode}
                 alertLinkedIds={alertLinkedIds} />
             ) : (
               <InvestigationGraph nodes={graphNodes} edges={graphEdges}
-                onExpand={(n) => investigateEntity(n.type, n.value)}
+                onExpand={(n) => expandEntity(n.type, n.value)}
                 onCollapse={collapseEntity}
                 alertLinkedIds={alertLinkedIds} />
+            )}
+
+            {/* Node Detail Panel */}
+            {selectedNode && (
+              <NodeDetailPanel node={selectedNode} detail={nodeDetail} loading={nodeDetailLoading}
+                onClose={() => setSelectedNode(null)} />
             )}
           </div>
         )}
@@ -217,9 +249,114 @@ export function App() {
           <QueryEditor query={query} onChange={setQuery} onExecute={() => executeQuery(query)} executing={executing} />
           {queryError && <div className="query-error">{queryError}</div>}
           <ResultsTable results={results} executing={executing} hasExecuted={hasExecuted} queryError={queryError}
-            onEntityClick={(type, value) => investigateEntity(type, value)} />
+            onEntityClick={(type, value) => addEntityToGraph(type, value)} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── Node Detail Panel ─── */
+
+const TYPE_LABELS: Record<string, { icon: string; label: string; color: string }> = {
+  alert: { icon: "\u26A0", label: "Alert", color: "var(--severity-critical)" },
+  user: { icon: "\u{1F464}", label: "User", color: "#5c7cfa" },
+  host: { icon: "\u{1F5A5}", label: "Host", color: "#40c790" },
+  process: { icon: "\u2699", label: "Process", color: "#b07cfa" },
+  ip: { icon: "\u{1F310}", label: "IP Address", color: "#f0b840" },
+};
+
+interface DetailField { label: string; value: string; mono?: boolean }
+interface DetailEvent { timestamp: string; action: string; detail: string }
+
+function NodeDetailPanel({ node, detail, loading, onClose }: {
+  node: GNode; detail: Record<string, unknown> | null; loading: boolean;
+  onClose: () => void;
+}) {
+  const cfg = TYPE_LABELS[node.type] || TYPE_LABELS.host;
+  const fields = (detail as { fields?: DetailField[] } | null)?.fields || [];
+  const events = (detail as { events?: DetailEvent[] } | null)?.events || [];
+
+  const sevField = fields.find(f => f.label === "Severity");
+  const sevColor = sevField?.value === "critical" ? "var(--severity-critical)" :
+    sevField?.value === "high" ? "var(--severity-high)" :
+    sevField?.value === "medium" ? "var(--severity-medium)" : null;
+
+  return (
+    <div style={{
+      position: "absolute", top: 0, right: 0, bottom: 0, width: 340,
+      background: "var(--bg-secondary)", borderLeft: `3px solid ${cfg.color}`,
+      zIndex: 20, overflow: "auto",
+      animation: "slideInRight 0.2s ease-out",
+      boxShadow: "var(--shadow-lg)",
+    }}>
+      {/* Header */}
+      <div style={{ padding: "16px 16px 14px", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-primary)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{
+              width: 40, height: 40, borderRadius: "50%",
+              border: `2.5px solid ${cfg.color}`,
+              background: `${cfg.color}15`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 20, flexShrink: 0,
+            }}>{cfg.icon}</span>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", color: cfg.color, marginBottom: 2 }}>{cfg.label}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", wordBreak: "break-all", lineHeight: 1.3 }}>{node.value}</div>
+            </div>
+          </div>
+          <button className="btn btn-sm btn-ghost" onClick={onClose} style={{ flexShrink: 0 }}>&times;</button>
+        </div>
+        {sevColor && (
+          <div style={{ marginTop: 8, padding: "4px 10px", borderRadius: 20, background: `${sevColor}15`, border: `1px solid ${sevColor}30`, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: sevColor }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: sevColor }} />
+            {sevField?.value?.toUpperCase()}
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div className="loading-state" style={{ padding: 40 }}><div className="loading-spinner" style={{ width: 18, height: 18 }} /> Loading details...</div>
+      ) : (
+        <div style={{ padding: "12px 16px" }}>
+          {/* Fields */}
+          {fields.map((f, i) => (
+            <div key={i} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-dim)", marginBottom: 2 }}>{f.label}</div>
+              <div style={{
+                fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5,
+                fontFamily: f.mono ? "var(--font-mono)" : "inherit",
+                wordBreak: "break-all", whiteSpace: "pre-wrap",
+              }}>{f.value || "\u2014"}</div>
+            </div>
+          ))}
+
+          {/* Events timeline */}
+          {events.length > 0 && (
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-dim)", marginBottom: 8 }}>
+                Recent Activity ({events.length})
+              </div>
+              {events.map((ev, i) => (
+                <div key={i} style={{
+                  display: "flex", gap: 8, padding: "6px 0",
+                  borderLeft: `2px solid ${cfg.color}30`, paddingLeft: 10, marginLeft: 4,
+                  marginBottom: 2,
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4 }}>{ev.detail}</div>
+                    <div style={{ fontSize: 9, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginTop: 1 }}>
+                      {ev.timestamp ? new Date(ev.timestamp).toLocaleString() : ""}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import fs from "fs";
 import { executeEsql } from "../elastic/esql.js";
 import { listIndices, getMapping } from "../elastic/indices.js";
 import { investigateEntity } from "../elastic/investigate.js";
+import { getEntityDetail } from "../elastic/entity-detail.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://threat-hunt/mcp-app.html";
@@ -119,6 +120,24 @@ export function registerThreatHuntTools(server: McpServer) {
     },
     async ({ index }) => {
       const result = await getMapping(index);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+    }
+  );
+
+  registerAppTool(
+    server,
+    "get-entity-detail",
+    {
+      title: "Get Entity Detail",
+      description: "Fetch detailed information about an entity from Elasticsearch",
+      inputSchema: {
+        entityType: z.enum(["user", "host", "ip", "process", "alert"]),
+        entityValue: z.string(),
+      },
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    async ({ entityType, entityValue }) => {
+      const result = await getEntityDetail(entityType, entityValue);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
