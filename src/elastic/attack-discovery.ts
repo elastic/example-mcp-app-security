@@ -476,3 +476,78 @@ export async function getDiscoveryDetail(
 
   return { titleWithReplacements, summaryWithReplacements, detailsWithReplacements, alerts, entityRisk };
 }
+
+// ─── On-Demand Generation ───
+
+export interface GenerationResult {
+  execution_uuid: string;
+}
+
+export async function generateAttackDiscovery(options: {
+  connectorId: string;
+  actionTypeId: string;
+  connectorName?: string;
+  size?: number;
+  start?: string;
+  end?: string;
+  filter?: Record<string, unknown>;
+}): Promise<GenerationResult> {
+  const anonymizationFields = await getAnonymizationFields();
+
+  return kibanaRequest<GenerationResult>(
+    "/api/attack_discovery/_generate",
+    {
+      apiVersion: "2023-10-31",
+      body: {
+        alertsIndexPattern: ".alerts-security.alerts-default",
+        anonymizationFields,
+        apiConfig: {
+          connectorId: options.connectorId,
+          actionTypeId: options.actionTypeId,
+        },
+        connectorName: options.connectorName,
+        size: options.size || 50,
+        subAction: "invokeAI",
+        start: options.start || "now-7d",
+        end: options.end || "now",
+        replacements: {},
+        ...(options.filter ? { filter: options.filter } : {}),
+      },
+    }
+  );
+}
+
+export async function listAIConnectors(): Promise<{ id: string; name: string; actionTypeId: string }[]> {
+  const all = await kibanaRequest<Array<{ id: string; name: string; connector_type_id?: string; action_type_id?: string }>>(
+    "/api/actions/connectors",
+    { apiVersion: "2023-10-31" }
+  );
+  const aiTypes = new Set([".gen-ai", ".bedrock", ".gemini"]);
+  return all
+    .filter((c) => aiTypes.has(c.connector_type_id || c.action_type_id || ""))
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      actionTypeId: c.connector_type_id || c.action_type_id || "",
+    }));
+}
+
+async function getAnonymizationFields(): Promise<Array<{ field: string; allowed: boolean; anonymized: boolean; id: string }>> {
+  const result = await kibanaRequest<{ data: Array<{ field: string; allowed: boolean; anonymized: boolean; id: string }> }>(
+    "/api/security_ai_assistant/anonymization_fields/_find",
+    { params: { perPage: "500" }, apiVersion: "2023-10-31" }
+  );
+  const fields = result.data || [];
+
+  // Ensure _id is present and allowed (required for Attack Discovery)
+  const hasId = fields.some((f) => f.field === "_id");
+  if (!hasId) {
+    fields.push({ field: "_id", allowed: true, anonymized: false, id: "_id_injected" });
+  } else {
+    for (const f of fields) {
+      if (f.field === "_id") { f.allowed = true; f.anonymized = false; }
+    }
+  }
+
+  return fields;
+}

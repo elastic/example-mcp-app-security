@@ -29,22 +29,10 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       inputSchema: {
         days: z.number().optional().describe("Number of days to look back (default: 1)"),
         limit: z.number().optional().describe("Max discoveries to return (default: 50)"),
-        verdicts: z
-          .array(
-            z.object({
-              title: z.string().describe("The attack discovery title this verdict applies to"),
-              classification: z.enum(["benign", "suspicious", "malicious"]).describe("Your triage verdict"),
-              confidence: z.enum(["low", "medium", "high"]).describe("Your confidence in this verdict"),
-              summary: z.string().describe("1-2 sentence explanation of your verdict"),
-              action: z.string().describe("Recommended next action"),
-            })
-          )
-          .optional()
-          .describe("Your triage verdicts per attack discovery. Provide these based on your analysis of the findings."),
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ days, limit, verdicts }) => {
+    async ({ days, limit }) => {
       const summary = await fetchDiscoveries({ days, limit });
 
       let triaged = null;
@@ -59,7 +47,6 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       const compact = {
         total: summary.total,
         params: { days: days || 1, limit: limit || 50 },
-        verdicts: verdicts || [],
         discoveries: (triaged || summary.discoveries).slice(0, 20).map((d) => {
           const base: Record<string, unknown> = {
             id: d.id,
@@ -217,6 +204,81 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],
       };
+    }
+  );
+
+  // ─── On-Demand Generation ───
+
+  registerAppTool(
+    server,
+    "generate-attack-discovery",
+    {
+      title: "Generate Attack Discovery",
+      description: "Trigger an on-demand attack discovery generation using a specified AI connector.",
+      inputSchema: {
+        connectorName: z.string().describe("AI connector name (e.g., 'Sonnet 4.5', 'GPT 5')"),
+        size: z.number().optional().describe("Number of alerts to analyze (default: 50)"),
+        start: z.string().optional().describe("Start time (default: now-7d)"),
+        end: z.string().optional().describe("End time (default: now)"),
+        filter: z.string().optional().describe("Optional ES DSL filter as JSON string"),
+      },
+      _meta: { ui: { resourceUri: RESOURCE_URI } },
+    },
+    async ({ connectorName, size, start, end, filter }) => {
+      try {
+        const { generateAttackDiscovery, listAIConnectors } = await import("../elastic/attack-discovery.js");
+        const connectors = await listAIConnectors();
+        const connector = connectors.find((c) => c.name.toLowerCase().includes(connectorName.toLowerCase()));
+        if (!connector) {
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No matching connector. Available: " + connectors.map((c) => c.name).join(", ") }) }] };
+        }
+        const filterObj = filter ? JSON.parse(filter) : undefined;
+        const result = await generateAttackDiscovery({ connectorId: connector.id, actionTypeId: connector.actionTypeId, connectorName: connector.name, size, start, end, filter: filterObj });
+        return { content: [{ type: "text" as const, text: JSON.stringify({ status: "generation_started", execution_uuid: result.execution_uuid, connector: connector.name, message: "Attack discovery generation has been started using " + connector.name + ". This typically takes 1-3 minutes. The interactive dashboard will show a progress banner and auto-refresh when results are ready. Do NOT call triage-attack-discoveries yet — wait for the user to tell you the results are in, or let them view results directly in the dashboard." }) }] };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: msg }) }] };
+      }
+    }
+  );
+
+  registerAppTool(
+    server,
+    "get-generation-status",
+    {
+      title: "Get Attack Discovery Generation Status",
+      description: "Check the status of attack discovery generations",
+      inputSchema: {
+        size: z.number().optional(),
+        start: z.string().optional(),
+        end: z.string().optional(),
+      },
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    async ({ size, start, end }) => {
+      const { kibanaRequest } = await import("../elastic/client.js");
+      const params: Record<string, string> = {};
+      if (size) params.size = String(size);
+      if (start) params.start = start;
+      if (end) params.end = end;
+      const result = await kibanaRequest("/api/attack_discovery/generations", { params, apiVersion: "2023-10-31" });
+      return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+    }
+  );
+
+  registerAppTool(
+    server,
+    "list-ai-connectors",
+    {
+      title: "List AI Connectors",
+      description: "List available AI connectors",
+      inputSchema: {},
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    async () => {
+      const { listAIConnectors } = await import("../elastic/attack-discovery.js");
+      const connectors = await listAIConnectors();
+      return { content: [{ type: "text" as const, text: JSON.stringify(connectors) }] };
     }
   );
 

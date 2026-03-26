@@ -169,15 +169,41 @@ export function App() {
   const [detail, setDetail] = useState<DiscoveryDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [verdicts, setVerdicts] = useState<Verdict[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [actionResult, setActionResult] = useState<string | null>(null);
+  const [generations, setGenerations] = useState<Array<{ status: string; connector_id: string; connectorName?: string; discoveries: number; start: string; end?: string; loading_message?: string; execution_uuid: string; reason?: string }>>([]);
   const [searchFilter, setSearchFilter] = useState("");
   const [tab, setTab] = useState<"summary" | "flow" | "alerts" | "entities" | "signals">("summary");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [flyout, setFlyout] = useState<FlyoutState | null>(null);
   const [expandedAlerts, setExpandedAlerts] = useState<Set<string>>(new Set());
   const paramsRef = useRef<{ days: number; limit: number }>({ days: 1, limit: 50 });
+
+  const checkGenerationStatus = useCallback(async (app?: McpApp) => {
+    const mcpApp = app || appRef.current;
+    if (!mcpApp) return;
+    try {
+      const result = await mcpApp.callServerTool({ name: "get-generation-status", arguments: { size: 5, start: "now-1h" } });
+      const text = extractCallResult(result);
+      if (text) {
+        const data = JSON.parse(text) as { generations?: Array<{ status: string; connector_id: string; discoveries: number; start: string; end?: string; loading_message?: string; execution_uuid: string; reason?: string }> };
+        const gens = (data.generations || []).map((g) => ({ ...g, connectorName: undefined as string | undefined }));
+        // Fetch connector names
+        try {
+          const connResult = await mcpApp.callServerTool({ name: "list-ai-connectors", arguments: {} });
+          const connText = extractCallResult(connResult);
+          if (connText) {
+            const connectors = JSON.parse(connText) as Array<{ id: string; name: string }>;
+            const connMap = new Map(connectors.map((c) => [c.id, c.name]));
+            for (const g of gens) {
+              g.connectorName = connMap.get(g.connector_id) || g.connector_id;
+            }
+          }
+        } catch { /* ignore */ }
+        setGenerations(gens);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   const loadDiscoveries = useCallback(async (app?: McpApp) => {
     const mcpApp = app || appRef.current;
@@ -301,7 +327,6 @@ export function App() {
           if (data.params) {
             paramsRef.current = { days: data.params.days || 1, limit: data.params.limit || 50 };
           }
-          if (Array.isArray(data.verdicts)) setVerdicts(data.verdicts);
           if (Array.isArray(data.discoveries)) {
             setDiscoveries(data.discoveries.map((d: Record<string, unknown>) => ({
               ...d,
@@ -316,10 +341,21 @@ export function App() {
     app.connect().then(() => {
       setConnected(true);
       setTimeout(() => { if (!gotResult) loadDiscoveries(app); }, 1500);
+      checkGenerationStatus(app);
     });
 
     return () => { appRef.current = null; };
-  }, [loadDiscoveries]);
+  }, [loadDiscoveries, checkGenerationStatus]);
+
+  // Poll generation status while in progress
+  useEffect(() => {
+    if (!connected || !generations.some((g) => g.status === "started")) return;
+    const interval = setInterval(async () => {
+      await checkGenerationStatus();
+      await loadDiscoveries();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [connected, generations, checkGenerationStatus, loadDiscoveries]);
 
   useEffect(() => {
     if (!flyout) return;
@@ -402,6 +438,9 @@ export function App() {
             onChange={(e) => setSearchFilter(e.target.value)}
           />
         </div>
+        <button className="btn btn-sm btn-ghost" style={{ flexShrink: 0 }} onClick={() => { loadDiscoveries(); checkGenerationStatus(); }} title="Refresh">
+          &#x21bb;
+        </button>
         <button className="btn btn-sm btn-ghost" style={{ flexShrink: 0 }} onClick={() => {
           const next = !isFullscreen;
           try { appRef.current?.requestDisplayMode({ mode: next ? "fullscreen" : "inline" }); } catch {}
@@ -411,26 +450,57 @@ export function App() {
         </button>
       </div>
 
-      {/* Verdicts */}
-      {verdicts.length > 0 && !selected && (
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border-subtle)", background: "var(--bg-secondary)" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", color: "var(--text-dim)", marginBottom: 8 }}>
-            AI Verdicts
-          </div>
-          {verdicts.map((v, i) => (
-            <div key={i} className={`verdict-card ${v.classification}`}>
-              <div className="verdict-card-header">
-                <span className="verdict-card-title">{v.title}</span>
-                <span className={`confidence-badge ${v.classification === "malicious" ? "confidence-high" : v.classification === "suspicious" ? "confidence-moderate" : "confidence-low"}`}>
-                  {v.classification.toUpperCase()}
-                </span>
+      {/* Generation banners - only show during active generation or just-completed */}
+      {(() => {
+        const running = generations.filter((g) => g.status === "started");
+        const justFinished = generations.filter((g) => {
+          if (g.status !== "succeeded" && g.status !== "failed") return false;
+          if (!g.end) return false;
+          return Date.now() - new Date(g.end).getTime() < 60000;
+        }).slice(0, 1);
+        const visible = [...running, ...justFinished];
+        if (visible.length === 0 || selected) return null;
+        return (
+        <div style={{ padding: "8px 16px", display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+          {visible.map((g) => {
+            const isRunning = g.status === "started";
+            const succeeded = g.status === "succeeded";
+            const failed = g.status === "failed";
+            const name = g.connectorName || g.connector_id;
+            const ts = g.end || g.start;
+            const time = ts ? new Date(ts).toLocaleString() : "";
+            return (
+              <div key={g.execution_uuid} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 14px", borderRadius: "var(--radius-md)",
+                background: isRunning ? "rgba(92,124,250,0.08)" : succeeded && g.discoveries > 0 ? "rgba(64,199,144,0.08)" : succeeded ? "rgba(64,199,144,0.05)" : "rgba(240,64,64,0.06)",
+                border: `1px solid ${isRunning ? "rgba(92,124,250,0.2)" : succeeded ? "rgba(64,199,144,0.15)" : "rgba(240,64,64,0.15)"}`,
+                fontSize: 12,
+              }}>
+                {isRunning && <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2, flexShrink: 0 }} />}
+                {succeeded && <span style={{ fontSize: 16, flexShrink: 0 }}>&#10003;</span>}
+                {failed && <span style={{ fontSize: 16, flexShrink: 0, color: "var(--error)" }}>&#10007;</span>}
+                <div style={{ flex: 1 }}>
+                  {isRunning ? (
+                    <>
+                      <strong>Attack discovery in progress via {name}</strong>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{g.loading_message || "Analyzing alerts..."}</div>
+                    </>
+                  ) : succeeded ? (
+                    <span style={{ color: g.discoveries > 0 ? "var(--success)" : "var(--text-muted)" }}>
+                      Attack discovery ran successfully via {name} at {time} and <strong>{g.discoveries} new attack{g.discoveries !== 1 ? "s" : ""}</strong> {g.discoveries === 1 ? "was" : "were"} discovered.
+                      {g.discoveries > 0 && <span style={{ marginLeft: 4, fontWeight: 600 }}>Refresh to view the results.</span>}
+                    </span>
+                  ) : (
+                    <span style={{ color: "var(--error)" }}>Attack discovery failed via {name}. {g.reason || ""}</span>
+                  )}
+                </div>
               </div>
-              <div className="verdict-card-body">{v.summary}</div>
-              <div className="verdict-card-action">{v.action}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
-      )}
+        );
+      })()}
 
       {/* Main body */}
       <div className="app-body">
@@ -445,7 +515,11 @@ export function App() {
             <div className="empty-state">
               <div style={{ fontSize: 28, marginBottom: 8 }}>&#128737;</div>
               <div>No open attack discoveries found</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>Try adjusting the time range</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                {generations.some((g) => g.status === "started")
+                  ? "A generation is in progress — results will appear here automatically."
+                  : "Try adjusting the time range or running a new generation."}
+              </div>
             </div>
           ) : (
             filtered.map((d, i) => (
