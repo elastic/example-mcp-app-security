@@ -68,7 +68,7 @@ export async function kibanaRequest<T = unknown>(
   } = {}
 ): Promise<T> {
   const config = getConfig();
-  const url = new URL(path, config.kibanaUrl);
+  const url = new URL(config.kibanaUrl + path);
   if (options.params) {
     for (const [k, v] of Object.entries(options.params)) {
       url.searchParams.set(k, v);
