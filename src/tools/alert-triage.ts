@@ -150,11 +150,11 @@ export function registerAlertTriageTools(server: McpServer) {
     "acknowledge-alerts-bulk",
     {
       title: "Bulk Acknowledge Alerts",
-      description: "Mark multiple alerts as acknowledged",
+      description: "Mark multiple alerts as acknowledged. Call this after triaging alerts to clear them from the queue.",
       inputSchema: {
         alertIds: z.array(z.string()).describe("Array of alert document IDs"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: {} },
     },
     async ({ alertIds }) => {
       const result = await acknowledgeAlerts(alertIds);

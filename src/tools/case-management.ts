@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import fs from "fs";
 import * as cases from "../elastic/cases.js";
+import { esRequest } from "../elastic/client.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://manage-cases/mcp-app.html";
@@ -95,23 +96,50 @@ export function registerCaseManagementTools(server: McpServer) {
     "create-case",
     {
       title: "Create Case",
-      description: "Create a new security case",
+      description: "Create a new security case. Call this directly to create cases from attack discoveries or alert triage findings. Pass alertIds to automatically attach alerts to the case.",
       inputSchema: {
         title: z.string(),
         description: z.string(),
         tags: z.string().optional().describe("Comma-separated tags"),
         severity: z.string().optional(),
+        alertIds: z.array(z.string()).optional().describe("Alert document IDs to attach to the case"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ title, description, tags, severity }) => {
+    async ({ title, description, tags, severity, alertIds }) => {
       const result = await cases.createCase({
         title,
         description,
         tags: tags ? tags.split(",") : undefined,
         severity,
       });
-      return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+
+      let alertsAttached = 0;
+      if (alertIds && alertIds.length > 0) {
+        try {
+          const alertDocs = await esRequest<{
+            docs: Array<{ _index: string; _id: string; found: boolean; _source?: Record<string, unknown> }>;
+          }>("/.alerts-security.alerts-default/_mget", {
+            body: { ids: alertIds },
+          });
+
+          for (const doc of alertDocs.docs) {
+            if (!doc.found || !doc._source) continue;
+            try {
+              const ruleId = (doc._source["kibana.alert.rule.uuid"] as string) || "";
+              const ruleName = (doc._source["kibana.alert.rule.name"] as string) || "Unknown Rule";
+              await cases.attachAlert(result.id, doc._id, doc._index, ruleId, ruleName);
+              alertsAttached++;
+            } catch {
+              // skip individual alert attachment failures
+            }
+          }
+        } catch {
+          // alert lookup failed — case still created
+        }
+      }
+
+      return { content: [{ type: "text" as const, text: JSON.stringify({ ...result, alertsAttached }) }] };
     }
   );
 

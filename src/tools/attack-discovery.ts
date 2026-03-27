@@ -13,7 +13,8 @@ import {
   getDiscoveryDetail,
 } from "../elastic/attack-discovery.js";
 import type { AttackDiscovery } from "../elastic/attack-discovery.js";
-import { createCase, attachAlert } from "../elastic/cases.js";
+import { createCase, attachAlert, addComment } from "../elastic/cases.js";
+import { esRequest } from "../elastic/client.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-attack-discoveries/mcp-app.html";
@@ -143,13 +144,14 @@ export function registerAttackDiscoveryTools(server: McpServer) {
     "approve-discoveries",
     {
       title: "Approve Discoveries",
-      description: "Create cases for approved attack discovery findings",
+      description: "Create cases for approved attack discovery findings. Call this to bulk-create cases from triaged attack discoveries.",
       inputSchema: {
         findings: z.array(
           z.object({
             id: z.string(),
             title: z.string(),
             summaryMarkdown: z.string(),
+            detailsMarkdown: z.string().optional().describe("Full attack narrative with IOCs, attack chain, and investigation details"),
             mitreTactics: z.array(z.string()),
             alertIds: z.array(z.string()),
             riskScore: z.number(),
@@ -157,10 +159,10 @@ export function registerAttackDiscoveryTools(server: McpServer) {
           })
         ).describe("Array of approved findings to create cases for"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { resourceUri: "ui://manage-cases/mcp-app.html" } },
     },
     async ({ findings }) => {
-      const results: { findingId: string; caseId: string; caseTitle: string }[] = [];
+      const results: { findingId: string; caseId: string; caseTitle: string; alertsAttached: number }[] = [];
 
       for (const finding of findings) {
         const caseData = await createCase({
@@ -174,12 +176,47 @@ export function registerAttackDiscoveryTools(server: McpServer) {
             `**Alert Count**: ${finding.alertIds.length}`,
             ``,
             finding.summaryMarkdown,
+            ``,
+            ...(finding.detailsMarkdown ? [`---`, ``, finding.detailsMarkdown] : []),
           ].join("\n"),
           tags: ["attack-discovery", "ease", ...finding.mitreTactics.map((t) => `mitre:${t}`)],
           severity: finding.riskScore >= 80 ? "critical" : finding.riskScore >= 60 ? "high" : finding.riskScore >= 40 ? "medium" : "low",
         });
 
-        results.push({ findingId: finding.id, caseId: caseData.id, caseTitle: caseData.title });
+        if (finding.detailsMarkdown) {
+          try {
+            await addComment(caseData.id, finding.detailsMarkdown);
+          } catch {
+            // comment failed — case still created
+          }
+        }
+
+        let alertsAttached = 0;
+        if (finding.alertIds.length > 0) {
+          try {
+            const alertDocs = await esRequest<{
+              docs: Array<{ _index: string; _id: string; found: boolean; _source?: Record<string, unknown> }>;
+            }>(`/.alerts-security.alerts-default/_mget`, {
+              body: { ids: finding.alertIds },
+            });
+
+            for (const doc of alertDocs.docs) {
+              if (!doc.found || !doc._source) continue;
+              try {
+                const ruleId = (doc._source["kibana.alert.rule.uuid"] as string) || "";
+                const ruleName = (doc._source["kibana.alert.rule.name"] as string) || "Unknown Rule";
+                await attachAlert(caseData.id, doc._id, doc._index, ruleId, ruleName);
+                alertsAttached++;
+              } catch {
+                // skip individual alert attachment failures
+              }
+            }
+          } catch {
+            // alert lookup failed — case still created without attachments
+          }
+        }
+
+        results.push({ findingId: finding.id, caseId: caseData.id, caseTitle: caseData.title, alertsAttached });
       }
 
       return {
@@ -228,7 +265,10 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       try {
         const { generateAttackDiscovery, listAIConnectors } = await import("../elastic/attack-discovery.js");
         const connectors = await listAIConnectors();
-        const connector = connectors.find((c) => c.name.toLowerCase().includes(connectorName.toLowerCase()));
+        let connector = connectors.find((c) => c.name.toLowerCase().includes(connectorName.toLowerCase()));
+        if (!connector && connectors.length === 1) {
+          connector = connectors[0];
+        }
         if (!connector) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No matching connector. Available: " + connectors.map((c) => c.name).join(", ") }) }] };
         }
@@ -271,9 +311,9 @@ export function registerAttackDiscoveryTools(server: McpServer) {
     "list-ai-connectors",
     {
       title: "List AI Connectors",
-      description: "List available AI connectors",
+      description: "List available AI connectors. Call this first before generate-attack-discovery to find valid connector names.",
       inputSchema: {},
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: {} },
     },
     async () => {
       const { listAIConnectors } = await import("../elastic/attack-discovery.js");
