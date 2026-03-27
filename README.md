@@ -48,7 +48,7 @@ Click any node in the graph to see real Elasticsearch data — alert details, pr
 
 ## How It Works
 
-> **[Interactive flow diagram](docs/interaction-flow.html)** — a visual walkthrough of the full interaction lifecycle, including bidirectional communication and the skills layer.
+![Interaction Flow](docs/screenshots/interaction-flow.png)
 
 ```
 ┌─────────────────────────────────────────────┐
