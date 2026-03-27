@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elastic Security MCP App — Interaction Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; background: #0c0d14; color: #e4e5eb; padding: 40px; min-height: 100vh; }
+.title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 6px; background: linear-gradient(135deg, #5c7cfa, #40c790); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.subtitle { font-size: 13px; color: #636882; margin-bottom: 40px; }
+.diagram { position: relative; max-width: 1100px; margin: 0 auto; }
+
+.layer { position: relative; margin-bottom: 24px; padding: 20px 24px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.06); }
+.layer-label { position: absolute; top: -10px; left: 20px; background: #0c0d14; padding: 0 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #636882; }
+.layer-user { background: rgba(92,124,250,0.04); border-color: rgba(92,124,250,0.15); }
+.layer-claude { background: rgba(176,124,250,0.04); border-color: rgba(176,124,250,0.12); }
+.layer-server { background: rgba(64,199,144,0.04); border-color: rgba(64,199,144,0.12); }
+.layer-elastic { background: rgba(240,184,64,0.04); border-color: rgba(240,184,64,0.12); }
+
+.flow-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.node { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; font-size: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); }
+.node-blue { border-color: rgba(92,124,250,0.3); color: #5c7cfa; }
+.node-purple { border-color: rgba(176,124,250,0.3); color: #b07cfa; }
+.node-green { border-color: rgba(64,199,144,0.3); color: #40c790; }
+.node-yellow { border-color: rgba(240,184,64,0.3); color: #f0b840; }
+
+.arrow { display: flex; align-items: center; gap: 6px; }
+.arrow-line { height: 2px; width: 40px; border-radius: 1px; }
+.arrow-label { font-size: 10px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+.arr-down { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 20px; }
+.arr-down .arrow-line { width: 2px; height: 30px; }
+.arr-blue .arrow-line { background: rgba(92,124,250,0.4); } .arr-blue .arrow-label { color: rgba(92,124,250,0.6); }
+.arr-purple .arrow-line { background: rgba(176,124,250,0.4); } .arr-purple .arrow-label { color: rgba(176,124,250,0.6); }
+.arr-green .arrow-line { background: rgba(64,199,144,0.4); } .arr-green .arrow-label { color: rgba(64,199,144,0.6); }
+.arr-yellow .arrow-line { background: rgba(240,184,64,0.4); } .arr-yellow .arrow-label { color: rgba(240,184,64,0.6); }
+
+.step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+.step-blue { background: rgba(92,124,250,0.15); color: #5c7cfa; }
+.step-purple { background: rgba(176,124,250,0.15); color: #b07cfa; }
+.step-green { background: rgba(64,199,144,0.15); color: #40c790; }
+
+.desc { font-size: 11px; color: #9496a1; line-height: 1.5; margin-top: 10px; padding-left: 30px; }
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #636882; background: rgba(255,255,255,0.04); padding: 2px 6px; border-radius: 4px; }
+
+.section-title { font-size: 16px; font-weight: 700; margin: 40px 0 16px; }
+.section-subtitle { font-size: 11px; color: #636882; margin-bottom: 20px; }
+
+.bidir { display: flex; gap: 30px; margin-top: 20px; }
+.bidir-col { flex: 1; }
+.bidir-col h4 { font-size: 12px; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.bidir-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 11px; color: #9496a1; }
+</style>
+</head>
+<body>
+<div class="diagram">
+  <div class="title">Elastic Security MCP App</div>
+  <div class="subtitle">Interaction flow — how user intent becomes interactive security operations</div>
+
+  <!-- STEP 1 -->
+  <div class="layer layer-user">
+    <div class="layer-label">User</div>
+    <div class="flow-row">
+      <span class="step-num step-blue">1</span>
+      <div class="node node-blue">💬 "Triage my ransomware alerts"</div>
+    </div>
+    <div class="desc">User asks a security question in natural language. Claude Desktop routes it to the LLM.</div>
+  </div>
+
+  <div class="arr-down arr-blue" style="margin-left:60px"><div class="arrow-line"></div><div class="arrow-label">user message</div></div>
+
+  <!-- STEP 2 -->
+  <div class="layer layer-claude">
+    <div class="layer-label">Claude (LLM + Skill)</div>
+    <div class="flow-row">
+      <span class="step-num step-purple">2</span>
+      <div class="node node-purple">🧠 Reads SKILL.md</div>
+      <div class="arrow arr-purple"><div class="arrow-line"></div><div class="arrow-label">→</div></div>
+      <span class="step-num step-purple">3</span>
+      <div class="node node-purple">🔧 Calls <span class="mono">triage-alerts</span></div>
+      <div class="node" style="font-size:10px; color:#636882; border-style:dashed">query: "ransomware"<br>verdicts: [{rule, classification, summary}]</div>
+    </div>
+    <div class="desc">Claude reads the alert-triage skill to learn the SOC workflow, then calls the MCP tool with intent-aware parameters and optional AI verdicts.</div>
+  </div>
+
+  <div class="arr-down arr-purple" style="margin-left:60px"><div class="arrow-line"></div><div class="arrow-label">tools/call (JSON-RPC over stdio)</div></div>
+
+  <!-- STEP 3 -->
+  <div class="layer layer-server">
+    <div class="layer-label">MCP App Server (Node.js)</div>
+    <div class="flow-row">
+      <span class="step-num step-green">4</span>
+      <div class="node node-green">📊 Queries Elasticsearch</div>
+      <div class="arrow arr-green"><div class="arrow-line"></div><div class="arrow-label">→</div></div>
+      <span class="step-num step-green">5</span>
+      <div class="node node-green">📄 Returns compact summary<br><span class="mono">~2KB text → LLM</span></div>
+      <div class="arrow arr-green"><div class="arrow-line"></div><div class="arrow-label">+</div></div>
+      <div class="node node-green">🖥️ Serves UI resource<br><span class="mono">ui://triage-alerts/mcp-app.html</span></div>
+    </div>
+    <div class="desc">Server queries ES with wildcard filters, returns compact summary (counts + per-alert details) to Claude, AND serves the bundled React UI as a single HTML resource.</div>
+  </div>
+
+  <div style="display:flex; gap:80px; margin-left:40px">
+    <div class="arr-down arr-green"><div class="arrow-line"></div><div class="arrow-label">ES REST API</div></div>
+    <div class="arr-down arr-purple" style="margin-left:120px"><div class="arrow-line"></div><div class="arrow-label">tool result + UI resource</div></div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div style="display:flex; gap:20px">
+    <div class="layer layer-elastic" style="flex:1">
+      <div class="layer-label">Elastic Stack</div>
+      <div class="flow-row">
+        <div class="node node-yellow">🔍 Elasticsearch 9.x</div>
+        <div class="node node-yellow">📋 Kibana APIs</div>
+      </div>
+      <div class="desc" style="padding-left:0">.alerts-security.alerts-* · logs-endpoint.events.* · Cases API · Detection Engine · Attack Discovery API</div>
+    </div>
+
+    <div class="layer layer-user" style="flex:1.2">
+      <div class="layer-label">Claude Desktop (Rendering)</div>
+      <div class="flow-row">
+        <span class="step-num step-blue">6</span>
+        <div class="node node-blue">📝 Claude's text analysis<br><span style="font-size:9px;color:#636882">Triage findings, verdicts, recommendations</span></div>
+      </div>
+      <div class="flow-row" style="margin-top:8px">
+        <span class="step-num step-blue">7</span>
+        <div class="node node-blue" style="border-color:rgba(92,124,250,0.5); background:rgba(92,124,250,0.06)">🖼️ Interactive UI (sandboxed iframe)<br><span style="font-size:9px;color:#636882">Dashboard, graphs, forms — all interactive</span></div>
+      </div>
+      <div class="desc" style="padding-left:0">Text response + interactive dashboard render together. The UI is a React app in a sandboxed iframe that can call back to the server.</div>
+    </div>
+  </div>
+
+  <!-- Bidirectional -->
+  <div class="section-title">Ongoing Bidirectional Communication</div>
+  <div class="section-subtitle">After initial render, the UI iframe communicates with both the server and Claude</div>
+
+  <div class="bidir">
+    <div class="bidir-col">
+      <h4 style="color:#40c790">UI → Server (app-only tools)</h4>
+      <div class="bidir-item"><span class="mono">poll-alerts</span> Refresh alert data with filters</div>
+      <div class="bidir-item"><span class="mono">get-alert-context</span> Process tree, network events</div>
+      <div class="bidir-item"><span class="mono">investigate-entity</span> Expand graph node connections</div>
+      <div class="bidir-item"><span class="mono">get-entity-detail</span> Full ES data for clicked entity</div>
+      <div class="bidir-item"><span class="mono">execute-esql</span> Run threat hunt queries</div>
+      <div class="bidir-item"><span class="mono">get-case-alerts</span> Alerts attached to a case</div>
+      <div class="bidir-item"><span class="mono">create-case</span> Create case from triage verdict</div>
+      <div class="bidir-item"><span class="mono">get-generation-status</span> Poll attack discovery progress</div>
+    </div>
+    <div class="bidir-col">
+      <h4 style="color:#5c7cfa">UI → Claude (host APIs)</h4>
+      <div class="bidir-item"><span class="mono">updateModelContext</span> Push classification state to LLM</div>
+      <div class="bidir-item"><span class="mono">sendMessage</span> "Summarize case" / "Extract IOCs"</div>
+      <div class="bidir-item"><span class="mono">requestDisplayMode</span> Toggle fullscreen/inline</div>
+    </div>
+    <div class="bidir-col">
+      <h4 style="color:#b07cfa">Claude → UI (notifications)</h4>
+      <div class="bidir-item"><span class="mono">ontoolresult</span> Tool result with params + verdicts</div>
+      <div class="bidir-item"><span class="mono">ontoolinput</span> Streaming tool arguments</div>
+      <div class="bidir-item"><span class="mono">onhostcontextchanged</span> Theme / locale changes</div>
+    </div>
+  </div>
+
+  <!-- Skills -->
+  <div class="section-title">Skills Layer</div>
+  <div class="section-subtitle">SKILL.md files installed in Claude Desktop teach it when and how to use each tool</div>
+
+  <div style="display:flex; gap:12px; flex-wrap:wrap">
+    <div class="node" style="border-color:rgba(240,64,64,0.3); color:#f04040">🔴 alert-triage<br><span style="font-size:9px;color:#636882">SOC workflow, classification guide, verdict format</span></div>
+    <div class="node" style="border-color:rgba(240,184,64,0.3); color:#f0b840">🟡 attack-discovery<br><span style="font-size:9px;color:#636882">Confidence scoring, on-demand generation</span></div>
+    <div class="node" style="border-color:rgba(92,124,250,0.3); color:#5c7cfa">🔵 case-management<br><span style="font-size:9px;color:#636882">Tool mapping, create-case examples</span></div>
+    <div class="node" style="border-color:rgba(64,199,144,0.3); color:#40c790">🟢 detection-rules<br><span style="font-size:9px;color:#636882">Rule types, tuning strategy</span></div>
+    <div class="node" style="border-color:rgba(176,124,250,0.3); color:#b07cfa">🟣 sample-data<br><span style="font-size:9px;color:#636882">Attack scenarios, cleanup</span></div>
+  </div>
+</div>
+</body>
+</html>
