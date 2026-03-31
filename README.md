@@ -375,7 +375,6 @@ npm run build:server # Build server only
 
 - [Elastic Agent Skills](https://github.com/elastic/agent-skills/tree/main/skills/security) — SOC triage methodology and tool patterns
 - [MCP Apps Specification](https://modelcontextprotocol.io/extensions/apps/overview) — Interactive UI extensions for MCP
-- [Microsoft Sentinel Investigation Graph](https://learn.microsoft.com/en-us/azure/sentinel/investigate-cases) — Entity-centric investigation UX
 
 ## License
 
