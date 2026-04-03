@@ -51,12 +51,171 @@ body { font-family: 'Inter', sans-serif; background: #0c0d14; color: #e4e5eb; pa
 .bidir-col { flex: 1; }
 .bidir-col h4 { font-size: 12px; font-weight: 700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
 .bidir-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 11px; color: #9496a1; }
+
+/* Architecture section */
+.arch-section { margin-bottom: 48px; }
+.arch-heading { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.arch-subheading { font-size: 11px; color: #636882; margin-bottom: 20px; }
+.arch-grid { display: flex; gap: 16px; }
+.arch-col { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.arch-box { border-radius: 12px; padding: 16px 18px; border: 1px solid rgba(255,255,255,0.06); }
+.arch-box-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.arch-box-inner { display: flex; flex-direction: column; gap: 6px; }
+.arch-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; font-size: 11px; font-weight: 500; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); }
+.arch-item-label { flex-shrink: 0; font-weight: 600; }
+.arch-item-desc { color: #636882; font-size: 10px; }
+.arch-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.badge-model { background: rgba(176,124,250,0.15); color: #b07cfa; }
+.badge-app { background: rgba(64,199,144,0.15); color: #40c790; }
+.arch-connector { display: flex; align-items: center; justify-content: center; padding: 8px 0; }
+.arch-connector-line { width: 2px; height: 20px; border-radius: 1px; }
+.arch-row-connector { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.arch-row-line { height: 2px; width: 24px; border-radius: 1px; }
+.arch-process-label { text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; padding: 6px 12px; border-radius: 8px; margin-bottom: 12px; }
+
+.divider { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 48px 0 40px; }
 </style>
 </head>
 <body>
 <div class="diagram">
   <div class="title">Elastic Security MCP App</div>
-  <div class="subtitle">Interaction flow — how user intent becomes interactive security operations</div>
+  <div class="subtitle">Architecture & interaction flow — how user intent becomes interactive security operations</div>
+
+  <!-- ARCHITECTURE -->
+  <div class="arch-section">
+    <div class="arch-heading">Server Architecture</div>
+    <div class="arch-subheading">Everything runs in a single Node.js process — tools, API clients, and bundled UI views are all packaged together</div>
+
+    <div class="arch-grid">
+      <!-- Left: External callers -->
+      <div class="arch-col" style="flex:0.7">
+        <div class="arch-box layer-claude" style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+          <div class="arch-box-title" style="color:#b07cfa">🧠 MCP Host (Claude / VS Code / etc)</div>
+          <div class="arch-box-inner">
+            <div class="arch-item" style="border-color:rgba(176,124,250,0.15)">
+              <div><span class="arch-item-label" style="color:#b07cfa">LLM Agent</span><br><span class="arch-item-desc">Calls model-facing tools via JSON-RPC</span></div>
+            </div>
+            <div class="arch-item" style="border-color:rgba(92,124,250,0.15)">
+              <div><span class="arch-item-label" style="color:#5c7cfa">App iframe</span><br><span class="arch-item-desc">Calls app-only tools via postMessage</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:0 4px;">
+        <div style="font-size:9px; color:#636882; font-weight:600; font-family:'JetBrains Mono',monospace; white-space:nowrap;">stdio / HTTP</div>
+        <div style="width:40px; height:2px; background:rgba(255,255,255,0.12); border-radius:1px;"></div>
+        <div style="color:rgba(255,255,255,0.3); font-size:14px;">→</div>
+      </div>
+
+      <!-- Center: The MCP Server -->
+      <div class="arch-col" style="flex:1.6">
+        <div class="arch-box layer-server" style="position:relative;">
+          <div class="arch-process-label" style="background:rgba(64,199,144,0.08); color:#40c790; border:1px solid rgba(64,199,144,0.2);">Single Node.js Process — <span class="mono" style="color:#40c790">main.ts</span></div>
+
+          <div style="display:flex; gap:12px;">
+            <!-- Tool Registry -->
+            <div style="flex:1;">
+              <div style="font-size:10px; font-weight:700; color:#40c790; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:8px;">Tool Registry <span class="mono" style="color:#4a6e5c">server.ts</span></div>
+              <div class="arch-box-inner">
+                <div class="arch-item" style="border-color:rgba(176,124,250,0.15)">
+                  <span class="arch-badge badge-model">model</span>
+                  <div><span class="arch-item-label" style="color:#d4d5db">triage-alerts</span></div>
+                </div>
+                <div class="arch-item" style="border-color:rgba(176,124,250,0.15)">
+                  <span class="arch-badge badge-model">model</span>
+                  <div><span class="arch-item-label" style="color:#d4d5db">manage-cases</span></div>
+                </div>
+                <div class="arch-item" style="border-color:rgba(176,124,250,0.15)">
+                  <span class="arch-badge badge-model">model</span>
+                  <div><span class="arch-item-label" style="color:#d4d5db">manage-rules</span></div>
+                </div>
+                <div class="arch-item" style="border-color:rgba(176,124,250,0.15)">
+                  <span class="arch-badge badge-model">model</span>
+                  <div><span class="arch-item-label" style="color:#d4d5db">threat-hunt</span></div>
+                </div>
+                <div class="arch-item" style="border-color:rgba(64,199,144,0.15)">
+                  <span class="arch-badge badge-app">app</span>
+                  <div><span class="arch-item-label" style="color:#d4d5db">poll-alerts</span></div>
+                </div>
+                <div class="arch-item" style="border-color:rgba(64,199,144,0.15)">
+                  <span class="arch-badge badge-app">app</span>
+                  <div><span class="arch-item-label" style="color:#d4d5db">execute-esql</span></div>
+                </div>
+                <div class="arch-item" style="border-color:rgba(64,199,144,0.15); border-style:dashed; opacity:0.6">
+                  <span class="arch-badge badge-app">app</span>
+                  <div><span class="arch-item-label" style="color:#9496a1">+ 12 more app-only</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- UI Resources + Elastic Client -->
+            <div style="flex:1; display:flex; flex-direction:column; gap:12px;">
+              <div>
+                <div style="font-size:10px; font-weight:700; color:#40c790; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:8px;">UI Resources <span class="mono" style="color:#4a6e5c">views/*</span></div>
+                <div class="arch-box-inner">
+                  <div class="arch-item" style="border-color:rgba(92,124,250,0.15)">
+                    <div><span class="arch-item-label" style="color:#5c7cfa">ui://</span><span class="arch-item-desc" style="color:#9496a1">triage-alerts/mcp-app.html</span></div>
+                  </div>
+                  <div class="arch-item" style="border-color:rgba(92,124,250,0.15)">
+                    <div><span class="arch-item-label" style="color:#5c7cfa">ui://</span><span class="arch-item-desc" style="color:#9496a1">manage-cases/mcp-app.html</span></div>
+                  </div>
+                  <div class="arch-item" style="border-color:rgba(92,124,250,0.15); border-style:dashed; opacity:0.6">
+                    <div><span class="arch-item-desc" style="color:#636882">+ 4 more bundled React views</span></div>
+                  </div>
+                </div>
+                <div style="font-size:9px; color:#636882; margin-top:6px; padding-left:2px;">Each view is a single-file HTML (Vite + React + Tailwind)</div>
+              </div>
+
+              <div>
+                <div style="font-size:10px; font-weight:700; color:#f0b840; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:8px;">Elastic API Client <span class="mono" style="color:#8a7a3a">elastic/*</span></div>
+                <div class="arch-box-inner">
+                  <div class="arch-item" style="border-color:rgba(240,184,64,0.12)">
+                    <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                      <span class="mono" style="color:#f0b840">alerts.ts</span>
+                      <span class="mono" style="color:#f0b840">cases.ts</span>
+                      <span class="mono" style="color:#f0b840">rules.ts</span>
+                      <span class="mono" style="color:#f0b840">esql.ts</span>
+                      <span class="mono" style="color:#f0b840">indices.ts</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="font-size:9px; color:#636882; margin-top:6px; padding-left:2px;">Typed wrappers around ES/Kibana REST APIs via shared <span class="mono" style="color:#636882">client.ts</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:0 4px;">
+        <div style="font-size:9px; color:#636882; font-weight:600; font-family:'JetBrains Mono',monospace; white-space:nowrap;">REST API</div>
+        <div style="width:40px; height:2px; background:rgba(255,255,255,0.12); border-radius:1px;"></div>
+        <div style="color:rgba(255,255,255,0.3); font-size:14px;">→</div>
+      </div>
+
+      <!-- Right: Elastic Stack -->
+      <div class="arch-col" style="flex:0.6">
+        <div class="arch-box layer-elastic" style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+          <div class="arch-box-title" style="color:#f0b840">⚡ Elastic Stack</div>
+          <div class="arch-box-inner">
+            <div class="arch-item" style="border-color:rgba(240,184,64,0.15)">
+              <div><span class="arch-item-label" style="color:#f0b840">Elasticsearch</span><br><span class="arch-item-desc">Alerts, events, indices</span></div>
+            </div>
+            <div class="arch-item" style="border-color:rgba(240,184,64,0.15)">
+              <div><span class="arch-item-label" style="color:#f0b840">Kibana</span><br><span class="arch-item-desc">Cases, rules, attack discovery</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="arch-heading" style="margin-bottom:4px;">Interaction Flow</div>
+  <div class="arch-subheading" style="margin-bottom:24px;">How a user request flows through each layer</div>
 
   <!-- STEP 1 -->
   <div class="layer layer-user">
