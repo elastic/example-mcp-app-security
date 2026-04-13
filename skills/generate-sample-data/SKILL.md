@@ -1,5 +1,5 @@
 ---
-name: elastic-security-sample-data
+name: generate-sample-data
 description: >
   Generate sample security events, attack scenarios, and synthetic alerts for Elastic
   Security. Use when demoing, populating dashboards, testing detection rules, setting

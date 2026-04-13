@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+cd "$(dirname "$0")/.."
+
+# Map CLAUDE_PLUGIN_OPTION_* env vars (set by marketplace userConfig) to
+# the env vars the server expects. Falls through if already set directly.
+export ELASTICSEARCH_URL="${ELASTICSEARCH_URL:-${CLAUDE_PLUGIN_OPTION_ELASTICSEARCH_URL:-}}"
+export ELASTICSEARCH_API_KEY="${ELASTICSEARCH_API_KEY:-${CLAUDE_PLUGIN_OPTION_ELASTICSEARCH_API_KEY:-}}"
+export KIBANA_URL="${KIBANA_URL:-${CLAUDE_PLUGIN_OPTION_KIBANA_URL:-}}"
+export KIBANA_API_KEY="${KIBANA_API_KEY:-${CLAUDE_PLUGIN_OPTION_KIBANA_API_KEY:-}}"
+
+# Load .env as fallback for dev testing (--plugin-dir mode).
+if [ -z "${ELASTICSEARCH_URL:-}" ] && [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
+exec node dist/main.js --stdio
