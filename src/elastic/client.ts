@@ -41,13 +41,18 @@ export async function esRequest<T = unknown>(
     }
   }
 
+  const isRawBody = typeof options.body === "string";
   const res = await fetch(url.toString(), {
     method: options.method || (options.body ? "POST" : "GET"),
     headers: {
       Authorization: `ApiKey ${config.elasticsearchApiKey}`,
-      "Content-Type": "application/json",
+      "Content-Type": isRawBody ? "application/x-ndjson" : "application/json",
     },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.body
+      ? isRawBody
+        ? (options.body as string)
+        : JSON.stringify(options.body)
+      : undefined,
   });
 
   if (!res.ok) {
