@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "MCP Server (dev)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "watch", "main.ts"],
+      "port": 3001
+    },
+    {
+      "name": "View Builder (watch)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/build-views.js", "--watch"],
+      "port": 0
+    }
+  ]
+}
