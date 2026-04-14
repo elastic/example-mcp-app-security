@@ -20,4 +20,9 @@ if [ -z "${ELASTICSEARCH_URL:-}" ] && [ -f .env ]; then
   set +a
 fi
 
-exec node dist/main.js --stdio
+# Use bundled single-file build if available, otherwise fall back to dist/main.js
+if [ -f dist/main.bundle.mjs ]; then
+  exec node dist/main.bundle.mjs --stdio
+else
+  exec node dist/main.js --stdio
+fi

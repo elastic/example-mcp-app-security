@@ -50,7 +50,23 @@
 
   "mcpServers": {
     "elastic-security": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/elastic-security-mcp"
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/elastic-security-mcp",
+      "env": {
+        "NODE_PATH": "${CLAUDE_PLUGIN_DATA}/node_modules"
+      }
     }
+  },
+
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/package.json\" \"${CLAUDE_PLUGIN_DATA}/package.json\" >/dev/null 2>&1 || (cd \"${CLAUDE_PLUGIN_DATA}\" && cp \"${CLAUDE_PLUGIN_ROOT}/package.json\" . && npm install --omit=dev) || rm -f \"${CLAUDE_PLUGIN_DATA}/package.json\""
+          }
+        ]
+      }
+    ]
   }
 }
