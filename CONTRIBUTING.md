@@ -45,7 +45,7 @@ The dev server runs on `http://localhost:3001/mcp` in HTTP mode. Use `npm run st
 
 ## Building Distribution Packages
 
-The project supports two distribution formats. Both start from the same build pipeline.
+The project supports three distribution formats. All start from the same build pipeline.
 
 ### Full Build
 
@@ -89,6 +89,16 @@ npm pack
 
 This produces `elastic-security-mcp-app-<version>.tgz` in the repo root. The `bin`, `main`, and `files` fields in `package.json` control what gets included.
 
+### Skill Zips (for Claude Desktop Skills)
+
+Each skill in `skills/` is packaged as an individual `.zip` for upload to Claude Desktop's Skills UI.
+
+```bash
+npm run skills:zip
+```
+
+This script (`scripts/build-skill-zips.sh`) iterates over `skills/*/`, zipping each directory that contains a `SKILL.md`. The resulting files are written to `dist/skills/` (e.g. `dist/skills/alert-triage.zip`).
+
 ## Release Process
 
 Releases are automated via GitHub Actions (`.github/workflows/release.yml`). To create a release:
@@ -106,7 +116,8 @@ The workflow will:
 1. Build the project and create the esbuild bundle
 2. Pack the `.mcpb` bundle (for Claude Desktop)
 3. Pack the `.tgz` tarball (for VS Code / npx)
-4. Create a GitHub release with both files attached
+4. Build skill zips (one `.zip` per skill in `dist/skills/`)
+5. Create a GitHub release with all files attached
 
 ## Adding a New Tool
 

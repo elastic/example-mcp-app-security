@@ -276,17 +276,22 @@ Restart Claude Desktop. The tools appear under the MCP connector menu.
 
 ### Install Skills
 
+Skills teach Claude *when* and *how* to use the tools. Download the skill zips from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest):
+
+- `alert-triage.zip`
+- `attack-discovery-triage.zip`
+- `case-management.zip`
+- `detection-rule-management.zip`
+- `generate-sample-data.zip`
+
+In Claude Desktop: **Settings → Skills → Add skill** → upload each zip individually.
+
+If you're building from source, you can generate the zips locally instead:
+
 ```bash
 npm run skills:zip
+# Produces dist/skills/<skill-name>.zip for each skill
 ```
-
-This produces one `.zip` per skill in `dist/skills/`. In Claude Desktop: **Settings → Skills → Add skill** → upload each zip individually:
-
-- `dist/skills/alert-triage.zip`
-- `dist/skills/attack-discovery-triage.zip`
-- `dist/skills/case-management.zip`
-- `dist/skills/detection-rule-management.zip`
-- `dist/skills/generate-sample-data.zip`
 
 ### VS Code (manual config)
 
