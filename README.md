@@ -188,7 +188,7 @@ Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https:
 
 ### VS Code / Cursor (via npx)
 
-Add to your user or workspace settings (requires Node.js 22+):
+Download the `.tgz` tarball from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest) and add to your user or workspace settings (requires Node.js 22+):
 
 ```json
 {
@@ -196,7 +196,11 @@ Add to your user or workspace settings (requires Node.js 22+):
     "servers": {
       "elastic-security": {
         "command": "npx",
-        "args": ["-y", "elastic-security-mcp-app", "--stdio"],
+        "args": [
+          "-y",
+          "https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app-0.1.0.tgz",
+          "--stdio"
+        ],
         "env": {
           "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
           "ELASTICSEARCH_API_KEY": "your-api-key",
@@ -208,6 +212,8 @@ Add to your user or workspace settings (requires Node.js 22+):
   }
 }
 ```
+
+> **Note:** Replace the version in the URL (`0.1.0`) with the version from the release you downloaded.
 
 ### Claude.ai (via tunnel)
 

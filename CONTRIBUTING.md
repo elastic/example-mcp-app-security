@@ -76,19 +76,18 @@ The resulting file is `example-mcp-app-security.mcpb` in the repo root.
 - `manifest.json` — MCPB spec v0.3 manifest declaring server config, user-configurable credentials, tool metadata, and compatibility
 - `.mcpbignore` — controls which files are excluded from the bundle (keeps it lean by only including the esbuild bundle + views)
 
-### npm Package (for VS Code / npx)
+### npm Tarball (for VS Code / npx)
 
-The `package.json` is configured for npm publishing with `bin`, `main`, and `files` fields. To publish:
+The release workflow produces a `.tgz` tarball via `npm pack` and attaches it to the GitHub release. Users install via `npx` pointing at the tarball URL -- no npm registry publishing required.
+
+To build a tarball locally:
 
 ```bash
-npm publish --access public
+npm run build
+npm pack
 ```
 
-The `prepublishOnly` script automatically runs the build before publishing. Users install via:
-
-```
-npx elastic-security-mcp-app --stdio
-```
+This produces `elastic-security-mcp-app-<version>.tgz` in the repo root. The `bin`, `main`, and `files` fields in `package.json` control what gets included.
 
 ## Release Process
 
@@ -105,9 +104,9 @@ git push origin --tags
 The workflow will:
 
 1. Build the project and create the esbuild bundle
-2. Pack the `.mcpb` bundle
-3. Create a GitHub release with the `.mcpb` file attached
-4. Optionally publish to npm (when the `NPM_PUBLISH` repository variable is set to `true` and an `NPM_TOKEN` secret is configured)
+2. Pack the `.mcpb` bundle (for Claude Desktop)
+3. Pack the `.tgz` tarball (for VS Code / npx)
+4. Create a GitHub release with both files attached
 
 ## Adding a New Tool
 
