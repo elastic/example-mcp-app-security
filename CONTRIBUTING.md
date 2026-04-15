@@ -76,14 +76,6 @@ The resulting file is `example-mcp-app-security.mcpb` in the repo root.
 - `manifest.json` — MCPB spec v0.3 manifest declaring server config, user-configurable credentials, tool metadata, and compatibility
 - `.mcpbignore` — controls which files are excluded from the bundle (keeps it lean by only including the esbuild bundle + views)
 
-### Claude Code Plugin Zip
-
-```bash
-npm run plugin:zip
-```
-
-Produces a `.zip` for Claude Code's plugin system (`scripts/build-plugin-zip.sh`). Includes the esbuild bundle, views, skills, agents, and the `.claude-plugin/plugin.json` manifest.
-
 ### npm Package (for VS Code / npx)
 
 The `package.json` is configured for npm publishing with `bin`, `main`, and `files` fields. To publish:

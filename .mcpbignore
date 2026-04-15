@@ -13,11 +13,6 @@ package-lock.json
 scripts/
 .github/
 
-# Claude plugin format (separate distribution)
-.claude-plugin/
-claude-plugin/
-bin/
-
 # Skills, agents, docs
 skills/
 .claude/
