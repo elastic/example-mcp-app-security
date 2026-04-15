@@ -2,6 +2,15 @@ import type { ElasticConfig } from "../shared/types.js";
 
 let _config: ElasticConfig | null = null;
 
+export function setConfig(config: ElasticConfig) {
+  _config = {
+    elasticsearchUrl: config.elasticsearchUrl.replace(/\/$/, ""),
+    elasticsearchApiKey: config.elasticsearchApiKey,
+    kibanaUrl: (config.kibanaUrl || config.elasticsearchUrl).replace(/\/$/, ""),
+    kibanaApiKey: config.kibanaApiKey || config.elasticsearchApiKey,
+  };
+}
+
 export function getConfig(): ElasticConfig {
   if (!_config) {
     const elasticsearchUrl = process.env.ELASTICSEARCH_URL;
@@ -42,17 +51,21 @@ export async function esRequest<T = unknown>(
   }
 
   const isRawBody = typeof options.body === "string";
+  const contentType = isRawBody && path.includes("_bulk")
+    ? "application/x-ndjson"
+    : "application/json";
+
+  const timeoutMs = path.includes("_bulk") ? 120_000 : 30_000;
   const res = await fetch(url.toString(), {
     method: options.method || (options.body ? "POST" : "GET"),
     headers: {
       Authorization: `ApiKey ${config.elasticsearchApiKey}`,
-      "Content-Type": isRawBody ? "application/x-ndjson" : "application/json",
+      "Content-Type": contentType,
     },
     body: options.body
-      ? isRawBody
-        ? (options.body as string)
-        : JSON.stringify(options.body)
+      ? isRawBody ? (options.body as string) : JSON.stringify(options.body)
       : undefined,
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!res.ok) {
@@ -95,6 +108,7 @@ export async function kibanaRequest<T = unknown>(
     method: options.method || (options.body ? "POST" : "GET"),
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
