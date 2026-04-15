@@ -14,7 +14,8 @@
     "start": "node dist/main.js",
     "start:stdio": "node dist/main.js --stdio",
     "dev": "concurrently --raw \"node scripts/build-views.js --watch\" \"tsx watch main.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "skills:zip": "bash scripts/build-skill-zips.sh"
   },
   "engines": {
     "node": ">=22"
