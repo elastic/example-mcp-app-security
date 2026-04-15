@@ -180,7 +180,44 @@ Generate ECS-compliant security events:
 - Windows Credential Theft, AWS Privilege Escalation, Okta Identity Takeover, Ransomware Kill Chain
 - All data tagged for safe cleanup
 
-## Prerequisites
+## Installation
+
+### Claude Desktop (one-click install)
+
+Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest) and double-click it. Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required.
+
+### VS Code / Cursor (via npx)
+
+Add to your user or workspace settings (requires Node.js 22+):
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "elastic-security": {
+        "command": "npx",
+        "args": ["-y", "elastic-security-mcp-app", "--stdio"],
+        "env": {
+          "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
+          "ELASTICSEARCH_API_KEY": "your-api-key",
+          "KIBANA_URL": "https://your-cluster.kb.cloud.example.com",
+          "KIBANA_API_KEY": "your-kibana-api-key"
+        }
+      }
+    }
+  }
+}
+```
+
+### Claude.ai (via tunnel)
+
+```bash
+npm start
+npx cloudflared tunnel --url http://localhost:3001
+# Add the generated URL as a custom MCP connector in Claude.ai settings
+```
+
+## Prerequisites (build from source)
 
 - **Node.js 22+**
 - **Elasticsearch 8.x or 9.x** with Security enabled
@@ -188,7 +225,7 @@ Generate ECS-compliant security events:
 - **API keys** for both Elasticsearch and Kibana
 - **Claude Desktop**, **Claude.ai**, or another MCP-compatible host
 
-## Quick Start
+## Quick Start (build from source)
 
 ```bash
 # Clone and install
@@ -208,7 +245,7 @@ npm start
 # Server runs on http://localhost:3001/mcp
 ```
 
-### Claude Desktop
+### Claude Desktop (manual config)
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -242,15 +279,7 @@ done
 
 In Claude Desktop: Settings → Skills → Manage Skills → drag each `.skill` file.
 
-### Claude.ai (via tunnel)
-
-```bash
-npm start
-npx cloudflared tunnel --url http://localhost:3001
-# Add the generated URL as a custom MCP connector in Claude.ai settings
-```
-
-### VS Code
+### VS Code (manual config)
 
 Add to `.vscode/settings.json`:
 

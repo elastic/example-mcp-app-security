@@ -1,0 +1,43 @@
+# Source and config
+src/
+*.ts
+tsconfig*.json
+vite.config.*
+.env*
+
+# Dependencies (esbuild bundle is self-contained)
+node_modules/
+package-lock.json
+
+# Build scripts and tooling
+scripts/
+.github/
+
+# Claude plugin format (separate distribution)
+.claude-plugin/
+claude-plugin/
+bin/
+
+# Skills, agents, docs
+skills/
+.claude/
+agents/
+docs/
+project/
+
+# Dev / IDE
+.vscode/
+.git/
+*.map
+
+# Misc
+*.zip
+*.mcpb
+.DS_Store
+.gitignore
+
+# Only keep: manifest.json, dist/main.bundle.mjs, dist/views/
+# Exclude the rest of dist/ (tsc output, declarations, etc.)
+dist/main.js
+dist/src/
+dist/**/*.d.ts

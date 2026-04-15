@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Bundle with esbuild
+        run: |
+          npx esbuild dist/main.js \
+            --bundle \
+            --platform=node \
+            --format=esm \
+            --target=node22 \
+            --outfile=dist/main.bundle.mjs \
+            --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"
+
+      - name: Pack MCPB bundle
+        run: npx @anthropic-ai/mcpb pack .
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            elastic-security-mcp-app.mcpb \
+            --title "Elastic Security MCP App ${{ github.ref_name }}" \
+            --generate-notes
+
+      - name: Publish to npm
+        if: vars.NPM_PUBLISH == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
