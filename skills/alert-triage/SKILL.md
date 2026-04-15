@@ -1,5 +1,5 @@
 ---
-name: alert-triage
+name: elastic-security-alert-triage
 description: >
   Triage Elastic Security alerts — fetch, investigate, classify threats, create cases,
   and acknowledge. Use when triaging alerts, performing SOC analysis, investigating

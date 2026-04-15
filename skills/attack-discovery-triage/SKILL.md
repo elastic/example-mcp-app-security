@@ -1,5 +1,5 @@
 ---
-name: attack-discovery-triage
+name: elastic-security-attack-discovery-triage
 description: >
   Triage Elastic Security Attack Discovery findings — fetch correlated attack narratives, assess confidence
   with entity risk and rule frequency signals, and present an interactive triage dashboard for approval,

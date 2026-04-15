@@ -1,5 +1,5 @@
 ---
-name: detection-rule-management
+name: elastic-security-detection-rules
 description: >
   Create, tune, and manage Elastic Security detection rules. Use for false positive
   tuning, adding exceptions, creating new detection coverage, finding noisy rules,
