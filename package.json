@@ -40,6 +40,8 @@
     "start:stdio": "node dist/main.js --stdio",
     "dev": "concurrently --raw \"node scripts/build-views.js --watch\" \"tsx watch main.ts\"",
     "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build",
+    "skills:zip": "bash scripts/build-skill-zips.sh",
     "mcpb:pack": "bash scripts/build-mcpb.sh",
     "prepublishOnly": "npm run build"
   },

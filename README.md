@@ -108,7 +108,7 @@ Click any node in the graph to see real Elasticsearch data — alert details, pr
 
 ### Skills
 
-The `skills/` directory contains [Claude Desktop Skills](https://docs.anthropic.com/en/docs/claude-desktop/skills) — `SKILL.md` files that teach Claude *when* and *how* to use the tools. Install via Claude Desktop's Skills UI (Settings → Skills → Manage Skills → drag `.skill` file).
+The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/overview) — `SKILL.md` files that teach Claude *when* and *how* to use the tools. Run `npm run skills:zip` to package each skill into an individual `.zip` file under `dist/skills/`, then upload them via Claude Desktop's Skills UI.
 
 ## Features in Detail
 
@@ -271,13 +271,16 @@ Restart Claude Desktop. The tools appear under the MCP connector menu.
 ### Install Skills
 
 ```bash
-cd skills
-for skill in alert-triage case-management detection-rule-management generate-sample-data attack-discovery-triage; do
-  [ -d "$skill" ] && zip -r ../dist/skills/${skill}.skill ${skill}/
-done
+npm run skills:zip
 ```
 
-In Claude Desktop: Settings → Skills → Manage Skills → drag each `.skill` file.
+This produces one `.zip` per skill in `dist/skills/`. In Claude Desktop: **Settings → Skills → Add skill** → upload each zip individually:
+
+- `dist/skills/alert-triage.zip`
+- `dist/skills/attack-discovery-triage.zip`
+- `dist/skills/case-management.zip`
+- `dist/skills/detection-rule-management.zip`
+- `dist/skills/generate-sample-data.zip`
 
 ### VS Code (manual config)
 
