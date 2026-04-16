@@ -195,9 +195,15 @@ async function bulkIndex(docs: IndexedDoc[]): Promise<{ indexed: number }> {
       doc._source,
     ]);
 
-    const result = await esRequest<{ items: unknown[]; errors: boolean }>("/_bulk", {
+    const result = await esRequest<{ items: Array<{ create: { _index: string; status: number; error?: unknown } }>; errors: boolean }>("/_bulk", {
       body: body.map((line) => JSON.stringify(line)).join("\n") + "\n",
     });
+
+    if (result.errors) {
+      const succeeded = result.items.filter((item) => item.create.status >= 200 && item.create.status < 300).length;
+      const firstError = result.items.find((item) => item.create.error);
+      throw new Error(`Bulk indexing had errors: ${succeeded}/${result.items.length} succeeded. First error: ${JSON.stringify(firstError?.create.error)}`);
+    }
     totalIndexed += result.items.length;
   }
 

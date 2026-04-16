@@ -180,7 +180,50 @@ Generate ECS-compliant security events:
 - Windows Credential Theft, AWS Privilege Escalation, Okta Identity Takeover, Ransomware Kill Chain
 - All data tagged for safe cleanup
 
-## Prerequisites
+## Installation
+
+### Claude Desktop (one-click install)
+
+Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest) and double-click it. Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required.
+
+### VS Code / Cursor (via npx)
+
+Add to your user or workspace settings (requires Node.js 22+):
+
+.vscode/mcp.json:
+
+```json
+{
+  "servers": {
+    "elastic-security": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "https://github.com/elastic/wip-example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz",
+        "--stdio"
+      ],
+      "env": {
+        "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
+        "ELASTICSEARCH_API_KEY": "your-api-key",
+        "KIBANA_URL": "https://your-cluster.kb.cloud.example.com",
+        "KIBANA_API_KEY": "your-kibana-api-key"
+      }
+    }
+  }
+}
+```
+
+> **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
+
+### Claude.ai (via tunnel)
+
+```bash
+npm start
+npx cloudflared tunnel --url http://localhost:3001
+# Add the generated URL as a custom MCP connector in Claude.ai settings
+```
+
+## Prerequisites (build from source)
 
 - **Node.js 22+**
 - **Elasticsearch 8.x or 9.x** with Security enabled
@@ -188,11 +231,11 @@ Generate ECS-compliant security events:
 - **API keys** for both Elasticsearch and Kibana
 - **Claude Desktop**, **Claude.ai**, or another MCP-compatible host
 
-## Quick Start
+## Quick Start (build from source)
 
 ```bash
 # Clone and install
-git clone https://github.com/elastic/example-mcp-app-security.git
+git clone https://github.com/elastic/wip-example-mcp-app-security.git
 cd example-mcp-app-security
 npm install
 
@@ -208,7 +251,7 @@ npm start
 # Server runs on http://localhost:3001/mcp
 ```
 
-### Claude Desktop
+### Claude Desktop (manual config)
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -233,43 +276,38 @@ Restart Claude Desktop. The tools appear under the MCP connector menu.
 
 ### Install Skills
 
+Skills teach Claude *when* and *how* to use the tools. Download the skill zips from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest):
+
+- `alert-triage.zip`
+- `attack-discovery-triage.zip`
+- `case-management.zip`
+- `detection-rule-management.zip`
+- `generate-sample-data.zip`
+
+In Claude Desktop: **Settings → Skills → Add skill** → upload each zip individually.
+
+If you're building from source, you can generate the zips locally instead:
+
 ```bash
 npm run skills:zip
+# Produces dist/skills/<skill-name>.zip for each skill
 ```
 
-This produces one `.zip` per skill in `dist/skills/`. In Claude Desktop: **Settings → Skills → Add skill** → upload each zip individually:
+### VS Code (manual config)
 
-- `dist/skills/alert-triage.zip`
-- `dist/skills/attack-discovery-triage.zip`
-- `dist/skills/case-management.zip`
-- `dist/skills/detection-rule-management.zip`
-- `dist/skills/generate-sample-data.zip`
-
-### Claude.ai (via tunnel)
-
-```bash
-npm start
-npx cloudflared tunnel --url http://localhost:3001
-# Add the generated URL as a custom MCP connector in Claude.ai settings
-```
-
-### VS Code
-
-Add to `.vscode/settings.json`:
+Add to `.vscode/mcp.json`:
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "elastic-security": {
-        "command": "node",
-        "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
-        "env": {
-          "ELASTICSEARCH_URL": "...",
-          "ELASTICSEARCH_API_KEY": "...",
-          "KIBANA_URL": "...",
-          "KIBANA_API_KEY": "..."
-        }
+  "servers": {
+    "elastic-security": {
+      "command": "node",
+      "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
+      "env": {
+        "ELASTICSEARCH_URL": "...",
+        "ELASTICSEARCH_API_KEY": "...",
+        "KIBANA_URL": "...",
+        "KIBANA_API_KEY": "..."
       }
     }
   }

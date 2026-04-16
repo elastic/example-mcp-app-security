@@ -4,6 +4,30 @@
   "description": "MCP App server for Elastic Security — interactive blue-team UIs for alert triage, case management, detection rules, and threat hunting",
   "type": "module",
   "license": "Apache-2.0",
+  "main": "dist/main.js",
+  "bin": {
+    "elastic-security-mcp-app": "./dist/main.js"
+  },
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elastic/wip-example-mcp-app-security.git"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "elastic",
+    "elasticsearch",
+    "kibana",
+    "security",
+    "siem",
+    "soc",
+    "alerts",
+    "detection",
+    "threat-hunting"
+  ],
   "scripts": {
     "build": "tsc --noEmit && tsc -p tsconfig.server.json && node scripts/build-views.js",
     "build:views": "node scripts/build-views.js",
@@ -15,7 +39,10 @@
     "start:stdio": "node dist/main.js --stdio",
     "dev": "concurrently --raw \"node scripts/build-views.js --watch\" \"tsx watch main.ts\"",
     "typecheck": "tsc --noEmit",
-    "skills:zip": "bash scripts/build-skill-zips.sh"
+    "skills:zip": "bash scripts/build-skill-zips.sh",
+    "mcpb:pack": "bash scripts/build-mcpb.sh",
+    "prepublishOnly": "npm run build",
+    "version": "node -e \"const m=JSON.parse(require('fs').readFileSync('manifest.json','utf8'));m.version=require('./package.json').version;require('fs').writeFileSync('manifest.json',JSON.stringify(m,null,2)+'\\n')\" && git add manifest.json"
   },
   "engines": {
     "node": ">=22"

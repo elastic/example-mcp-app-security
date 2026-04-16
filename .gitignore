@@ -2,6 +2,11 @@ node_modules/
 dist/
 *.tsbuildinfo
 .mcp.json
+.vscode/mcp.json
 .env
 .DS_Store
+*.code-workspace
 *.backup
+*.zip
+*.mcpb
+.claude/

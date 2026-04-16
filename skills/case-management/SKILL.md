@@ -1,5 +1,5 @@
 ---
-name: elastic-security-case-management
+name: case-management
 description: >
   Create, search, update, and manage SOC cases for Elastic Security. ALWAYS use this
   skill when the user mentions cases, incidents, investigations, or asks to see, show,

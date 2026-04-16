@@ -6,7 +6,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function resolveViewPath(viewName: string): string {
   const candidates = [
+    // esbuild bundle: __dirname = dist/
+    path.resolve(__dirname, "views", viewName, "mcp-app.html"),
+    // tsx dev: __dirname = src/tools/
     path.resolve(__dirname, "../../dist/views", viewName, "mcp-app.html"),
+    // tsc compiled: __dirname = dist/src/tools/
     path.resolve(__dirname, "../../../dist/views", viewName, "mcp-app.html"),
     path.resolve(__dirname, "../../views", viewName, "mcp-app.html"),
   ];
