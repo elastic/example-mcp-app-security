@@ -28,10 +28,13 @@ project/
 # Misc
 *.zip
 *.mcpb
+*.md
+*.backup
 *.code-workspace
 .DS_Store
 .gitignore
 elastic-security-plugin*/
+package.json
 
 # Only keep: manifest.json, dist/main.bundle.mjs, dist/views/
 # Exclude the rest of dist/ (tsc output, declarations, etc.)
