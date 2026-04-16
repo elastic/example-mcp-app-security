@@ -9,8 +9,7 @@
     "elastic-security-mcp-app": "./dist/main.js"
   },
   "files": [
-    "dist/",
-    "bin/"
+    "dist/"
   ],
   "repository": {
     "type": "git",
