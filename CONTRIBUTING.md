@@ -78,7 +78,7 @@ The resulting file is `example-mcp-app-security.mcpb` in the repo root.
 
 ### npm Tarball (for VS Code / npx)
 
-The release workflow produces a `.tgz` tarball via `npm pack` and attaches it to the GitHub release. Users install via `npx` pointing at the tarball URL -- no npm registry publishing required.
+The release workflow produces two `.tgz` tarballs via `npm pack` and attaches them to the GitHub release: a version-less `elastic-security-mcp-app.tgz` (stable URL for docs) and a versioned `elastic-security-mcp-app-<version>.tgz` (for pinning). Users install via `npx` pointing at the tarball URL -- no npm registry publishing required.
 
 To build a tarball locally:
 

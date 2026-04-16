@@ -188,7 +188,7 @@ Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https:
 
 ### VS Code / Cursor (via npx)
 
-Download the `.tgz` tarball from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest) and add to your user or workspace settings (requires Node.js 22+):
+Add to your user or workspace settings (requires Node.js 22+):
 
 .vscode/mcp.json:
 
@@ -199,7 +199,7 @@ Download the `.tgz` tarball from the [latest GitHub release](https://github.com/
       "command": "npx",
       "args": [
         "-y",
-        "https://github.com/elastic/wip-example-mcp-app-security/releases/latest/download/elastic-security-mcp-app-0.1.0.tgz",
+        "https://github.com/elastic/wip-example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz",
         "--stdio"
       ],
       "env": {
@@ -213,7 +213,7 @@ Download the `.tgz` tarball from the [latest GitHub release](https://github.com/
 }
 ```
 
-> **Note:** Replace the version in the URL (`0.1.0`) with the version from the release you downloaded.
+> **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 
 ### Claude.ai (via tunnel)
 

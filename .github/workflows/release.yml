@@ -40,7 +40,9 @@ jobs:
           echo "MCPB_FILE=$(ls *.mcpb)" >> "$GITHUB_ENV"
 
       - name: Pack npm tarball
-        run: npm pack
+        run: |
+          npm pack
+          cp elastic-security-mcp-app-*.tgz elastic-security-mcp-app.tgz
 
       - name: Build skill zips
         run: npm run skills:zip
@@ -52,6 +54,7 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" \
             "$MCPB_FILE" \
+            elastic-security-mcp-app.tgz \
             elastic-security-mcp-app-*.tgz \
             dist/skills/*.zip \
             --title "Elastic Security MCP App ${{ github.ref_name }}" \
