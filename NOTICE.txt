@@ -1,0 +1,2 @@
+Elastic Security MCP App
+Copyright 2012-2026 Elasticsearch B.V.
