@@ -190,23 +190,23 @@ Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https:
 
 Download the `.tgz` tarball from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest) and add to your user or workspace settings (requires Node.js 22+):
 
+.vscode/mcp.json:
+
 ```json
 {
-  "mcp": {
-    "servers": {
-      "elastic-security": {
-        "command": "npx",
-        "args": [
-          "-y",
-          "https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app-0.1.0.tgz",
-          "--stdio"
-        ],
-        "env": {
-          "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
-          "ELASTICSEARCH_API_KEY": "your-api-key",
-          "KIBANA_URL": "https://your-cluster.kb.cloud.example.com",
-          "KIBANA_API_KEY": "your-kibana-api-key"
-        }
+  "servers": {
+    "elastic-security": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app-0.1.0.tgz",
+        "--stdio"
+      ],
+      "env": {
+        "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
+        "ELASTICSEARCH_API_KEY": "your-api-key",
+        "KIBANA_URL": "https://your-cluster.kb.cloud.example.com",
+        "KIBANA_API_KEY": "your-kibana-api-key"
       }
     }
   }
@@ -295,21 +295,19 @@ npm run skills:zip
 
 ### VS Code (manual config)
 
-Add to `.vscode/settings.json`:
+Add to `.vscode/mcp.json`:
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "elastic-security": {
-        "command": "node",
-        "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
-        "env": {
-          "ELASTICSEARCH_URL": "...",
-          "ELASTICSEARCH_API_KEY": "...",
-          "KIBANA_URL": "...",
-          "KIBANA_API_KEY": "..."
-        }
+  "servers": {
+    "elastic-security": {
+      "command": "node",
+      "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
+      "env": {
+        "ELASTICSEARCH_URL": "...",
+        "ELASTICSEARCH_API_KEY": "...",
+        "KIBANA_URL": "...",
+        "KIBANA_API_KEY": "..."
       }
     }
   }
