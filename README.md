@@ -184,11 +184,11 @@ Generate ECS-compliant security events:
 
 ### Claude Desktop (one-click install)
 
-Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest) and double-click it. Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required.
+Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest) and double-click it. Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required.
 
 ### VS Code / Cursor (via npx)
 
-Download the `.tgz` tarball from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest) and add to your user or workspace settings (requires Node.js 22+):
+Download the `.tgz` tarball from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest) and add to your user or workspace settings (requires Node.js 22+):
 
 .vscode/mcp.json:
 
@@ -199,7 +199,7 @@ Download the `.tgz` tarball from the [latest GitHub release](https://github.com/
       "command": "npx",
       "args": [
         "-y",
-        "https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app-0.1.0.tgz",
+        "https://github.com/elastic/wip-example-mcp-app-security/releases/latest/download/elastic-security-mcp-app-0.1.0.tgz",
         "--stdio"
       ],
       "env": {
@@ -235,7 +235,7 @@ npx cloudflared tunnel --url http://localhost:3001
 
 ```bash
 # Clone and install
-git clone https://github.com/elastic/example-mcp-app-security.git
+git clone https://github.com/elastic/wip-example-mcp-app-security.git
 cd example-mcp-app-security
 npm install
 
@@ -276,7 +276,7 @@ Restart Claude Desktop. The tools appear under the MCP connector menu.
 
 ### Install Skills
 
-Skills teach Claude *when* and *how* to use the tools. Download the skill zips from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest):
+Skills teach Claude *when* and *how* to use the tools. Download the skill zips from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest):
 
 - `alert-triage.zip`
 - `attack-discovery-triage.zip`

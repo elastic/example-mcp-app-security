@@ -12,7 +12,7 @@ Thank you for your interest in contributing to the Elastic Security MCP App.
 ## Getting Started
 
 ```bash
-git clone https://github.com/elastic/example-mcp-app-security.git
+git clone https://github.com/elastic/wip-example-mcp-app-security.git
 cd example-mcp-app-security
 npm install
 cp .env.example .env
