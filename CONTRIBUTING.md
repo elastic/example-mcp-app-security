@@ -104,10 +104,7 @@ This script (`scripts/build-skill-zips.sh`) iterates over `skills/*/`, zipping e
 Releases are automated via GitHub Actions (`.github/workflows/release.yml`). To create a release:
 
 ```bash
-# Update version in package.json and manifest.json
-npm version patch  # or minor/major
-
-# Push the tag
+npm version patch  # or minor/major — bumps package.json + manifest.json, commits, and tags
 git push origin --tags
 ```
 
