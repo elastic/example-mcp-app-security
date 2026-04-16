@@ -108,7 +108,7 @@ Click any node in the graph to see real Elasticsearch data — alert details, pr
 
 ### Skills
 
-The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/overview) — `SKILL.md` files that teach Claude *when* and *how* to use the tools. Run `npm run skills:zip` to package each skill into an individual `.zip` file under `dist/skills/`, then upload them via Claude Desktop's Skills UI.
+The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/overview) — `SKILL.md` files that teach Claude *when* and *how* to use the tools. See [Installation → Skills](#skills) for setup.
 
 ## Features in Detail
 
@@ -182,7 +182,7 @@ Generate ECS-compliant security events:
 
 ## Installation
 
-### Install Skills
+### Skills
 
 Skills teach your AI agent *when* and *how* to use the tools. You can install them using the `skills` CLI with `npx`, or by cloning this repository and running the bundled installer script. The `npx` method requires Node.js with `npx` available in your environment.
 
@@ -239,7 +239,7 @@ Download the skill zips from the [latest GitHub release](https://github.com/elas
 
 In Claude Desktop: **Customize → Skills → Create Skill → Upload a skill** → upload each zip individually.
 
-If you're building from source, you can generate the zips locally instead:
+If you're building from source, you can generate the zips locally:
 
 ```bash
 npm run skills:zip
@@ -279,17 +279,36 @@ git pull
 
 Without `--force` the script skips skills that are already installed.
 
-### MCP Installation
+### MCP Server
 
-### Claude Desktop (one-click install)
+#### Claude Desktop
 
-Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest) and double-click it. Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required.
+**One-click install:** Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest) and double-click it. Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required.
 
-### VS Code / Cursor (via npx)
+**Manual config (build from source):** Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
-Add to your user or workspace settings (requires Node.js 22+):
+```json
+{
+  "mcpServers": {
+    "elastic-security": {
+      "command": "node",
+      "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
+      "env": {
+        "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
+        "ELASTICSEARCH_API_KEY": "your-api-key",
+        "KIBANA_URL": "https://your-cluster.kb.cloud.example.com",
+        "KIBANA_API_KEY": "your-kibana-api-key"
+      }
+    }
+  }
+}
+```
 
-.vscode/mcp.json:
+Restart Claude Desktop. The tools appear under the MCP connector menu.
+
+#### VS Code / Cursor
+
+**Via npx (recommended):** Add to your user or workspace `.vscode/mcp.json` (requires Node.js 22+):
 
 ```json
 {
@@ -314,68 +333,7 @@ Add to your user or workspace settings (requires Node.js 22+):
 
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 
-### Claude.ai (via tunnel)
-
-```bash
-npm start
-npx cloudflared tunnel --url http://localhost:3001
-# Add the generated URL as a custom MCP connector in Claude.ai settings
-```
-
-## Prerequisites (build from source)
-
-- **Node.js 22+**
-- **Elasticsearch 8.x or 9.x** with Security enabled
-- **Kibana 8.x or 9.x** (for cases, rules, and attack discovery)
-- **API keys** for both Elasticsearch and Kibana
-- **Claude Desktop**, **Claude.ai**, or another MCP-compatible host
-
-## Quick Start (build from source)
-
-```bash
-# Clone and install
-git clone https://github.com/elastic/wip-example-mcp-app-security.git
-cd example-mcp-app-security
-npm install
-
-# Configure
-cp .env.example .env
-# Edit .env with your Elasticsearch/Kibana URLs and API keys
-
-# Build
-npm run build
-
-# Run (HTTP mode for testing)
-npm start
-# Server runs on http://localhost:3001/mcp
-```
-
-### Claude Desktop (manual config)
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "elastic-security": {
-      "command": "node",
-      "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
-      "env": {
-        "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
-        "ELASTICSEARCH_API_KEY": "your-api-key",
-        "KIBANA_URL": "https://your-cluster.kb.cloud.example.com",
-        "KIBANA_API_KEY": "your-kibana-api-key"
-      }
-    }
-  }
-}
-```
-
-Restart Claude Desktop. The tools appear under the MCP connector menu.
-
-### VS Code (manual config)
-
-Add to `.vscode/mcp.json`:
+**Manual config (build from source):** Same file, pointing to your local build:
 
 ```json
 {
@@ -393,6 +351,44 @@ Add to `.vscode/mcp.json`:
   }
 }
 ```
+
+#### Claude.ai
+
+Run the server locally and expose it via tunnel:
+
+```bash
+npm start
+npx cloudflared tunnel --url http://localhost:3001
+# Add the generated URL as a custom MCP connector in Claude.ai settings
+```
+
+## Building from Source
+
+### Prerequisites
+
+- **Node.js 22+**
+- **Elasticsearch 8.x or 9.x** with Security enabled
+- **Kibana 8.x or 9.x** (for cases, rules, and attack discovery)
+- **API keys** for both Elasticsearch and Kibana
+- **Claude Desktop**, **Claude.ai**, or another MCP-compatible host
+
+### Quick Start
+
+```bash
+git clone https://github.com/elastic/wip-example-mcp-app-security.git
+cd example-mcp-app-security
+npm install
+
+cp .env.example .env
+# Edit .env with your Elasticsearch/Kibana URLs and API keys
+
+npm run build
+
+npm start
+# Server runs on http://localhost:3001/mcp
+```
+
+Then configure your MCP host using one of the manual config options under [MCP Server](#mcp-server) above.
 
 ## Architecture
 
