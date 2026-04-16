@@ -6,8 +6,7 @@ on:
     tags:
       - "v*"
 
-  push:
-    branches: [ 'packaging-mcpb' ]
+    branches: ["packaging-mcpb"]
 
 permissions:
   contents: write
