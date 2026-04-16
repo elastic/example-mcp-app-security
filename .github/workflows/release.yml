@@ -1,7 +1,7 @@
 name: Release
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Manual trigger to test the build pipeline — no release is created
   push:
     tags:
       - "v*"
