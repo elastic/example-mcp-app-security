@@ -182,6 +182,27 @@ Generate ECS-compliant security events:
 
 ## Installation
 
+### Install Skills
+
+Skills teach Claude *when* and *how* to use the tools. Download the skill zips from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest):
+
+- `alert-triage.zip`
+- `attack-discovery-triage.zip`
+- `case-management.zip`
+- `detection-rule-management.zip`
+- `generate-sample-data.zip`
+
+In Claude Desktop: **Customize → Skills → Create Skill → Upload a skill** → upload each zip individually.
+
+If you're building from source, you can generate the zips locally instead:
+
+```bash
+npm run skills:zip
+# Produces dist/skills/<skill-name>.zip for each skill
+```
+
+### MCP Installation
+
 ### Claude Desktop (one-click install)
 
 Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest) and double-click it. Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required.
@@ -273,25 +294,6 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```
 
 Restart Claude Desktop. The tools appear under the MCP connector menu.
-
-### Install Skills
-
-Skills teach Claude *when* and *how* to use the tools. Download the skill zips from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest):
-
-- `alert-triage.zip`
-- `attack-discovery-triage.zip`
-- `case-management.zip`
-- `detection-rule-management.zip`
-- `generate-sample-data.zip`
-
-In Claude Desktop: **Settings → Skills → Add skill** → upload each zip individually.
-
-If you're building from source, you can generate the zips locally instead:
-
-```bash
-npm run skills:zip
-# Produces dist/skills/<skill-name>.zip for each skill
-```
 
 ### VS Code (manual config)
 
