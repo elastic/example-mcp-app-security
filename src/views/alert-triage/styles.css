@@ -175,7 +175,9 @@ body {
 
 .alert-list-pane {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px;
 }
 
@@ -204,6 +206,7 @@ body {
   transition: all var(--transition-fast);
   margin-bottom: 6px;
   border-left: 3px solid transparent;
+  min-width: 0;
 }
 
 .alert-card::before {
@@ -242,13 +245,20 @@ body {
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
+  min-width: 0;
+}
+
+/* Badge + risk score must not shrink so the rule name can use remaining space + ellipsis */
+.alert-card-row1 > span:not(.alert-card-rule):not(.alert-card-time) {
+  flex-shrink: 0;
 }
 
 .alert-card-rule {
   font-weight: 600;
   font-size: 13px;
   color: var(--text-primary);
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -266,23 +276,32 @@ body {
   font-size: 11.5px;
   color: var(--text-muted);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   margin-bottom: 6px;
   line-height: 1.4;
+  min-width: 0;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .alert-card-meta {
-  display: flex;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 10px;
   font-size: 11px;
   color: var(--text-secondary);
+  min-width: 0;
 }
 
 .meta-item {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
   gap: 4px;
+  min-width: 0;
 }
 
 .meta-label {
@@ -290,11 +309,20 @@ body {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .meta-value {
   font-family: var(--font-mono);
   font-size: 11px;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .alert-card-mitre {
@@ -776,6 +804,7 @@ body {
   border-radius: var(--radius-sm);
   transition: background var(--transition-fast);
   user-select: none;
+  min-width: 0;
 }
 
 .host-group-header:hover {
@@ -785,6 +814,11 @@ body {
 .host-group-header .host-name {
   font-family: var(--font-mono);
   color: var(--text-primary);
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .host-group-header .host-count {
@@ -806,6 +840,7 @@ body {
 
 .host-group-alerts {
   padding-left: 4px;
+  min-width: 0;
 }
 
 .ungrouped-label {
