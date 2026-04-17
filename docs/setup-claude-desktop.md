@@ -4,6 +4,9 @@
 
 Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest) and double-click it.
 
+> [!NOTE]
+> Claude Desktop displays a security warning stating the extension will have access to your computer. This is a standard message shown for all third-party extensions and is not specific to this one.
+
 Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
 
 > [!IMPORTANT]
