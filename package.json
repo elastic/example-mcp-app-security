@@ -41,8 +41,16 @@
     "typecheck": "tsc --noEmit",
     "skills:zip": "bash scripts/build-skill-zips.sh",
     "mcpb:pack": "bash scripts/build-mcpb.sh",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
     "prepublishOnly": "npm run build",
+    "prepare": "husky",
     "version": "node -e \"const m=JSON.parse(require('fs').readFileSync('manifest.json','utf8'));m.version=require('./package.json').version;require('fs').writeFileSync('manifest.json',JSON.stringify(m,null,2)+'\\n')\" && git add manifest.json"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs}": [
+      "eslint --fix"
+    ]
   },
   "engines": {
     "node": ">=22"
@@ -76,9 +84,13 @@
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
+    "eslint": "^10.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "tailwindcss": "^4.2.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.2",
     "vite": "^8.0.2",
     "vite-plugin-singlefile": "^2.3.2"
   }
