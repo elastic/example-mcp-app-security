@@ -319,7 +319,7 @@ export function App() {
   }, [checked]);
 
   useEffect(() => {
-    const app = new McpApp({ name: "attack-discovery-triage", version: "0.1.0" });
+    const app = new McpApp({ name: "attack-discovery-triage", version: "1.0.0" });
     appRef.current = app;
     applyTheme(app);
 

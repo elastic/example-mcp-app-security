@@ -115,7 +115,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const app = new McpApp({ name: "case-management", version: "0.1.0" });
+    const app = new McpApp({ name: "case-management", version: "1.0.0" });
     appRef.current = app;
     applyTheme(app);
 

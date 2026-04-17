@@ -61,7 +61,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const app = new McpApp({ name: "alert-triage", version: "0.1.0" });
+    const app = new McpApp({ name: "alert-triage", version: "1.0.0" });
     appRef.current = app;
     applyTheme(app);
 

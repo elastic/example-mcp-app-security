@@ -20,7 +20,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SKILLS_DIR="$REPO_ROOT/skills"
 
 SCRIPT_NAME="$(basename "$0")"
-VERSION="0.1.0"
+VERSION="1.0.0"
 
 # ── Agent directory mappings ──────────────────────────────────────────────
 # Each entry: "agent_id|project_dir" (relative to $PWD)

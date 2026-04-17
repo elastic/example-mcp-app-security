@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "elastic-security-mcp-app",
   "display_name": "Elastic Security",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Interactive blue-team security operations for Elastic Security — alert triage, attack discovery, case management, detection rules, threat hunting, and sample data generation.",
   "long_description": "An MCP App server that brings interactive blue-team security operations directly into Claude Desktop. Provides six rich React-based UIs that render inline in the conversation: alert triage with AI verdicts, AI-powered attack discovery with confidence scoring and MITRE mapping, case management with the Kibana Cases API, detection rule browsing and tuning, an ES|QL threat-hunting workbench with a D3 investigation graph, and an ECS sample-data generator for demos.",
   "author": {

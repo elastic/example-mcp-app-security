@@ -16,7 +16,7 @@ import { registerAttackDiscoveryTools } from "./tools/attack-discovery.js";
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "elastic-security",
-    version: "0.1.0",
+    version: "1.0.0",
   });
 
   registerAlertTriageTools(server);
