@@ -40,6 +40,7 @@ The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/
 | [Add to Claude Desktop](docs/setup-claude-desktop.md) | Install the MCP app via one-click `.mcpb` or manual config |
 | [Add to Cursor](docs/setup-cursor.md) | Connect the MCP app via npx or a locally running server |
 | [Add to VS Code](docs/setup-vscode.md) | Connect the MCP app via npx or a locally running server |
+| [Add to Claude Code](docs/setup-claude-code.md) | Register the MCP app via the `claude mcp add` CLI |
 | [Add to Claude.ai](docs/setup-claude-ai.md) | Expose the MCP app via a cloudflared tunnel |
 | [Build and run locally](docs/setup-local.md) | Build the MCP server from source and run it on your machine |
 | [Install skills](docs/setup-skills.md) | Install skills via npx, local clone, or zip upload |
