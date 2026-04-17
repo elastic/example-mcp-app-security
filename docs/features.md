@@ -2,6 +2,10 @@
 
 ## Alert Triage
 
+![AI Verdict Cards](screenshots/alert-verdicts.png)
+
+*Alert triage with AI verdict cards — Claude passes structured Malicious/Suspicious/Benign classifications that render inline.*
+
 The primary SOC workflow. Claude acts as a senior analyst:
 
 - **Intent-aware filtering**: "triage ransomware alerts" → filters by rule name, host, user, process with OR logic
@@ -15,6 +19,10 @@ The primary SOC workflow. Claude acts as a senior analyst:
 
 ## Attack Discovery
 
+![Attack Discovery](screenshots/attack-discovery.png)
+
+*On-demand AI-powered attack chain analysis with MITRE tactics mapping and confidence scoring.*
+
 AI-powered correlated attack chain analysis using Elastic's Attack Discovery API:
 
 - **On-demand generation**: "run attack discovery using Opus 4.6" triggers analysis via any AI connector
@@ -26,6 +34,10 @@ AI-powered correlated attack chain analysis using Elastic's Attack Discovery API
 - **Auto-polling**: refreshes every 10s during active generation
 
 ## Threat Hunt & Investigation Graph
+
+![Investigation Graph](screenshots/investigation-graph.png)
+
+*Entity investigation graph — progressive expansion, hover-to-trace, draggable nodes, real ES data on click.*
 
 ES|QL query workbench with a Sentinel-style entity investigation graph:
 

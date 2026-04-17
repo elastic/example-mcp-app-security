@@ -21,20 +21,6 @@ This project provides six interactive security operations tools, each with a ric
 
 See [docs/features.md](docs/features.md) for a full breakdown of each tool's capabilities.
 
-## Screenshots
-
-![AI Verdict Cards](docs/screenshots/alert-verdicts.png)
-
-*Alert triage with AI verdict cards — Claude passes structured Malicious/Suspicious/Benign classifications that render inline.*
-
-![Investigation Graph](docs/screenshots/investigation-graph.png)
-
-*Entity investigation graph — progressive expansion, hover-to-trace, draggable nodes, real ES data on click.*
-
-![Attack Discovery](docs/screenshots/attack-discovery.png)
-
-*Attack Discovery — on-demand AI-powered attack chain analysis with MITRE tactics mapping and confidence scoring.*
-
 ## How It Works
 
 ![Interaction Flow](docs/screenshots/interaction-flow.png)
