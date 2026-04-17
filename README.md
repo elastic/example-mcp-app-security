@@ -45,12 +45,13 @@ See [docs/architecture.md](docs/architecture.md) for details on how views are bu
 
 ### Skills
 
-The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/overview) — `SKILL.md` files that teach Claude *when* and *how* to use the tools. Run `npm run skills:zip` to package each skill into an individual `.zip` file under `dist/skills/`, then upload them via Claude Desktop's Skills UI.
+The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/overview) — `SKILL.md` files that teach Claude *when* and *how* to use the tools. See [docs/setup-skills.md](docs/setup-skills.md) for installation instructions.
 
 ## Installation
 
 | Guide | Description |
 |-------|-------------|
+| [Install skills](docs/setup-skills.md) | Install skills via npx, local clone, or zip upload |
 | [Run locally](docs/setup-local.md) | Build from source and run the server on your machine |
 | [Add to Cursor](docs/setup-cursor.md) | Connect via npx or a locally running server |
 | [Add to Claude Desktop](docs/setup-claude-desktop.md) | One-click `.mcpb` install or manual config |
