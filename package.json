@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "MCP App server for Elastic Security — interactive blue-team UIs for alert triage, case management, detection rules, and threat hunting",
   "type": "module",
-  "license": "Apache-2.0",
+  "license": "Elastic-2.0",
   "main": "dist/main.js",
   "bin": {
     "elastic-security-mcp-app": "./dist/main.js"
