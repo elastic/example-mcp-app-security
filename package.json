@@ -1,0 +1,97 @@
+{
+  "name": "elastic-security-mcp-app",
+  "version": "0.1.0",
+  "description": "MCP App server for Elastic Security — interactive blue-team UIs for alert triage, case management, detection rules, and threat hunting",
+  "type": "module",
+  "license": "Elastic-2.0",
+  "main": "dist/main.js",
+  "bin": {
+    "elastic-security-mcp-app": "./dist/main.js"
+  },
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elastic/example-mcp-app-security.git"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "elastic",
+    "elasticsearch",
+    "kibana",
+    "security",
+    "siem",
+    "soc",
+    "alerts",
+    "detection",
+    "threat-hunting"
+  ],
+  "scripts": {
+    "build": "tsc --noEmit && tsc -p tsconfig.server.json && node scripts/build-views.js",
+    "build:views": "node scripts/build-views.js",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:standalone": "node scripts/build-standalone.js",
+    "standalone": "node scripts/build-standalone.js && node dist/standalone/server.js",
+    "standalone:dev": "tsx standalone/server.ts",
+    "start": "node dist/main.js",
+    "start:stdio": "node dist/main.js --stdio",
+    "dev": "concurrently --raw \"node scripts/build-views.js --watch\" \"tsx watch main.ts\"",
+    "typecheck": "tsc --noEmit",
+    "skills:zip": "bash scripts/build-skill-zips.sh",
+    "mcpb:pack": "bash scripts/build-mcpb.sh",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "prepublishOnly": "npm run build",
+    "prepare": "husky",
+    "version": "node -e \"const m=JSON.parse(require('fs').readFileSync('manifest.json','utf8'));m.version=require('./package.json').version;require('fs').writeFileSync('manifest.json',JSON.stringify(m,null,2)+'\\n')\" && git add manifest.json"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs}": [
+      "eslint --fix"
+    ]
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@elastic/highlightjs-esql": "^1.2.3",
+    "@modelcontextprotocol/ext-apps": "^1.3.1",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "cors": "^2.8.6",
+    "d3-drag": "^3.0.0",
+    "d3-force": "^3.0.0",
+    "d3-selection": "^3.0.0",
+    "d3-zoom": "^3.0.0",
+    "express": "^5.2.1",
+    "highlight.js": "^11.11.1",
+    "marked": "^17.0.5",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/cors": "^2.8.19",
+    "@types/d3-drag": "^3.0.7",
+    "@types/d3-force": "^3.0.10",
+    "@types/d3-selection": "^3.0.11",
+    "@types/d3-zoom": "^3.0.8",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "eslint": "^10.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "tailwindcss": "^4.2.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.2",
+    "vite": "^8.0.2",
+    "vite-plugin-singlefile": "^2.3.2"
+  }
+}

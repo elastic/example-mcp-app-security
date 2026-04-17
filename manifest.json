@@ -1,0 +1,113 @@
+{
+  "manifest_version": "0.3",
+  "name": "elastic-security-mcp-app",
+  "display_name": "Elastic Security",
+  "version": "0.1.0",
+  "description": "Interactive blue-team security operations for Elastic Security — alert triage, attack discovery, case management, detection rules, threat hunting, and sample data generation.",
+  "long_description": "An MCP App server that brings interactive blue-team security operations directly into Claude Desktop. Provides six rich React-based UIs that render inline in the conversation: alert triage with AI verdicts, AI-powered attack discovery with confidence scoring and MITRE mapping, case management with the Kibana Cases API, detection rule browsing and tuning, an ES|QL threat-hunting workbench with a D3 investigation graph, and an ECS sample-data generator for demos.",
+  "author": {
+    "name": "Elastic",
+    "url": "https://www.elastic.co"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elastic/example-mcp-app-security.git"
+  },
+  "homepage": "https://github.com/elastic/example-mcp-app-security",
+  "support": "https://github.com/elastic/example-mcp-app-security/issues",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/main.bundle.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/main.bundle.mjs", "--stdio"],
+      "env": {
+        "ELASTICSEARCH_URL": "${user_config.elasticsearch_url}",
+        "ELASTICSEARCH_API_KEY": "${user_config.elasticsearch_api_key}",
+        "KIBANA_URL": "${user_config.kibana_url}",
+        "KIBANA_API_KEY": "${user_config.kibana_api_key}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "triage-alerts",
+      "description": "Fetch, filter, and triage security alerts with AI verdicts"
+    },
+    {
+      "name": "triage-attack-discoveries",
+      "description": "Review AI-correlated attack chain findings with confidence scoring"
+    },
+    {
+      "name": "generate-attack-discovery",
+      "description": "Trigger on-demand attack discovery analysis via any AI connector"
+    },
+    {
+      "name": "manage-cases",
+      "description": "Create, search, and manage SOC investigation cases"
+    },
+    {
+      "name": "manage-rules",
+      "description": "Browse, tune, and manage detection rules"
+    },
+    {
+      "name": "threat-hunt",
+      "description": "ES|QL query workbench with entity investigation graph"
+    },
+    {
+      "name": "generate-sample-data",
+      "description": "Generate ECS-compliant security events for demos"
+    }
+  ],
+  "tools_generated": true,
+  "user_config": {
+    "elasticsearch_url": {
+      "type": "string",
+      "title": "Elasticsearch URL",
+      "description": "Elasticsearch URL (e.g. https://your-cluster.es.cloud.example.com)",
+      "required": true,
+      "sensitive": false
+    },
+    "elasticsearch_api_key": {
+      "type": "string",
+      "title": "Elasticsearch API Key",
+      "description": "API key for Elasticsearch authentication",
+      "required": true,
+      "sensitive": true
+    },
+    "kibana_url": {
+      "type": "string",
+      "title": "Kibana URL",
+      "description": "Kibana URL (e.g. https://your-cluster.kb.cloud.example.com)",
+      "required": true,
+      "sensitive": false
+    },
+    "kibana_api_key": {
+      "type": "string",
+      "title": "Kibana API Key",
+      "description": "API key for Kibana authentication",
+      "required": true,
+      "sensitive": true
+    }
+  },
+  "keywords": [
+    "security",
+    "elastic",
+    "elasticsearch",
+    "kibana",
+    "siem",
+    "soc",
+    "alerts",
+    "detection",
+    "threat-hunting",
+    "mcp-app"
+  ],
+  "license": "Apache-2.0",
+  "privacy_policies": ["https://www.elastic.co/legal/privacy-statement"],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=22.0.0"
+    }
+  }
+}

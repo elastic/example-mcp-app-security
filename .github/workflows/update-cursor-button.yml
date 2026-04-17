@@ -1,0 +1,96 @@
+name: Update Cursor Install Button
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: # Manual re-run after editing a config file
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-button:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Generate buttons from config files
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          node - <<'EOF'
+          const fs = require("fs");
+          const path = require("path");
+
+          const tag = process.env.RELEASE_TAG;
+
+          // Find all cursor-*.json config files in .github/
+          const configs = fs.readdirSync(".github")
+            .filter(f => f.startsWith("cursor-") && f.endsWith(".json"));
+
+          // Collect all .md files in the repo (excluding node_modules)
+          function findMarkdownFiles(dir) {
+            return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+              const fullPath = path.join(dir, entry.name);
+              if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
+                return findMarkdownFiles(fullPath);
+              }
+              return entry.isFile() && entry.name.endsWith(".md") ? [fullPath] : [];
+            });
+          }
+
+          const mdFiles = findMarkdownFiles(".");
+
+          for (const configFile of configs) {
+            const markerName = configFile.replace(".json", ""); // e.g. "cursor-mcp-config"
+            const config = JSON.parse(fs.readFileSync(path.join(".github", configFile), "utf8"));
+
+            // On a versioned release, pin any /releases/latest/download/ URL to the specific tag
+            if (tag && Array.isArray(config.args)) {
+              config.args = config.args.map(arg =>
+                arg.includes("/releases/latest/download/")
+                  ? arg.replace("/releases/latest/download/", `/releases/download/${tag}/`)
+                  : arg
+              );
+            }
+
+            const encoded = Buffer.from(JSON.stringify(config)).toString("base64");
+            const button = `[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=elastic-security&config=${encoded})`;
+            const pattern = new RegExp(`<!-- ${markerName}:START -->[\\s\\S]*?<!-- ${markerName}:END -->`, "g");
+            const replacement = `<!-- ${markerName}:START -->\n${button}\n<!-- ${markerName}:END -->`;
+
+            for (const mdFile of mdFiles) {
+              const content = fs.readFileSync(mdFile, "utf8");
+              if (!pattern.test(content)) continue;
+              fs.writeFileSync(mdFile, content.replace(pattern, replacement));
+              console.log(`Updated ${markerName} in ${mdFile}`);
+            }
+          }
+
+          console.log(`Done${tag ? ` (release ${tag})` : " (manual run)"}`);
+          EOF
+
+      - name: Commit and open PR
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "*.md" "**/*.md"
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          BRANCH="chore/cursor-buttons${RELEASE_TAG:+-$RELEASE_TAG}"
+          git checkout -b "$BRANCH"
+          git commit -m "chore: regenerate Cursor install buttons${RELEASE_TAG:+ for $RELEASE_TAG}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: regenerate Cursor install buttons${RELEASE_TAG:+ for $RELEASE_TAG}" \
+            --body "Automated update of Cursor install buttons${RELEASE_TAG:+ for release $RELEASE_TAG}."

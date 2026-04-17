@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "lib": ["ES2022"]
+  },
+  "include": ["main.ts", "src/server.ts", "src/elastic/**/*", "src/tools/**/*", "src/shared/types.ts"],
+  "exclude": ["node_modules", "src/views/**/*"]
+}
