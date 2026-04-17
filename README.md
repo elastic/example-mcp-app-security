@@ -267,7 +267,7 @@ npx cloudflared tunnel --url http://localhost:3001
 
 ### Skills (optional)
 
-Skills are prompt guides (`SKILL.md` files) that teach AI agents *when* and *how* to use the MCP tools. They improve the quality of tool calls but are not required — the tools work without them.
+Skills are prompt guides (`SKILL.md` files) that teach AI agents *when* and *how* to use the MCP tools.
 
 **Claude Desktop (zip upload):** Download skill zips from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest) and upload via **Customize → Skills → Create Skill → Upload a skill**. If building from source, run `npm run skills:zip` to generate them locally.
 
