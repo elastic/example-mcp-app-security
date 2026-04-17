@@ -4,7 +4,7 @@ An [MCP App](https://modelcontextprotocol.io/extensions/apps/overview) that brin
 
 > **What are MCP Apps?** MCP Apps extend the Model Context Protocol to let tool servers return interactive HTML interfaces — dashboards, forms, visualizations — that render inside the AI conversation. The LLM calls a tool, and instead of just returning text, an interactive UI appears alongside the response.
 
-<img src="docs/screenshots/alert-triage.png" width="640">
+![Alert Triage Dashboard](docs/screenshots/alert-triage.png)
 
 ## What This Does
 
@@ -23,15 +23,15 @@ See [docs/features.md](docs/features.md) for a full breakdown of each tool's cap
 
 ## Screenshots
 
-<img src="docs/screenshots/alert-verdicts.png" width="600">
+![AI Verdict Cards](docs/screenshots/alert-verdicts.png)
 
 *Alert triage with AI verdict cards — Claude passes structured Malicious/Suspicious/Benign classifications that render inline.*
 
-<img src="docs/screenshots/investigation-graph.png" width="600">
+![Investigation Graph](docs/screenshots/investigation-graph.png)
 
 *Entity investigation graph — progressive expansion, hover-to-trace, draggable nodes, real ES data on click.*
 
-<img src="docs/screenshots/attack-discovery.png" width="600">
+![Attack Discovery](docs/screenshots/attack-discovery.png)
 
 *Attack Discovery — on-demand AI-powered attack chain analysis with MITRE tactics mapping and confidence scoring.*
 
