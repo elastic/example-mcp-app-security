@@ -37,11 +37,11 @@ The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/
 
 | Guide | Description |
 |-------|-------------|
+| [Add to Claude Desktop](docs/setup-claude-desktop.md) | Install the MCP app via one-click `.mcpb` or manual config |
+| [Add to Cursor](docs/setup-cursor.md) | Connect the MCP app via npx or a locally running server |
+| [Add to Claude.ai](docs/setup-claude-ai.md) | Expose the MCP app via a cloudflared tunnel |
+| [Build and run locally](docs/setup-local.md) | Build the MCP server from source and run it on your machine |
 | [Install skills](docs/setup-skills.md) | Install skills via npx, local clone, or zip upload |
-| [Run locally](docs/setup-local.md) | Build from source and run the server on your machine |
-| [Add to Cursor](docs/setup-cursor.md) | Connect via npx or a locally running server |
-| [Add to Claude Desktop](docs/setup-claude-desktop.md) | One-click `.mcpb` install or manual config |
-| [Add to Claude.ai](docs/setup-claude-ai.md) | Expose a local server via cloudflared tunnel |
 
 ## Development
 
