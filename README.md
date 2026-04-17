@@ -182,7 +182,7 @@ Generate ECS-compliant security events:
 
 ## Installation
 
-### MCP Server
+### MCP App
 
 #### Claude Desktop
 
@@ -299,7 +299,7 @@ npm start
 # Server runs on http://localhost:3001/mcp
 ```
 
-Then configure your MCP host using one of the manual config options under [MCP Server](#mcp-server) above.
+Then configure your MCP host using one of the manual config options under [MCP App](#mcp-app) above.
 
 ## Architecture
 
