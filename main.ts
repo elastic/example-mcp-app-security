@@ -39,7 +39,15 @@ if (isStdio) {
   });
 
   const port = parseInt(process.env.PORT || "3001", 10);
-  app.listen(port, () => {
+  const httpServer = app.listen(port, () => {
     console.log(`Elastic Security MCP App server running on http://localhost:${port}/mcp`);
+  });
+  httpServer.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`Error: Port ${port} is already in use. Set a different port with the PORT environment variable.`);
+    } else {
+      console.error(`Server error: ${err.message}`);
+    }
+    process.exit(1);
   });
 }

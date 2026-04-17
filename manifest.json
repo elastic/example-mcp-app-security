@@ -11,10 +11,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/elastic/wip-example-mcp-app-security.git"
+    "url": "https://github.com/elastic/example-mcp-app-security.git"
   },
-  "homepage": "https://github.com/elastic/wip-example-mcp-app-security",
-  "support": "https://github.com/elastic/wip-example-mcp-app-security/issues",
+  "homepage": "https://github.com/elastic/example-mcp-app-security",
+  "support": "https://github.com/elastic/example-mcp-app-security/issues",
   "server": {
     "type": "node",
     "entry_point": "dist/main.bundle.mjs",

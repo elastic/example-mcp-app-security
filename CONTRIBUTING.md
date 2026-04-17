@@ -12,7 +12,7 @@ Thank you for your interest in contributing to the Elastic Security MCP App.
 ## Getting Started
 
 ```bash
-git clone https://github.com/elastic/wip-example-mcp-app-security.git
+git clone https://github.com/elastic/example-mcp-app-security.git
 cd example-mcp-app-security
 npm install
 cp .env.example .env
@@ -33,15 +33,15 @@ The dev server runs on `http://localhost:3001/mcp` in HTTP mode. Use `npm run st
 
 ## Project Structure
 
-| Path | Description |
-|------|-------------|
-| `main.ts` | Entry point — HTTP and stdio transport |
-| `src/server.ts` | MCP server factory — registers all tool modules |
-| `src/elastic/` | Elasticsearch and Kibana API clients |
-| `src/tools/` | MCP tool definitions (model-facing + app-only) |
-| `src/views/` | React UIs (one per capability, bundled as single HTML files) |
-| `src/shared/` | Shared UI components, types, and utilities |
-| `skills/` | Claude Desktop Skills (`SKILL.md` per capability) |
+| Path            | Description                                                  |
+| --------------- | ------------------------------------------------------------ |
+| `main.ts`       | Entry point — HTTP and stdio transport                       |
+| `src/server.ts` | MCP server factory — registers all tool modules              |
+| `src/elastic/`  | Elasticsearch and Kibana API clients                         |
+| `src/tools/`    | MCP tool definitions (model-facing + app-only)               |
+| `src/views/`    | React UIs (one per capability, bundled as single HTML files) |
+| `src/shared/`   | Shared UI components, types, and utilities                   |
+| `skills/`       | Claude Desktop Skills (`SKILL.md` per capability)            |
 
 ## Building Distribution Packages
 
