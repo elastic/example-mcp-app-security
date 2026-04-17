@@ -14,7 +14,7 @@ Click to install:
 
 > After clicking, replace the placeholder values in Cursor's MCP settings with your actual Elasticsearch and Kibana credentials.
 
-Or add manually to `.vscode/mcp.json`:
+Or add manually to `.cursor/mcp.json`:
 
 ```json
 {
@@ -43,7 +43,7 @@ Or add manually to `.vscode/mcp.json`:
 
 Requires the project to be [built locally](./setup-local.md). Cursor launches the server process directly.
 
-Add to `.vscode/mcp.json`:
+Add to `.cursor/mcp.json`:
 
 ```json
 {
@@ -72,7 +72,7 @@ Click to install:
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=elastic-security-local&config=eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjMwMDEvbWNwIn0=)
 <!-- cursor-mcp-config-local:END -->
 
-Or add manually to `.vscode/mcp.json`:
+Or add manually to `.cursor/mcp.json`:
 
 ```json
 {
