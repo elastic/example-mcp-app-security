@@ -73,4 +73,4 @@ npm run build:server # Build server only
 
 ## License
 
-Apache-2.0
+Elastic-2.0
