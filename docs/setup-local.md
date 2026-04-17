@@ -13,7 +13,7 @@ Build from source and run the MCP server on your machine.
 
 ```bash
 # Clone and install
-git clone https://github.com/elastic/wip-example-mcp-app-security.git
+git clone https://github.com/elastic/example-mcp-app-security.git
 cd example-mcp-app-security
 npm install
 

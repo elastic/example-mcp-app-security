@@ -15,7 +15,7 @@ Add to `.vscode/mcp.json`:
       "command": "npx",
       "args": [
         "-y",
-        "https://github.com/elastic/wip-example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz",
+        "https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz",
         "--stdio"
       ],
       "env": {

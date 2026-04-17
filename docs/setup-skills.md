@@ -1,6 +1,6 @@
 # Installing Skills
 
-Skills teach your AI agent *when* and *how* to use the tools. You can install them using the `skills` CLI with `npx`, or by cloning this repository and running the bundled installer script.
+Skills teach your AI agent _when_ and _how_ to use the tools. You can install them using the `skills` CLI with `npx`, or by cloning this repository and running the bundled installer script.
 
 ## npx (Recommended)
 
@@ -30,12 +30,12 @@ cd example-mcp-app-security
 
 The script requires bash 3.2+ and standard Unix utilities (`awk`, `find`, `cp`, `rm`, `mkdir`).
 
-| Flag | Description |
-|------|-------------|
-| `-a, --agent` | Target agent (repeatable) |
+| Flag          | Description                             |
+| ------------- | --------------------------------------- |
+| `-a, --agent` | Target agent (repeatable)               |
 | `-s, --skill` | Install specific skills by name or glob |
-| `-f, --force` | Overwrite already-installed skills |
-| `-y, --yes` | Skip confirmation prompts |
+| `-f, --force` | Overwrite already-installed skills      |
+| `-y, --yes`   | Skip confirmation prompts               |
 
 List all available skills:
 
@@ -45,7 +45,7 @@ List all available skills:
 
 ## Claude Desktop (zip upload)
 
-Download the skill zips from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest):
+Download the skill zips from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest):
 
 - `alert-triage.zip`
 - `attack-discovery-triage.zip`
@@ -64,18 +64,18 @@ npm run skills:zip
 
 ## Supported agents
 
-| Agent | Install directory |
-|-------|-------------------|
-| claude-code | `.claude/skills` |
-| cursor | `.agents/skills` |
-| codex | `.agents/skills` |
-| opencode | `.agents/skills` |
-| pi | `.pi/agent/skills` |
-| windsurf | `.windsurf/skills` |
-| roo | `.roo/skills` |
-| cline | `.agents/skills` |
-| github-copilot | `.agents/skills` |
-| gemini-cli | `.agents/skills` |
+| Agent          | Install directory  |
+| -------------- | ------------------ |
+| claude-code    | `.claude/skills`   |
+| cursor         | `.agents/skills`   |
+| codex          | `.agents/skills`   |
+| opencode       | `.agents/skills`   |
+| pi             | `.pi/agent/skills` |
+| windsurf       | `.windsurf/skills` |
+| roo            | `.roo/skills`      |
+| cline          | `.agents/skills`   |
+| github-copilot | `.agents/skills`   |
+| gemini-cli     | `.agents/skills`   |
 
 ## Updating skills
 

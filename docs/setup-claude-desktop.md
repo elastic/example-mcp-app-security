@@ -2,7 +2,7 @@
 
 ## Option 1: One-click install (recommended)
 
-Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest) and double-click it.
+Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest) and double-click it.
 
 Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required.
 
@@ -33,7 +33,7 @@ Restart Claude Desktop. The tools appear under the MCP connector menu.
 
 ## Install Skills
 
-Skills teach Claude *when* and *how* to use the tools. Download the skill zips from the [latest GitHub release](https://github.com/elastic/wip-example-mcp-app-security/releases/latest):
+Skills teach Claude _when_ and _how_ to use the tools. Download the skill zips from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest):
 
 - `alert-triage.zip`
 - `attack-discovery-triage.zip`

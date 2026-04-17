@@ -12,7 +12,7 @@ claude mcp add elastic-security \
   -e ELASTICSEARCH_API_KEY=your-api-key \
   -e KIBANA_URL=https://your-cluster.kb.cloud.example.com \
   -e KIBANA_API_KEY=your-kibana-api-key \
-  -- npx -y https://github.com/elastic/wip-example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz --stdio
+  -- npx -y https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz --stdio
 ```
 
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
