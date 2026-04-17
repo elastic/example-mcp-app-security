@@ -6,7 +6,7 @@ Download `elastic-security-mcp-app.mcpb` from the [latest GitHub release](https:
 
 Claude Desktop shows an install dialog with a settings UI for your Elasticsearch and Kibana credentials. Sensitive values (API keys) are stored in the OS keychain. No Node.js, cloning, or config-file editing required. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
 
-> **Elastic Cloud users:** `KIBANA_URL` and `KIBANA_API_KEY` are optional — they default to the Elasticsearch values. On Elastic Cloud you only need `ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY`.
+> **Kibana credentials:** `KIBANA_URL` and `KIBANA_API_KEY` are optional — they default to the Elasticsearch values. If you use the same credentials for both, you only need `ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY`.
 
 ## Option 2: Manual config (build from source)
 

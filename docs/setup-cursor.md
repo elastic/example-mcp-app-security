@@ -39,7 +39,7 @@ Or add manually to `.cursor/mcp.json`:
 
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 >
-> **Elastic Cloud users:** `KIBANA_URL` and `KIBANA_API_KEY` are optional — they default to the Elasticsearch values. On Elastic Cloud you only need `ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY`.
+> **Kibana credentials:** `KIBANA_URL` and `KIBANA_API_KEY` are optional — they default to the Elasticsearch values. If you use the same credentials for both, you only need `ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY`.
 
 ## Option 2: Local server (stdio)
 

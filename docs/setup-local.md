@@ -38,7 +38,7 @@ You need an Elasticsearch API key with sufficient privileges for the operations 
 
 For a quick start, a key with the `superuser` role works for all tools. For production, scope the key to the minimum required privileges.
 
-> **Elastic Cloud users:** On Elastic Cloud the same API key works for both Elasticsearch and Kibana. You can omit `KIBANA_URL` and `KIBANA_API_KEY` — they default to their Elasticsearch counterparts.
+> **Kibana credentials:** `KIBANA_URL` and `KIBANA_API_KEY` are optional — they default to their Elasticsearch counterparts. If you use the same credentials for both, you only need `ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY`.
 
 ## Next Steps
 
