@@ -11,6 +11,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  pull-requests: write
+
 jobs:
   check:
     name: Lint, Typecheck & Build
@@ -35,3 +38,64 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Bundle with esbuild
+        if: github.event_name == 'pull_request'
+        run: |
+          npx esbuild dist/main.js \
+            --bundle \
+            --platform=node \
+            --format=esm \
+            --target=node22 \
+            --outfile=dist/main.bundle.mjs \
+            --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url);"
+
+      - name: Pack MCPB bundle
+        if: github.event_name == 'pull_request'
+        run: npx @anthropic-ai/mcpb pack .
+
+      - name: Upload MCPB artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: elastic-security-mcp-app-mcpb
+          path: "*.mcpb"
+
+      - name: Comment on PR with MCPB link
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `### 📦 MCPB Bundle Ready`,
+              ``,
+              `The \`.mcpb\` bundle was built successfully from this PR.`,
+              ``,
+              `**[Download artifact](${runUrl}#artifacts)** — look for \`elastic-security-mcp-app-mcpb\``,
+              ``,
+              `> To install: download and unzip the artifact, then double-click the \`.mcpb\` file to open in Claude Desktop.`,
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('MCPB Bundle Ready')
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
