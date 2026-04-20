@@ -6,12 +6,13 @@
 
 #
 # Build an MCPB bundle (.mcpb) for Claude Desktop distribution.
-# Produces elastic-security-mcp-app.mcpb in the repo root.
+# Produces example-mcp-app-security.mcpb in the repo root.
 # Usage: ./scripts/build-mcpb.sh
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TARGET_MCPB="example-mcp-app-security.mcpb"
 cd "$ROOT"
 
 echo "==> Building project..."
@@ -29,12 +30,23 @@ npx esbuild dist/main.js \
 echo "==> Packing MCPB bundle..."
 npx @anthropic-ai/mcpb pack .
 
+shopt -s nullglob
+mcpb_files=( *.mcpb )
+if [ "${#mcpb_files[@]}" -ne 1 ]; then
+  echo "Expected exactly one .mcpb file after packing, found ${#mcpb_files[@]}." >&2
+  exit 1
+fi
+
+if [ "${mcpb_files[0]}" != "$TARGET_MCPB" ]; then
+  mv "${mcpb_files[0]}" "$TARGET_MCPB"
+fi
+
 VERSION=$(node -e "console.log(require('./package.json').version)")
 echo ""
-echo "==> Done! elastic-security-mcp-app.mcpb (v${VERSION}) is ready."
+echo "==> Done! ${TARGET_MCPB} (v${VERSION}) is ready."
 echo ""
 echo "Distribute via GitHub release:"
-echo "  gh release create v${VERSION} elastic-security-mcp-app.mcpb"
+echo "  gh release create v${VERSION} ${TARGET_MCPB}"
 echo ""
 echo "Install in Claude Desktop:"
 echo "  Double-click the .mcpb file"

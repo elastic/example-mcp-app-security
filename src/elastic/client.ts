@@ -9,33 +9,51 @@ import type { ElasticConfig } from "../shared/types.js";
 
 let _config: ElasticConfig | null = null;
 
+function requireConfigValue(value: string | undefined, envName: string): string {
+  if (!value) {
+    throw new Error(
+      `${envName} is required. Configure both Elasticsearch and Kibana credentials to use the full app.`
+    );
+  }
+  return value;
+}
+
 export function setConfig(config: ElasticConfig) {
   _config = {
-    elasticsearchUrl: config.elasticsearchUrl.replace(/\/$/, ""),
-    elasticsearchApiKey: config.elasticsearchApiKey,
-    kibanaUrl: (config.kibanaUrl || config.elasticsearchUrl).replace(/\/$/, ""),
-    kibanaApiKey: config.kibanaApiKey || config.elasticsearchApiKey,
+    elasticsearchUrl: requireConfigValue(
+      config.elasticsearchUrl,
+      "ELASTICSEARCH_URL"
+    ).replace(/\/$/, ""),
+    elasticsearchApiKey: requireConfigValue(
+      config.elasticsearchApiKey,
+      "ELASTICSEARCH_API_KEY"
+    ),
+    kibanaUrl: requireConfigValue(config.kibanaUrl, "KIBANA_URL").replace(/\/$/, ""),
+    kibanaApiKey: requireConfigValue(config.kibanaApiKey, "KIBANA_API_KEY"),
   };
 }
 
 export function getConfig(): ElasticConfig {
   if (!_config) {
-    const elasticsearchUrl = process.env.ELASTICSEARCH_URL;
-    const elasticsearchApiKey = process.env.ELASTICSEARCH_API_KEY;
-    const kibanaUrl = process.env.KIBANA_URL;
-    const kibanaApiKey = process.env.KIBANA_API_KEY;
-
-    if (!elasticsearchUrl || !elasticsearchApiKey) {
-      throw new Error(
-        "ELASTICSEARCH_URL and ELASTICSEARCH_API_KEY environment variables are required"
-      );
-    }
+    const elasticsearchUrl = requireConfigValue(
+      process.env.ELASTICSEARCH_URL,
+      "ELASTICSEARCH_URL"
+    );
+    const elasticsearchApiKey = requireConfigValue(
+      process.env.ELASTICSEARCH_API_KEY,
+      "ELASTICSEARCH_API_KEY"
+    );
+    const kibanaUrl = requireConfigValue(process.env.KIBANA_URL, "KIBANA_URL");
+    const kibanaApiKey = requireConfigValue(
+      process.env.KIBANA_API_KEY,
+      "KIBANA_API_KEY"
+    );
 
     _config = {
       elasticsearchUrl: elasticsearchUrl.replace(/\/$/, ""),
       elasticsearchApiKey,
-      kibanaUrl: (kibanaUrl || elasticsearchUrl).replace(/\/$/, ""),
-      kibanaApiKey: kibanaApiKey || elasticsearchApiKey,
+      kibanaUrl: kibanaUrl.replace(/\/$/, ""),
+      kibanaApiKey,
     };
   }
   return _config;

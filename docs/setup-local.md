@@ -9,6 +9,8 @@ Build from source and run the MCP server on your machine.
 - **Kibana 8.x or 9.x** (for cases, rules, and attack discovery)
 - **API keys** for both Elasticsearch and Kibana
 
+Both Elasticsearch and Kibana credentials are required for full functionality. `KIBANA_URL` and `KIBANA_API_KEY` are required for cases, detection rules, and attack discovery.
+
 ## Steps
 
 ```bash
@@ -19,7 +21,7 @@ npm install
 
 # Configure
 cp .env.example .env
-# Edit .env with your Elasticsearch/Kibana URLs and API keys
+# Edit .env with your required Elasticsearch/Kibana URLs and API keys
 
 # Build
 npm run build
@@ -28,6 +30,10 @@ npm run build
 npm start
 # Server is now running at http://localhost:3001/mcp
 ```
+
+## Recommended Minimum Permissions
+
+For a least-privilege setup that still enables all app features, see [Recommended minimum permissions](./permissions.md).
 
 ## Next Steps
 
