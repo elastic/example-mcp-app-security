@@ -7,6 +7,7 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { createServer } from "./src/server.js";
