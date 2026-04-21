@@ -80,6 +80,7 @@ export async function esRequest<T = unknown>(
     headers: {
       Authorization: `ApiKey ${config.elasticsearchApiKey}`,
       "Content-Type": contentType,
+      "User-Agent": "elastic-security-mcp-app",
     },
     body: options.body
       ? isRawBody ? (options.body as string) : JSON.stringify(options.body)
@@ -117,6 +118,7 @@ export async function kibanaRequest<T = unknown>(
     "Content-Type": "application/json",
     "kbn-xsrf": "true",
     "x-elastic-internal-origin": "Kibana",
+    "User-Agent": "elastic-security-mcp-app",
   };
 
   if (options.apiVersion) {
