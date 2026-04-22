@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP App Standalone Harness</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --sidebar-width: 260px;
+      --bg: #0f1117;
+      --bg-sidebar: #161822;
+      --bg-hover: #1c1f2e;
+      --bg-active: #222639;
+      --text: #e8eaf0;
+      --text-muted: #636882;
+      --border: #282d42;
+      --accent: #5c7cfa;
+      --font: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-header h1 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar-header p {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .controls {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control-row label {
+      font-size: 11px;
+      color: var(--text-muted);
+      min-width: 48px;
+    }
+
+    .control-row select, .control-row button {
+      flex: 1;
+      padding: 4px 8px;
+      font-size: 12px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: var(--font);
+      cursor: pointer;
+    }
+
+    .control-row button:hover {
+      background: var(--bg-hover);
+    }
+
+    .control-row button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .view-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    .view-item {
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .view-item:hover { background: var(--bg-hover); }
+    .view-item.active { background: var(--bg-active); border-left: 2px solid var(--accent); }
+
+    .view-item .states {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .toolbar {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .toolbar .url {
+      flex: 1;
+      font-family: 'SF Mono', 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg-sidebar);
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .frame-container {
+      flex: 1;
+      padding: 0;
+      position: relative;
+    }
+
+    /* Simulate Claude Desktop's iframe constraints */
+    .frame-container.inline iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .frame-container.fullscreen iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: var(--bg);
+    }
+
+    .empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>MCP App Harness</h1>
+      <p>Standalone UI development</p>
+    </div>
+    <div class="controls">
+      <div class="control-row">
+        <label>Theme</label>
+        <button id="theme-dark" class="active" onclick="setTheme('dark')">Dark</button>
+        <button id="theme-light" onclick="setTheme('light')">Light</button>
+      </div>
+      <div class="control-row">
+        <label>State</label>
+        <select id="state-select" onchange="loadView()">
+          <!-- Populated dynamically -->
+        </select>
+      </div>
+    </div>
+    <div class="view-list" id="view-list">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+  <div class="main">
+    <div class="toolbar">
+      <span>Preview</span>
+      <span class="url" id="current-url">Select a view</span>
+    </div>
+    <div class="frame-container inline" id="frame-container">
+      <div class="empty-state" id="empty-state">Select a view from the sidebar</div>
+    </div>
+  </div>
+
+  <script>
+    const views = [
+      { id: "alert-triage", name: "Alert Triage", states: ["loaded", "empty", "critical-only"] },
+      { id: "attack-discovery", name: "Attack Discovery", states: ["loaded", "empty", "generating"] },
+      { id: "case-management", name: "Case Management", states: ["loaded", "empty"] },
+      { id: "detection-rules", name: "Detection Rules", states: ["loaded", "empty"] },
+      { id: "threat-hunt", name: "Threat Hunt", states: ["loaded", "empty"] },
+      { id: "sample-data", name: "Sample Data", states: ["loaded", "empty"] },
+    ];
+
+    let currentView = null;
+    let currentTheme = "dark";
+
+    function renderViewList() {
+      const list = document.getElementById("view-list");
+      list.innerHTML = views.map(v => `
+        <div class="view-item ${currentView === v.id ? 'active' : ''}" onclick="selectView('${v.id}')">
+          <span>${v.name}</span>
+          <span class="states">${v.states.length} states</span>
+        </div>
+      `).join("");
+    }
+
+    function selectView(viewId) {
+      currentView = viewId;
+      const view = views.find(v => v.id === viewId);
+
+      // Update state dropdown
+      const stateSelect = document.getElementById("state-select");
+      stateSelect.innerHTML = view.states.map(s => `<option value="${s}">${s}</option>`).join("");
+
+      renderViewList();
+      loadView();
+    }
+
+    function setTheme(theme) {
+      currentTheme = theme;
+      document.getElementById("theme-dark").classList.toggle("active", theme === "dark");
+      document.getElementById("theme-light").classList.toggle("active", theme === "light");
+      loadView();
+    }
+
+    function loadView() {
+      if (!currentView) return;
+
+      const state = document.getElementById("state-select").value;
+      const url = `/src/views/${currentView}/mcp-app.html?state=${state}&theme=${currentTheme}`;
+
+      document.getElementById("current-url").textContent = url;
+      document.getElementById("empty-state")?.remove();
+
+      const container = document.getElementById("frame-container");
+      // Remove existing iframe
+      const existing = container.querySelector("iframe");
+      if (existing) existing.remove();
+
+      const iframe = document.createElement("iframe");
+      iframe.src = url;
+      container.appendChild(iframe);
+    }
+
+    // Listen for display mode changes from views
+    window.addEventListener("message", (event) => {
+      if (event.data?.type === "displayModeChange") {
+        const container = document.getElementById("frame-container");
+        container.className = `frame-container ${event.data.mode}`;
+      }
+    });
+
+    renderViewList();
+
+    // Auto-select first view
+    selectView("alert-triage");
+  </script>
+</body>
+</html>
