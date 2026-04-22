@@ -11,17 +11,41 @@ const states: Record<string, { toolResult: unknown; toolResponses: Record<string
   loaded: {
     toolResult: { scenarios },
     toolResponses: {
-      "check-existing-sample-data": { exists: true, indices: ["sample-ransomware-*"], docCount: 450 },
-      "generate-scenario": { success: true, scenario: "ransomware", eventsCreated: 45, indices: ["sample-ransomware-events"] },
-      "create-rules-for-scenario": { success: true, rulesCreated: 5 },
-      "cleanup-sample-data": { success: true, deletedIndices: ["sample-ransomware-events"], deletedRules: 5 },
+      "check-existing-sample-data": {
+        totalDocs: 450,
+        totalAlerts: 35,
+        existingRules: 12,
+        byScenario: {
+          "ransomware-kill-chain": { events: 120, alerts: 7 },
+          "windows-credential-theft": { events: 85, alerts: 5 },
+          "linux-persistence": { events: 95, alerts: 6 },
+        },
+      },
+      "generate-scenario": (args: Record<string, unknown>) => ({
+        indexed: 50,
+        scenario: args.scenario || "ransomware-kill-chain",
+        indices: [`logs-endpoint.events.process-default`, `logs-endpoint.events.network-default`],
+      }),
+      "create-rules-for-scenario": (args: Record<string, unknown>) => ({
+        created: 5,
+        scenario: args.scenario || "ransomware-kill-chain",
+      }),
+      "cleanup-sample-data": { deleted: 450 },
     },
   },
   empty: {
     toolResult: { scenarios },
     toolResponses: {
-      "check-existing-sample-data": { exists: false, indices: [], docCount: 0 },
-      "generate-scenario": { success: true, scenario: "ransomware", eventsCreated: 45, indices: ["sample-ransomware-events"] },
+      "check-existing-sample-data": { totalDocs: 0, totalAlerts: 0, existingRules: 0, byScenario: {} },
+      "generate-scenario": (args: Record<string, unknown>) => ({
+        indexed: 50,
+        scenario: args.scenario || "ransomware-kill-chain",
+        indices: [`logs-endpoint.events.process-default`],
+      }),
+      "create-rules-for-scenario": (args: Record<string, unknown>) => ({
+        created: 5,
+        scenario: args.scenario || "ransomware-kill-chain",
+      }),
     },
   },
 };

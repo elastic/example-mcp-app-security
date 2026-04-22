@@ -89,6 +89,9 @@ export class App {
   }
 
   async connect(_transport?: unknown): Promise<void> {
+    // Wait for mock data to be loaded before firing any callbacks
+    await mockDataReady.then((m) => m.ready);
+
     // Fire host context (theme) immediately
     const theme = getMockTheme();
     setTimeout(() => {
@@ -166,8 +169,9 @@ export class App {
   assertNotificationCapability() {}
 }
 
-// Auto-load mock data for the current view
-import("./mock-data/index");
+// Auto-load mock data for the current view.
+// Exported so connect() can wait for it before firing callbacks.
+export const mockDataReady = import("./mock-data/index");
 
 // Re-export things views might import from ext-apps
 export const RESOURCE_URI_META_KEY = "ui/resourceUri";

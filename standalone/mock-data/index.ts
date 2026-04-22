@@ -20,8 +20,10 @@ const loaders: Record<string, () => Promise<{ init: () => void }>> = {
 };
 
 const loader = loaders[viewName];
-if (loader) {
-  loader().then((m) => m.init());
-} else {
-  console.warn(`[mock] Unknown view "${viewName}" — no mock data loaded. Available: ${Object.keys(loaders).join(", ")}`);
-}
+export const ready: Promise<void> = loader
+  ? loader().then((m) => m.init())
+  : Promise.resolve(
+      console.warn(
+        `[mock] Unknown view "${viewName}" — no mock data loaded. Available: ${Object.keys(loaders).join(", ")}`,
+      ),
+    );
