@@ -31,6 +31,8 @@ Add to `.vscode/mcp.json`:
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 >
 > **Required credentials:** Set `ELASTICSEARCH_URL`, `ELASTICSEARCH_API_KEY`, and `KIBANA_URL`. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
+>
+> **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
 ## Option 2: Local server (stdio)
 

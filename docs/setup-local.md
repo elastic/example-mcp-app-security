@@ -19,7 +19,7 @@ You need an Elasticsearch API key with sufficient privileges for the operations 
 - **Kibana UI:** Go to **Stack Management > API Keys > Create API key**
 - **Elastic docs:** [Elasticsearch API keys](https://www.elastic.co/docs/deploy-manage/api-keys/elasticsearch-api-keys)
 
-For a quick start, a key with the `superuser` role works for all tools. For production, scope the key to the minimum required privileges.
+For a quick start, a key with the `superuser` role works for all tools. For production, scope the key to the minimum required privileges — see [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
 Kibana API keys and Elasticsearch API keys are the same underlying credential type. This project uses `ELASTICSEARCH_API_KEY` for both Elasticsearch and Kibana requests, so you only need to configure one API key value.
 
