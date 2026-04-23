@@ -38,13 +38,20 @@ interface Props {
   alertLinkedIds?: Set<string>;
 }
 
+// Palette tuned to the app's dark theme.
+// Shared backgrounds: #171716 (canvas), #1f1f1e (node fill), #474745 (edges), #817f78 (muted text)
 const TYPE_CONFIG: Record<string, { color: string; shape: string; radius: number }> = {
   user: { color: "#5c7cfa", shape: "circle", radius: 22 },
-  host: { color: "#40c790", shape: "rect", radius: 20 },
-  ip: { color: "#f0b840", shape: "diamond", radius: 18 },
-  process: { color: "#b07cfa", shape: "hexagon", radius: 18 },
-  alert: { color: "#f04040", shape: "triangle", radius: 20 },
+  host: { color: "#4cbfa6", shape: "rect", radius: 20 },
+  ip: { color: "#d1a54a", shape: "diamond", radius: 18 },
+  process: { color: "#a085e0", shape: "hexagon", radius: 18 },
+  alert: { color: "#e05757", shape: "triangle", radius: 20 },
 };
+
+const NODE_FILL = "#1f1f1e";
+const EDGE_COLOR = "#474745";
+const EDGE_LABEL = "#817f78";
+const VALUE_LABEL = "#adaca1";
 
 export function InvestigationGraph({ nodes, edges, onExpand, onCollapse, alertLinkedIds }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -94,7 +101,7 @@ export function InvestigationGraph({ nodes, edges, onExpand, onCollapse, alertLi
     const link = edgeG.selectAll("line")
       .data(edges)
       .join("line")
-      .attr("stroke", "rgba(255,255,255,0.12)")
+      .attr("stroke", EDGE_COLOR)
       .attr("stroke-width", 1.5);
 
     const edgeLabels = edgeG.selectAll("text")
@@ -102,7 +109,8 @@ export function InvestigationGraph({ nodes, edges, onExpand, onCollapse, alertLi
       .join("text")
       .text((d) => d.label)
       .attr("font-size", 9)
-      .attr("fill", "rgba(255,255,255,0.3)")
+      .attr("font-family", "var(--font-mono)")
+      .attr("fill", EDGE_LABEL)
       .attr("text-anchor", "middle")
       .attr("dy", -4);
 
@@ -141,7 +149,7 @@ export function InvestigationGraph({ nodes, edges, onExpand, onCollapse, alertLi
       .append("circle")
       .attr("r", (d) => (TYPE_CONFIG[d.type]?.radius || 20) + 6)
       .attr("fill", "none")
-      .attr("stroke", "#f04040")
+      .attr("stroke", "#e05757")
       .attr("stroke-width", 2)
       .attr("stroke-dasharray", "4 3")
       .attr("opacity", 0.7);
@@ -159,16 +167,16 @@ export function InvestigationGraph({ nodes, edges, onExpand, onCollapse, alertLi
           .attr("opacity", 0.6);
       } else if (cfg.shape === "circle") {
         el.append("circle").attr("r", r)
-          .attr("fill", d.expanded ? cfg.color : "rgba(0,0,0,0.4)")
+          .attr("fill", d.expanded ? cfg.color : NODE_FILL)
           .attr("stroke", cfg.color).attr("stroke-width", 2);
       } else if (cfg.shape === "rect") {
         el.append("rect").attr("x", -r).attr("y", -r * 0.7).attr("width", r * 2).attr("height", r * 1.4).attr("rx", 4)
-          .attr("fill", d.expanded ? cfg.color : "rgba(0,0,0,0.4)")
+          .attr("fill", d.expanded ? cfg.color : NODE_FILL)
           .attr("stroke", cfg.color).attr("stroke-width", 2);
       } else if (cfg.shape === "diamond") {
         el.append("polygon")
           .attr("points", `0,${-r} ${r},0 0,${r} ${-r},0`)
-          .attr("fill", d.expanded ? cfg.color : "rgba(0,0,0,0.4)")
+          .attr("fill", d.expanded ? cfg.color : NODE_FILL)
           .attr("stroke", cfg.color).attr("stroke-width", 2);
       } else if (cfg.shape === "hexagon") {
         const pts = Array.from({ length: 6 }, (_, i) => {
@@ -176,12 +184,12 @@ export function InvestigationGraph({ nodes, edges, onExpand, onCollapse, alertLi
           return `${Math.cos(angle) * r},${Math.sin(angle) * r}`;
         }).join(" ");
         el.append("polygon").attr("points", pts)
-          .attr("fill", d.expanded ? cfg.color : "rgba(0,0,0,0.4)")
+          .attr("fill", d.expanded ? cfg.color : NODE_FILL)
           .attr("stroke", cfg.color).attr("stroke-width", 2);
       } else if (cfg.shape === "triangle") {
         el.append("polygon")
           .attr("points", `0,${-r} ${r},${r * 0.7} ${-r},${r * 0.7}`)
-          .attr("fill", d.expanded ? cfg.color : "rgba(0,0,0,0.4)")
+          .attr("fill", d.expanded ? cfg.color : NODE_FILL)
           .attr("stroke", cfg.color).attr("stroke-width", 2);
       }
 
@@ -200,7 +208,8 @@ export function InvestigationGraph({ nodes, edges, onExpand, onCollapse, alertLi
       .attr("text-anchor", "middle")
       .attr("dy", (d) => (TYPE_CONFIG[d.type]?.radius || 20) + 14)
       .attr("font-size", 10)
-      .attr("fill", "rgba(255,255,255,0.7)")
+      .attr("font-family", "var(--font-mono)")
+      .attr("fill", VALUE_LABEL)
       .attr("pointer-events", "none");
 
     // Count badges
@@ -233,7 +242,7 @@ export function InvestigationGraph({ nodes, edges, onExpand, onCollapse, alertLi
 
   if (nodes.length === 0) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-dim)", fontSize: 13 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#817f78", fontSize: 13, background: "transparent", padding: 16, textAlign: "center" }}>
         Click an entity in query results to start investigating, or ask Claude to investigate a user/host/IP.
       </div>
     );
@@ -242,15 +251,8 @@ export function InvestigationGraph({ nodes, edges, onExpand, onCollapse, alertLi
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <svg ref={svgRef} width={dimensions.width} height={dimensions.height}
-        style={{ background: "var(--bg-primary)", borderRadius: "var(--radius-md)" }} />
-      <div style={{ position: "absolute", bottom: 8, left: 12, display: "flex", gap: 10, fontSize: 9, color: "var(--text-dim)" }}>
-        {Object.entries(TYPE_CONFIG).map(([type, cfg]) => (
-          <span key={type} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-            <span style={{ width: 8, height: 8, borderRadius: type === "user" ? "50%" : 2, background: cfg.color }} />
-            {type}
-          </span>
-        ))}
-      </div>
+        style={{ background: "transparent" }} />
+      {/* Legend is rendered by the parent .graph-pane — see App.tsx. */}
     </div>
   );
 }
