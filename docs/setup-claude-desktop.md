@@ -6,6 +6,8 @@
 
 Download `example-mcp-app-security.mcpb` from the [latest GitHub release](https://github.com/elastic/example-mcp-app-security/releases/latest) and double-click it.
 
+If double-click doesn't work (e.g. Claude Desktop is not associated with `.mcpb` files on your system): open Claude Desktop → **Settings → Extensions → Advanced settings → Install Extension...** → select the `.mcpb` file.
+
 Claude Desktop opens an install dialog with fields for your Elasticsearch URL, Kibana URL, and Elasticsearch API key:
 
 - `ELASTICSEARCH_URL`
