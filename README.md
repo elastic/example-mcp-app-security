@@ -2,6 +2,16 @@
 
 [![Latest Release](https://img.shields.io/github/v/release/elastic/example-mcp-app-security?label=Download%20.mcpb&color=00bfb3)](https://github.com/elastic/example-mcp-app-security/releases/latest)
 
+## Quick Demo
+
+<div align="center">
+
+[![Watch the demo](https://play.vidyard.com/Axjk85zS4bxE7kdU48Xqwe.jpg)](https://videos.elastic.co/watch/Axjk85zS4bxE7kdU48Xqwe)
+
+*Click to watch the full demo*
+
+</div>
+
 An [MCP App](https://modelcontextprotocol.io/extensions/apps/overview) that brings interactive blue-team security operations directly into Claude, VS Code, and other MCP-compatible AI hosts. Built on the [Model Context Protocol](https://modelcontextprotocol.io/) with interactive UI extensions that render inline in the conversation.
 
 > **What are MCP Apps?** MCP Apps extend the Model Context Protocol to let tool servers return interactive HTML interfaces — dashboards, forms, visualizations — that render inside the AI conversation. The LLM calls a tool, and instead of just returning text, an interactive UI appears alongside the response.
