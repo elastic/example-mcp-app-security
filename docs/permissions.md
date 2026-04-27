@@ -18,8 +18,8 @@ For custom roles, see the [per-tool privilege breakdown](#appendix-per-tool-priv
 | Privilege area | Full-featured | Read-only |
 |---|---|---|
 | **Cluster** | `monitor` | `monitor` |
-| **System indices** (`.alerts-*`) | `read`, `write` | `read` |
-| **Data indices** (`logs-*`, `risk-score.*`) | `read`, `write` | `read` |
+| **System indices** (`.alerts-*`) | `read`, `write`, `monitor` | `read`, `monitor` |
+| **Data indices** (`logs-*`, `risk-score.*`) | `read`, `write`, `monitor` | `read`, `monitor` |
 | **Kibana features** | All on most Security features | Read on core Security features |
 | **Attack Discovery** | Yes | No |
 | **Case creation/updates** | Yes | No |
@@ -38,7 +38,7 @@ For custom roles, see the [per-tool privilege breakdown](#appendix-per-tool-priv
 
 ### Index privileges
 
-**System / alert indices** (`read`, `write`):
+**System / alert indices** (`read`, `write`, `monitor`):
 
 | Index pattern | Used by |
 |---|---|
@@ -46,7 +46,9 @@ For custom roles, see the [per-tool privilege breakdown](#appendix-per-tool-priv
 | `.alerts-security.attack.discovery.alerts-<space-id>` | Attack Discovery |
 | `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | Attack Discovery (ad-hoc generated) |
 
-**Data indices** (`read`, `write`):
+**Data indices** (`read`, `write`, `monitor`):
+
+> The index-level `monitor` privilege (distinct from the cluster-level `monitor` listed above) is required by `_cat/indices/<pattern>` and `_mapping` (used by Threat Hunt to list indices and read field mappings).
 
 | Index pattern | Used by |
 |---|---|
@@ -104,7 +106,7 @@ PUT /_security/role/mcp_app_full
         "logs-*",
         "risk-score.risk-score-latest-*"
       ],
-      "privileges": ["read", "write"]
+      "privileges": ["read", "write", "monitor"]
     }
   ],
   "applications": [
@@ -155,7 +157,7 @@ POST /_security/api_key
             "logs-*",
             "risk-score.risk-score-latest-*"
           ],
-          "privileges": ["read", "write"]
+          "privileges": ["read", "write", "monitor"]
         }
       ],
       "applications": [
@@ -198,7 +200,7 @@ A strict read-only role: view everything, change nothing.
 
 ### Index privileges
 
-**All index patterns** (`read` only):
+**All index patterns** (`read`, `monitor`):
 
 | Index pattern | Used by |
 |---|---|
@@ -237,7 +239,7 @@ PUT /_security/role/mcp_app_readonly
         "logs-*",
         "risk-score.risk-score-latest-*"
       ],
-      "privileges": ["read"]
+      "privileges": ["read", "monitor"]
     }
   ],
   "applications": [
@@ -275,7 +277,7 @@ POST /_security/api_key
             "logs-*",
             "risk-score.risk-score-latest-*"
           ],
-          "privileges": ["read"]
+          "privileges": ["read", "monitor"]
         }
       ],
       "applications": [
@@ -377,8 +379,8 @@ Use this appendix to build custom roles that enable only specific tools.
 | Operation | Cluster | Index privileges | Kibana features |
 |---|---|---|---|
 | ES\|QL queries | `monitor` | `read` on target indices (e.g., `logs-*`) | Security (Read) |
-| List indices | `monitor` | `read` on target indices | Security (Read) |
-| Field mappings | `monitor` | `read` on target indices | Security (Read) |
+| List indices | `monitor` | `read`, `monitor` on target indices | Security (Read) |
+| Field mappings | `monitor` | `read`, `monitor` on target indices | Security (Read) |
 | Entity detail | `monitor` | `read` on `logs-endpoint.events.process-*`, `logs-endpoint.events.network-*`, `.alerts-security.alerts-<space-id>` | Security (Read), Alerts (Read) |
 
 ### Sample Data
