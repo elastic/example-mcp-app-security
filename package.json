@@ -1,6 +1,6 @@
 {
   "name": "elastic-security-mcp-app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP App server for Elastic Security — interactive blue-team UIs for alert triage, case management, detection rules, and threat hunting",
   "type": "module",
   "license": "Elastic-2.0",
