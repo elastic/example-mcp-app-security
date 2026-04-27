@@ -58,6 +58,14 @@ const DATA_INDICES = [
   `.alerts-security.alerts-${SPACE}`,
   `.alerts-security.attack.discovery.alerts-${SPACE}`,
   `.adhoc.alerts-security.attack.discovery.alerts-${SPACE}`,
+  // Backing indices for the alert and attack-discovery data streams.
+  // `_update_by_query` and `_delete_by_query` dispatch writes directly
+  // to backing indices (used by acknowledgeAlerts, acknowledgeDiscoveries,
+  // and cleanupSampleData), so the role needs explicit privileges here
+  // — granting them on the data stream alone is not sufficient.
+  `.internal.alerts-security.alerts-${SPACE}-*`,
+  `.internal.alerts-security.attack.discovery.alerts-${SPACE}-*`,
+  `.internal.adhoc.alerts-security.attack.discovery.alerts-${SPACE}-*`,
   "logs-*",
   "risk-score.risk-score-latest-*",
 ];

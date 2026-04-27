@@ -18,7 +18,7 @@ For custom roles, see the [per-tool privilege breakdown](#appendix-per-tool-priv
 | Privilege area | Full-featured | Read-only |
 |---|---|---|
 | **Cluster** | `monitor` | `monitor` |
-| **System indices** (`.alerts-*`) | `read`, `write`, `monitor` | `read`, `monitor` |
+| **System indices** (`.alerts-*`, `.adhoc.*`, `.internal.*`) | `read`, `write`, `monitor` | `read`, `monitor` |
 | **Data indices** (`logs-*`, `risk-score.*`) | `read`, `write`, `monitor` | `read`, `monitor` |
 | **Kibana features** | All on most Security features | Read on core Security features |
 | **Attack Discovery** | Yes | No |
@@ -45,6 +45,9 @@ For custom roles, see the [per-tool privilege breakdown](#appendix-per-tool-priv
 | `.alerts-security.alerts-<space-id>` | Alert Triage, Attack Discovery, Detection Rules, Case Management, Sample Data cleanup |
 | `.alerts-security.attack.discovery.alerts-<space-id>` | Attack Discovery |
 | `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | Attack Discovery (ad-hoc generated) |
+| `.internal.alerts-security.alerts-<space-id>-*` | Backing indices for the alert data stream |
+| `.internal.alerts-security.attack.discovery.alerts-<space-id>-*` | Backing indices for the attack-discovery data stream |
+| `.internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*` | Backing indices for the ad-hoc attack-discovery data stream |
 
 **Data indices** (`read`, `write`, `monitor`):
 
@@ -103,6 +106,9 @@ PUT /_security/role/mcp_app_full
         ".alerts-security.alerts-<space-id>",
         ".alerts-security.attack.discovery.alerts-<space-id>",
         ".adhoc.alerts-security.attack.discovery.alerts-<space-id>",
+        ".internal.alerts-security.alerts-<space-id>-*",
+        ".internal.alerts-security.attack.discovery.alerts-<space-id>-*",
+        ".internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*",
         "logs-*",
         "risk-score.risk-score-latest-*"
       ],
@@ -154,6 +160,9 @@ POST /_security/api_key
             ".alerts-security.alerts-<space-id>",
             ".alerts-security.attack.discovery.alerts-<space-id>",
             ".adhoc.alerts-security.attack.discovery.alerts-<space-id>",
+            ".internal.alerts-security.alerts-<space-id>-*",
+            ".internal.alerts-security.attack.discovery.alerts-<space-id>-*",
+            ".internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*",
             "logs-*",
             "risk-score.risk-score-latest-*"
           ],
@@ -207,6 +216,9 @@ A strict read-only role: view everything, change nothing.
 | `.alerts-security.alerts-<space-id>` | Alert Triage, Detection Rules, Case viewing |
 | `.alerts-security.attack.discovery.alerts-<space-id>` | Attack Discovery viewing |
 | `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | Attack Discovery viewing |
+| `.internal.alerts-security.alerts-<space-id>-*` | Backing indices for the alert data stream |
+| `.internal.alerts-security.attack.discovery.alerts-<space-id>-*` | Backing indices for the attack-discovery data stream |
+| `.internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*` | Backing indices for the ad-hoc attack-discovery data stream |
 | `logs-*` | Threat Hunt, Alert Triage (enrichment) |
 | `risk-score.risk-score-latest-*` | Attack Discovery (entity risk scoring) |
 
@@ -236,6 +248,9 @@ PUT /_security/role/mcp_app_readonly
         ".alerts-security.alerts-<space-id>",
         ".alerts-security.attack.discovery.alerts-<space-id>",
         ".adhoc.alerts-security.attack.discovery.alerts-<space-id>",
+        ".internal.alerts-security.alerts-<space-id>-*",
+        ".internal.alerts-security.attack.discovery.alerts-<space-id>-*",
+        ".internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*",
         "logs-*",
         "risk-score.risk-score-latest-*"
       ],
@@ -274,6 +289,9 @@ POST /_security/api_key
             ".alerts-security.alerts-<space-id>",
             ".alerts-security.attack.discovery.alerts-<space-id>",
             ".adhoc.alerts-security.attack.discovery.alerts-<space-id>",
+            ".internal.alerts-security.alerts-<space-id>-*",
+            ".internal.alerts-security.attack.discovery.alerts-<space-id>-*",
+            ".internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*",
             "logs-*",
             "risk-score.risk-score-latest-*"
           ],
@@ -342,7 +360,7 @@ Use this appendix to build custom roles that enable only specific tools.
 |---|---|---|---|
 | Search alerts | `monitor` | `read` on `.alerts-security.alerts-<space-id>` | Security (Read), Alerts (Read) |
 | View alert context | `monitor` | `read` on `.alerts-security.alerts-<space-id>`, `logs-endpoint.events.process-*`, `logs-endpoint.events.network-*` | Security (Read), Alerts (Read) |
-| Acknowledge alerts | `monitor` | `read`, `write` on `.alerts-security.alerts-<space-id>` | Security (All), Alerts (All) |
+| Acknowledge alerts | `monitor` | `read`, `write` on `.alerts-security.alerts-<space-id>` and `.internal.alerts-security.alerts-<space-id>-*` | Security (All), Alerts (All) |
 
 ### Attack Discovery
 
@@ -351,7 +369,7 @@ Use this appendix to build custom roles that enable only specific tools.
 | View discoveries | `monitor` | `read` on `.alerts-security.attack.discovery.alerts-<space-id>`, `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | Security (Read), Attack discovery (Read) |
 | Assess confidence | `monitor` | `read` on `.alerts-security.alerts-<space-id>`, `risk-score.risk-score-latest-*` | Security (Read), Attack discovery (Read) |
 | Generate discoveries | `monitor` | `read` on `.alerts-security.alerts-<space-id>` | Security (All), Rules and Exceptions (All), Alerts (All), Elastic AI Assistant (All), Attack discovery (All), Actions and Connectors (All) |
-| Acknowledge discoveries | `monitor` | `read`, `write` on `.alerts-security.attack.discovery.alerts-<space-id>`, `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | Security (All), Attack discovery (All) |
+| Acknowledge discoveries | `monitor` | `read`, `write` on `.alerts-security.attack.discovery.alerts-<space-id>`, `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` and the matching `.internal.*-*` backing-index patterns | Security (All), Attack discovery (All) |
 
 ### Case Management
 
@@ -389,7 +407,7 @@ Use this appendix to build custom roles that enable only specific tools.
 |---|---|---|---|
 | Check existing data | `monitor` | `read` on `.alerts-security.alerts-<space-id>`, `logs-*` | Security (Read) |
 | Generate sample data | `monitor` | `read`, `write` on `logs-*` | Security (All), Rules and Exceptions (All) |
-| Cleanup sample data | `monitor` | `read`, `write` on `logs-*`, `.alerts-security.alerts-<space-id>` | Security (All), Rules and Exceptions (All), Alerts (All) |
+| Cleanup sample data | `monitor` | `read`, `write` on `logs-*`, `.alerts-security.alerts-<space-id>` and `.internal.alerts-security.alerts-<space-id>-*` | Security (All), Rules and Exceptions (All), Alerts (All) |
 
 ---
 
