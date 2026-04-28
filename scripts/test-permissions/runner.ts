@@ -22,22 +22,34 @@ import { findRules } from "../../src/elastic/rules.js";
 
 const TEST_TAG = "mcp-app-test";
 import {
+  ASSERTED_EXPECTATION_PROFILE,
+  QUICKSTART_BUILTINS,
+  QUICKSTART_COMPANION_DESCRIPTORS,
   ROLE_DESCRIPTORS,
   operationChecks,
+  type AnyRoleName,
+  type AssertedRoleName,
   type CheckResult,
+  type OperationCheck,
   type OperationGroup,
   type RoleName,
+  type RunOutcome,
   type SeedFixtures,
 } from "./roles.js";
 import {
   bootstrapAdminApiKey,
+  grantApiKeyForUser,
   createApiKey,
   createRole,
+  createUser,
   deleteApiKey,
   deleteRole,
+  deleteUser,
   hasPrivileges,
+  roleExists,
   listApiKeysByPrefix,
   listRolesByPrefix,
+  listUsersByPrefix,
   type CreatedApiKey,
 } from "./elastic-admin.js";
 
@@ -64,9 +76,23 @@ interface AdminConfig {
 }
 
 interface RoleArtifacts {
-  role: RoleName;
+  role: "full" | "readonly";
   roleName: string;
   apiKey: CreatedApiKey;
+}
+
+type QuickstartRoleName = "quickstart_full" | "quickstart_readonly";
+
+interface QuickstartArtifacts {
+  role: QuickstartRoleName;
+  companionRoleName: string;
+  username: string;
+  apiKey: CreatedApiKey;
+}
+
+interface UnavailableQuickstart {
+  role: QuickstartRoleName;
+  reason: string;
 }
 
 const SYM_OK = "✓";
@@ -82,6 +108,13 @@ const GROUP_ORDER: OperationGroup[] = [
   "sample-data",
 ];
 
+const ALL_ASSERTED_ROLES: AssertedRoleName[] = [
+  "full",
+  "readonly",
+  "quickstart_full",
+  "quickstart_readonly",
+];
+
 function parseArgs(argv: string[]): CliOptions {
   const opts: CliOptions = {
     roles: ["full", "readonly"],
@@ -94,8 +127,21 @@ function parseArgs(argv: string[]): CliOptions {
     if (arg === "--role") {
       const value = argv[++i];
       if (value === "both") opts.roles = ["full", "readonly"];
-      else if (value === "full" || value === "readonly") opts.roles = [value];
-      else die(`Unknown --role value: ${value} (expected full|readonly|both)`);
+      else if (value === "all") opts.roles = [...ALL_ASSERTED_ROLES];
+      else if (value === "quickstart")
+        opts.roles = ["quickstart_full", "quickstart_readonly"];
+      else if (value === "none") opts.roles = [];
+      else if (
+        value === "full" ||
+        value === "readonly" ||
+        value === "quickstart_full" ||
+        value === "quickstart_readonly"
+      )
+        opts.roles = [value];
+      else
+        die(
+          `Unknown --role value: ${value} (expected full|readonly|quickstart_full|quickstart_readonly|both|quickstart|all|none)`
+        );
     } else if (arg === "--cleanup-stale") {
       opts.cleanupStale = true;
     } else if (arg === "--no-cleanup") {
@@ -116,8 +162,12 @@ function printHelp() {
   console.log(`Usage: npm run test:permissions -- [options]
 
 Options:
-  --role <full|readonly|both>   Role(s) to test (default: both)
-  --cleanup-stale               Delete leftover ${TEST_RESOURCE_PREFIX}* roles/keys before running
+  --role <name|both|quickstart|all|none>
+                                Role(s) to test (default: both).
+                                Names: full, readonly, quickstart_full, quickstart_readonly.
+                                "both" = full,readonly. "quickstart" = quickstart_full,quickstart_readonly.
+                                "all" = all four. "none" = no roles (cleanup-stale only).
+  --cleanup-stale               Delete leftover ${TEST_RESOURCE_PREFIX}* roles/users/keys before running
   --no-cleanup                  Skip cleanup at end (prints API keys for reuse)
   --verbose                     Verbose output
   -h, --help                    Show this help
@@ -180,6 +230,54 @@ function isPermissionDenied(err: unknown): boolean {
   if (/security_exception/i.test(msg)) return true;
   if (/"status"\s*:\s*403/.test(msg)) return true;
   return false;
+}
+
+function isNotFound(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /Elasticsearch 404:|Kibana 404:|not_found/i.test(msg);
+}
+
+interface ObservedRun {
+  check: OperationCheck;
+  outcome: RunOutcome;
+  detail: string;
+}
+
+/**
+ * Runs every operation check against the currently active scoped key and
+ * returns the *observed* outcome for each — without comparing to any
+ * expectation. Used both for built-in discovery (where there's no
+ * expectation) and as the raw layer underneath asserted runs.
+ */
+async function runOpsObserve(
+  role: AnyRoleName,
+  fixtures: SeedFixtures
+): Promise<ObservedRun[]> {
+  const out: ObservedRun[] = [];
+  for (const check of operationChecks) {
+    if (check.skipUnless && !check.skipUnless(fixtures, role)) {
+      out.push({
+        check,
+        outcome: "skipped",
+        detail: "no fixture available for this check",
+      });
+      continue;
+    }
+    try {
+      const value = await check.run(fixtures, role);
+      out.push({ check, outcome: "pass", detail: summarize(value) });
+    } catch (err) {
+      const msg = formatError(err);
+      if (isPermissionDenied(err)) {
+        out.push({ check, outcome: "403", detail: "denied (403/401)" });
+      } else if (isNotFound(err)) {
+        out.push({ check, outcome: "404", detail: msg });
+      } else {
+        out.push({ check, outcome: "other", detail: msg });
+      }
+    }
+  }
+  return out;
 }
 
 async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixtures> {
@@ -279,11 +377,64 @@ async function cleanupStaleResources(opts: CliOptions): Promise<void> {
       console.warn(`  warning: failed to delete role ${r}: ${formatError(err)}`);
     }
   }
+  const users = await listUsersByPrefix(TEST_RESOURCE_PREFIX);
+  for (const u of users) {
+    if (opts.verbose) console.log(`→ Deleting stale user: ${u}`);
+    try {
+      await deleteUser(u);
+    } catch (err) {
+      console.warn(`  warning: failed to delete user ${u}: ${formatError(err)}`);
+    }
+  }
+}
+
+async function provisionQuickstart(
+  admin: AdminConfig,
+  role: QuickstartRoleName,
+  suffix: string
+): Promise<QuickstartArtifacts | UnavailableQuickstart> {
+  const builtin = QUICKSTART_BUILTINS[role];
+  if (!(await roleExists(builtin))) {
+    return { role, reason: `built-in '${builtin}' not present in cluster` };
+  }
+  const descriptor = QUICKSTART_COMPANION_DESCRIPTORS[role];
+  const companionRoleName = `${TEST_RESOURCE_PREFIX}${role}-companion-${suffix}`;
+  const username = `${TEST_RESOURCE_PREFIX}${role}-${suffix}`;
+  const password = crypto.randomBytes(18).toString("base64");
+  await createRole(companionRoleName, descriptor);
+  let apiKey: CreatedApiKey;
+  try {
+    await createUser(username, password, [builtin, companionRoleName]);
+    apiKey = await grantApiKeyForUser(
+      {
+        elasticsearchUrl: admin.elasticsearchUrl,
+        username: admin.basicAuth.username,
+        password: admin.basicAuth.password,
+      },
+      username,
+      password,
+      username
+    );
+  } catch (err) {
+    // Best-effort cleanup so a failed provisioning leaves no orphans.
+    try {
+      await deleteUser(username);
+    } catch {
+      /* swallow */
+    }
+    try {
+      await deleteRole(companionRoleName);
+    } catch {
+      /* swallow */
+    }
+    throw err;
+  }
+  return { role, companionRoleName, username, apiKey };
 }
 
 async function provisionRole(
   admin: AdminConfig,
-  role: RoleName,
+  role: "full" | "readonly",
   suffix: string
 ): Promise<RoleArtifacts> {
   const descriptor = ROLE_DESCRIPTORS[role];
@@ -303,13 +454,13 @@ async function provisionRole(
 }
 
 interface LayerAResult {
-  role: RoleName;
+  role: "full" | "readonly";
   outcome: "pass" | "fail";
   detail: string;
 }
 
 async function runLayerA(
-  role: RoleName,
+  role: "full" | "readonly",
   admin: AdminConfig,
   apiKey: CreatedApiKey
 ): Promise<LayerAResult> {
@@ -378,87 +529,67 @@ function collectMissing(result: {
 }
 
 async function runLayerB(
-  role: RoleName,
+  role: AssertedRoleName,
   admin: AdminConfig,
   apiKey: CreatedApiKey,
   fixtures: SeedFixtures
-): Promise<CheckResult[]> {
+): Promise<{ checkResults: CheckResult[]; observed: ObservedRun[] }> {
   useScopedConfig(admin, apiKey.encoded);
-  const results: CheckResult[] = [];
-  for (const check of operationChecks) {
-    if (check.skipUnless && !check.skipUnless(fixtures, role)) {
-      results.push({
-        check,
-        role,
-        outcome: "skipped",
-        detail: "no fixture available for this check",
-      });
-      continue;
-    }
-
-    const expectation = check.expect[role];
-    try {
-      const value = await check.run(fixtures, role);
-      if (expectation === "ok") {
-        results.push({
-          check,
-          role,
-          outcome: "pass",
-          detail: summarize(value),
-        });
-      } else {
-        results.push({
-          check,
-          role,
-          outcome: "fail",
-          detail: `expected 403 but call succeeded`,
-        });
-      }
-    } catch (err) {
-      const msg = formatError(err);
-      if (expectation === "403") {
-        if (isPermissionDenied(err)) {
-          results.push({
-            check,
-            role,
-            outcome: "pass",
-            detail: "denied (403/401)",
-          });
-        } else {
-          results.push({
-            check,
-            role,
-            outcome: "fail",
-            detail: `expected 403 but got non-permission error: ${msg}`,
-          });
-        }
-      } else {
-        // Expected ok. If this is a missing-fixture failure (e.g. no
-        // discoveries on the cluster), report skipped instead of failed.
-        if (isMissingFixture(msg)) {
-          results.push({
-            check,
-            role,
-            outcome: "skipped",
-            detail: `no fixture in cluster: ${msg}`,
-          });
-        } else {
-          results.push({
-            check,
-            role,
-            outcome: "fail",
-            detail: msg,
-          });
-        }
-      }
-    }
-  }
-  return results;
+  const observed = await runOpsObserve(role, fixtures);
+  const checkResults: CheckResult[] = observed.map((o) =>
+    deriveCheckResult(role, o)
+  );
+  return { checkResults, observed };
 }
 
-function isMissingFixture(msg: string): boolean {
-  // "Elasticsearch 404:" generally means the index/document doesn't exist.
-  return /Elasticsearch 404:|Kibana 404:|not_found/i.test(msg);
+function deriveCheckResult(
+  role: AssertedRoleName,
+  o: ObservedRun
+): CheckResult {
+  if (o.outcome === "skipped") {
+    return { check: o.check, role, outcome: "skipped", detail: o.detail };
+  }
+  const expectation = o.check.expect[ASSERTED_EXPECTATION_PROFILE[role]];
+  if (expectation === "ok") {
+    if (o.outcome === "pass") {
+      return { check: o.check, role, outcome: "pass", detail: o.detail };
+    }
+    if (o.outcome === "404") {
+      return {
+        check: o.check,
+        role,
+        outcome: "skipped",
+        detail: `no fixture in cluster: ${o.detail}`,
+      };
+    }
+    if (o.outcome === "403") {
+      return {
+        check: o.check,
+        role,
+        outcome: "fail",
+        detail: `expected ok but got 403/401`,
+      };
+    }
+    return { check: o.check, role, outcome: "fail", detail: o.detail };
+  }
+  // expectation === "403"
+  if (o.outcome === "403") {
+    return { check: o.check, role, outcome: "pass", detail: o.detail };
+  }
+  if (o.outcome === "pass") {
+    return {
+      check: o.check,
+      role,
+      outcome: "fail",
+      detail: `expected 403 but call succeeded`,
+    };
+  }
+  return {
+    check: o.check,
+    role,
+    outcome: "fail",
+    detail: `expected 403 but got non-permission error: ${o.detail}`,
+  };
 }
 
 interface LeftoverCounts {
@@ -518,13 +649,21 @@ function symbolFor(outcome: "pass" | "fail" | "skipped"): string {
 
 function printRoleReport(
   role: RoleName,
-  layerA: LayerAResult,
+  layerA: LayerAResult | null,
   layerB: CheckResult[]
 ) {
   console.log(`\n── ${role.toUpperCase()} ──`);
 
-  console.log("  Layer A (_has_privileges):");
-  console.log(`    ${symbolFor(layerA.outcome)} all role privileges granted — ${layerA.detail}`);
+  if (layerA) {
+    console.log("  Layer A (_has_privileges):");
+    console.log(
+      `    ${symbolFor(layerA.outcome)} all role privileges granted — ${layerA.detail}`
+    );
+  } else {
+    console.log(
+      "  Layer A: skipped (built-in privileges aren't enumerable from the role descriptor)"
+    );
+  }
 
   console.log("  Layer B (operations):");
   for (const group of GROUP_ORDER) {
@@ -532,7 +671,7 @@ function printRoleReport(
     if (inGroup.length === 0) continue;
     console.log(`    [${group}]`);
     for (const r of inGroup) {
-      const expected = r.check.expect[role];
+      const expected = r.check.expect[ASSERTED_EXPECTATION_PROFILE[role]];
       console.log(
         `      ${symbolFor(r.outcome)} ${r.check.name} (expect ${expected}) — ${r.detail}`
       );
@@ -543,6 +682,7 @@ function printRoleReport(
 async function cleanupRoleArtifacts(
   admin: AdminConfig,
   artifacts: RoleArtifacts[],
+  quickstartArtifacts: QuickstartArtifacts[],
   opts: CliOptions
 ) {
   if (!opts.cleanup) {
@@ -551,6 +691,12 @@ async function cleanupRoleArtifacts(
       console.log(`    role:    ${a.roleName}`);
       console.log(`    api key: ${a.apiKey.name} (id=${a.apiKey.id})`);
       console.log(`    encoded: ${a.apiKey.encoded}`);
+    }
+    for (const q of quickstartArtifacts) {
+      console.log(`    user:    ${q.username} (quickstart: ${q.role})`);
+      console.log(`    role:    ${q.companionRoleName}`);
+      console.log(`    api key: ${q.apiKey.name} (id=${q.apiKey.id})`);
+      console.log(`    encoded: ${q.apiKey.encoded}`);
     }
     return;
   }
@@ -568,6 +714,29 @@ async function cleanupRoleArtifacts(
     } catch (err) {
       console.warn(
         `  warning: failed to delete role ${a.roleName}: ${formatError(err)}`
+      );
+    }
+  }
+  for (const q of quickstartArtifacts) {
+    try {
+      await deleteApiKey(q.apiKey.id);
+    } catch (err) {
+      console.warn(
+        `  warning: failed to invalidate API key ${q.apiKey.id}: ${formatError(err)}`
+      );
+    }
+    try {
+      await deleteUser(q.username);
+    } catch (err) {
+      console.warn(
+        `  warning: failed to delete user ${q.username}: ${formatError(err)}`
+      );
+    }
+    try {
+      await deleteRole(q.companionRoleName);
+    } catch (err) {
+      console.warn(
+        `  warning: failed to delete role ${q.companionRoleName}: ${formatError(err)}`
       );
     }
   }
@@ -602,6 +771,7 @@ async function main() {
   };
 
   const provisioned: RoleArtifacts[] = [];
+  const provisionedQuickstarts: QuickstartArtifacts[] = [];
   let interrupted = false;
 
   const cleanupBootstrap = async () => {
@@ -618,7 +788,7 @@ async function main() {
   const onSignal = () => {
     interrupted = true;
     console.log("\n→ Caught SIGINT, cleaning up before exit…");
-    cleanupRoleArtifacts(admin, provisioned, opts)
+    cleanupRoleArtifacts(admin, provisioned, provisionedQuickstarts, opts)
       .then(() => cleanupBootstrap())
       .catch((err) => console.error(`Cleanup error: ${formatError(err)}`))
       .finally(() => process.exit(130));
@@ -644,32 +814,47 @@ async function main() {
       console.log(`  suffix:      ${fixtures.suffix}`);
     }
 
-    interface RoleRun {
-      role: RoleName;
-      layerA: LayerAResult;
+    interface AssertedRun {
+      role: AssertedRoleName;
+      layerA: LayerAResult | null;
       layerB: CheckResult[];
     }
-    const allResults: RoleRun[] = [];
+    const assertedRuns: AssertedRun[] = [];
+    const unavailableQuickstarts: UnavailableQuickstart[] = [];
 
     for (const role of opts.roles) {
       console.log(`\n→ Provisioning role "${role}"…`);
       useAdminConfig(admin);
-      const artifacts = await provisionRole(admin, role, fixtures.suffix);
-      provisioned.push(artifacts);
-
-      const layerA = await runLayerA(role, admin, artifacts.apiKey);
-      const layerB = await runLayerB(role, admin, artifacts.apiKey, fixtures);
-      allResults.push({ role, layerA, layerB });
+      let apiKey: CreatedApiKey;
+      let layerA: LayerAResult | null = null;
+      if (role === "full" || role === "readonly") {
+        const artifacts = await provisionRole(admin, role, fixtures.suffix);
+        provisioned.push(artifacts);
+        apiKey = artifacts.apiKey;
+        layerA = await runLayerA(role, admin, artifacts.apiKey);
+      } else {
+        const result = await provisionQuickstart(admin, role, fixtures.suffix);
+        if ("reason" in result) {
+          console.warn(`  ! ${role} unavailable: ${result.reason}`);
+          unavailableQuickstarts.push(result);
+          continue;
+        }
+        provisionedQuickstarts.push(result);
+        apiKey = result.apiKey;
+      }
+      const { checkResults } = await runLayerB(role, admin, apiKey, fixtures);
+      assertedRuns.push({ role, layerA, layerB: checkResults });
     }
 
-    // Report.
     let passed = 0;
     let failed = 0;
     let skipped = 0;
-    for (const { role, layerA, layerB } of allResults) {
+    for (const { role, layerA, layerB } of assertedRuns) {
       printRoleReport(role, layerA, layerB);
-      if (layerA.outcome === "pass") passed++;
-      else failed++;
+      if (layerA) {
+        if (layerA.outcome === "pass") passed++;
+        else failed++;
+      }
       for (const r of layerB) {
         if (r.outcome === "pass") passed++;
         else if (r.outcome === "fail") failed++;
@@ -677,7 +862,11 @@ async function main() {
       }
     }
 
-    console.log(`\nSummary: ${passed} passed, ${failed} failed, ${skipped} skipped`);
+    if (assertedRuns.length > 0) {
+      console.log(
+        `\nSummary: ${passed} passed, ${failed} failed, ${skipped} skipped`
+      );
+    }
 
     // Surface leftover test resources so the user can clean them up. We
     // query under the admin key to make sure we see everything regardless
@@ -700,7 +889,12 @@ async function main() {
   } finally {
     if (!interrupted) {
       try {
-        await cleanupRoleArtifacts(admin, provisioned, opts);
+        await cleanupRoleArtifacts(
+          admin,
+          provisioned,
+          provisionedQuickstarts,
+          opts
+        );
       } catch (err) {
         console.error(`Cleanup error: ${formatError(err)}`);
         if (exitCode === 0) exitCode = 1;

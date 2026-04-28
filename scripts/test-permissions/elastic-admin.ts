@@ -30,7 +30,7 @@ export interface BasicAuth {
  * inherit owner privileges) and for the per-role scoped keys (with
  * explicit `role_descriptors`).
  */
-async function basicAuthCreateApiKey(
+export async function basicAuthCreateApiKey(
   auth: BasicAuth,
   body: Record<string, unknown>
 ): Promise<{ id: string; name: string; encoded: string }> {
@@ -65,6 +65,46 @@ export async function bootstrapAdminApiKey(
   return basicAuthCreateApiKey(auth, { name, role_descriptors: {} });
 }
 
+/**
+ * POST /_security/api_key/grant — admin (basic auth) grants an API key
+ * for another user using their password. The resulting key inherits the
+ * target user's effective privileges.
+ *
+ * Why this and not basicAuthCreateApiKey-as-user: many built-in roles
+ * (notably `viewer`) don't include `manage_own_api_key`, so the user
+ * can't mint their own key. Grant works because authentication and
+ * authorization are split — the admin caller has `grant_api_key`, and
+ * the resulting key carries only the target user's privileges.
+ */
+export async function grantApiKeyForUser(
+  admin: BasicAuth,
+  targetUsername: string,
+  targetPassword: string,
+  keyName: string
+): Promise<CreatedApiKey> {
+  const url = admin.elasticsearchUrl.replace(/\/$/, "") + "/_security/api_key/grant";
+  const credentials = Buffer.from(`${admin.username}:${admin.password}`).toString("base64");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      grant_type: "password",
+      username: targetUsername,
+      password: targetPassword,
+      api_key: { name: keyName },
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Elasticsearch ${res.status}: ${text}`);
+  }
+  return (await res.json()) as CreatedApiKey;
+}
+
 export interface HasPrivilegesProbe {
   cluster?: string[];
   index?: Array<{ names: string[]; privileges: string[] }>;
@@ -94,6 +134,26 @@ export async function createRole(
     }
   );
   return { created: result.role?.created ?? true };
+}
+
+/**
+ * Returns true if a role with this name exists in the cluster.
+ * Used to short-circuit built-in provisioning when a reserved role
+ * isn't loaded (Security Solution reserved roles are gated on Kibana
+ * feature flags / licensing — they're absent on plain stacks).
+ */
+export async function roleExists(name: string): Promise<boolean> {
+  try {
+    await esRequest<Record<string, unknown>>(
+      `/_security/role/${encodeURIComponent(name)}`
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Elasticsearch 404")) {
+      return false;
+    }
+    throw err;
+  }
 }
 
 export async function deleteRole(name: string): Promise<{ found: boolean }> {
@@ -173,5 +233,50 @@ export async function listApiKeysByPrefix(
  */
 export async function listRolesByPrefix(prefix: string): Promise<string[]> {
   const result = await esRequest<Record<string, unknown>>("/_security/role");
+  return Object.keys(result).filter((name) => name.startsWith(prefix));
+}
+
+/**
+ * PUT /_security/user/<u> — create or overwrite a native-realm user.
+ * Used to provision a test user that has a built-in role assigned, so
+ * an API key minted as that user (with empty role_descriptors) inherits
+ * exactly the built-in role's privileges.
+ */
+export async function createUser(
+  username: string,
+  password: string,
+  roles: string[]
+): Promise<{ created: boolean }> {
+  const result = await esRequest<{ created: boolean }>(
+    `/_security/user/${encodeURIComponent(username)}`,
+    {
+      method: "PUT",
+      body: { password, roles },
+    }
+  );
+  return { created: result.created ?? true };
+}
+
+export async function deleteUser(
+  username: string
+): Promise<{ found: boolean }> {
+  try {
+    return await esRequest<{ found: boolean }>(
+      `/_security/user/${encodeURIComponent(username)}`,
+      { method: "DELETE" }
+    );
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Elasticsearch 404")) {
+      return { found: false };
+    }
+    throw err;
+  }
+}
+
+/**
+ * List native-realm usernames matching a prefix. Used by --cleanup-stale.
+ */
+export async function listUsersByPrefix(prefix: string): Promise<string[]> {
+  const result = await esRequest<Record<string, unknown>>("/_security/user");
   return Object.keys(result).filter((name) => name.startsWith(prefix));
 }

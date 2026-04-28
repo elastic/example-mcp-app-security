@@ -121,18 +121,97 @@ export const readonlyRole: RoleDescriptor = {
         "feature_securitySolutionNotes.read",
         "feature_securitySolutionRulesV4.read",
         "feature_securitySolutionAlertsV1.read",
+        "feature_actions.read",
       ],
       resources: [KIBANA_RESOURCE],
     },
   ],
 };
 
-export type RoleName = "full" | "readonly";
+export type AssertedRoleName =
+  | "full"
+  | "readonly"
+  | "quickstart_full"
+  | "quickstart_readonly";
+export type RoleName = AssertedRoleName;
 
-export const ROLE_DESCRIPTORS: Record<RoleName, RoleDescriptor> = {
+/**
+ * Custom-role descriptors for the asserted "Advanced" path. These
+ * roles are self-contained — they include cluster, index, and Kibana
+ * feature privileges in a single role.
+ */
+export const ROLE_DESCRIPTORS: Record<"full" | "readonly", RoleDescriptor> = {
   full: fullRole,
   readonly: readonlyRole,
 };
+
+/**
+ * The assertion profile for each asserted role. Quickstart variants
+ * (`quickstart_full` / `quickstart_readonly`) are expected to exhibit
+ * the same per-op outcomes as their custom-role counterparts (`full` /
+ * `readonly`), so we look up the same `expect` map under one key.
+ */
+export type AssertedExpectationProfile = "full" | "readonly";
+export const ASSERTED_EXPECTATION_PROFILE: Record<
+  AssertedRoleName,
+  AssertedExpectationProfile
+> = {
+  full: "full",
+  readonly: "readonly",
+  quickstart_full: "full",
+  quickstart_readonly: "readonly",
+};
+
+/**
+ * Quickstart path: built-in Kibana role paired with a small companion
+ * role that grants only the index privileges the built-in lacks. This
+ * matches what `docs/permissions.md` recommends to end users.
+ *
+ * The companion role intentionally has no cluster, Kibana-feature, or
+ * application privileges — those come from the built-in. If a future
+ * Kibana version stops shipping cluster `monitor` in `editor`/`viewer`,
+ * the matrix run will surface the regression as a `listIndices` (or
+ * similar) failure.
+ */
+export const QUICKSTART_BUILTINS: Record<
+  "quickstart_full" | "quickstart_readonly",
+  "editor" | "viewer"
+> = {
+  quickstart_full: "editor",
+  quickstart_readonly: "viewer",
+};
+
+export const QUICKSTART_COMPANION_DESCRIPTORS: Record<
+  "quickstart_full" | "quickstart_readonly",
+  RoleDescriptor
+> = {
+  // Cluster-level `monitor` is required by `_cat/indices/<pattern>`
+  // (Threat Hunt's listIndices). Neither `editor` nor `viewer` grants
+  // it on a stateful 9.5 cluster, so it has to come from the companion.
+  quickstart_full: {
+    cluster: ["monitor"],
+    indices: [
+      {
+        names: DATA_INDICES,
+        privileges: ["read", "write", "monitor"],
+      },
+    ],
+    applications: [],
+  },
+  quickstart_readonly: {
+    cluster: ["monitor"],
+    indices: [
+      {
+        names: DATA_INDICES,
+        privileges: ["read", "monitor"],
+      },
+    ],
+    applications: [],
+  },
+};
+
+/** Any role identity the runner may exercise. */
+export type AnyRoleName = AssertedRoleName;
 
 export type OperationGroup =
   | "alerts"
@@ -143,6 +222,9 @@ export type OperationGroup =
   | "sample-data";
 
 export type Expectation = "ok" | "403";
+
+/** Outcome bucket for a single operation run. */
+export type RunOutcome = "pass" | "403" | "404" | "other" | "skipped";
 
 export interface SeedFixtures {
   alertId: string;
@@ -162,21 +244,25 @@ export interface OperationCheck {
   group: OperationGroup;
   /**
    * Function that performs the operation. Receives the seed fixtures and
-   * the role being tested. Throws on API failure.
+   * the role being tested (asserted or built-in). Throws on API failure.
    */
-  run: (fixtures: SeedFixtures, role: RoleName) => Promise<unknown>;
+  run: (fixtures: SeedFixtures, role: AnyRoleName) => Promise<unknown>;
   /**
-   * Per-role expectation. "ok" = call must succeed. "403" = call must
-   * throw with a message containing "403" (Kibana sometimes returns 401
-   * for forbidden actions; that's also accepted).
+   * Per-role expectation, keyed by assertion profile (`full` or
+   * `readonly`). "ok" = call must succeed. "403" = call must throw
+   * with a message containing "403" (Kibana sometimes returns 401 for
+   * forbidden actions; that's also accepted). Only consulted for
+   * asserted roles (`full`, `readonly`, `quickstart_full`,
+   * `quickstart_readonly`) via `ASSERTED_EXPECTATION_PROFILE`;
+   * built-in runs record observed outcomes only.
    */
-  expect: Record<RoleName, Expectation>;
+  expect: Record<AssertedExpectationProfile, Expectation>;
   /**
    * If set, returning a falsy value from the resolver marks the check as
    * "skipped" instead of running it. Used for ops that need an optional
    * fixture (e.g. attack-discovery write tests need a discoveryId).
    */
-  skipUnless?: (fixtures: SeedFixtures, role: RoleName) => unknown;
+  skipUnless?: (fixtures: SeedFixtures, role: AnyRoleName) => unknown;
 }
 
 export interface CheckResult {
@@ -319,7 +405,7 @@ export const operationChecks: OperationCheck[] = [
     name: "listAIConnectors",
     group: "attack-discovery",
     run: async () => listAIConnectors(),
-    expect: { full: "ok", readonly: "403" },
+    expect: { full: "ok", readonly: "ok" },
   },
 
   // ─── threat-hunt ───────────────────────────────────────────────────────
