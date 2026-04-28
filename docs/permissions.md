@@ -1,42 +1,148 @@
 # Minimum Required Permissions
 
-This guide defines the least-privilege roles for the Elastic Security MCP app. Two pre-built roles cover most use cases:
+This guide defines the least-privilege roles for the Elastic Security MCP app on **stateful (self-managed and Elastic Cloud Hosted) deployments**. Two paths:
 
-- **Full-featured** — all tools, read and write operations
-- **Read-only** — view alerts, cases, rules, and discoveries without making changes
+- **[Quickstart](#quickstart--built-in-roles)** — assign a built-in Kibana role plus a small index-privileges add-on. Recommended for most users.
+- **[Advanced — Custom roles](#advanced--custom-roles)** — fully scripted role JSON. Use when you need to provision via API/IaC, or want finer-grained control than the built-ins offer.
 
-For custom roles, see the [per-tool privilege breakdown](#appendix-per-tool-privilege-breakdown) at the end.
+> **Space ID:** Kibana index patterns include a `<space-id>` segment (e.g., `.alerts-security.alerts-<space-id>`). For most deployments this is `default`. Replace `<space-id>` with your actual space ID throughout this guide. The app currently targets the `default` space.
 
-> **Space ID:** Kibana index patterns include a `<space-id>` segment (e.g., `.alerts-security.alerts-<space-id>`). For most deployments this is `default`. Replace `<space-id>` with your actual space ID throughout this guide.
->
-> The app currently targets the `default` space.
+> **Serverless:** This guide targets stateful deployments. Serverless projects ship a different set of built-in roles (`t1_analyst`, `soc_manager`, etc.) and aren't covered here yet.
 
 ---
 
-## Quick Reference
+## Quickstart — Built-in roles
 
-| Privilege area | Full-featured | Read-only |
+Two pre-built Kibana roles cover the entire Kibana feature surface the MCP app needs (Security, Cases, Timeline, Notes, Rules, Alerts, AI Assistant, Attack Discovery, Actions and Connectors). You only need to add a small block of **Elasticsearch index privileges** on top — Kibana feature privileges require no toggling.
+
+### Full-featured access
+
+**1. Create a companion role for index privileges**
+
+Stack Management → Roles → **Create role** → name it `mcp_app_indexes_full`, grant **Cluster privilege** `monitor`, and grant the following **Index privileges**:
+
+| Index pattern | Privileges |
+|---|---|
+| `.alerts-security.alerts-<space-id>` | `read`, `write`, `monitor` |
+| `.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `write`, `monitor` |
+| `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `write`, `monitor` |
+| `.internal.alerts-security.alerts-<space-id>-*` | `read`, `write`, `monitor` |
+| `.internal.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `write`, `monitor` |
+| `.internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `write`, `monitor` |
+| `logs-*` | `read`, `write`, `monitor` |
+| `risk-score.risk-score-latest-*` | `read`, `monitor` |
+
+> Why cluster `monitor` *and* index-level `monitor`: `_cat/indices/<pattern>` (used by Threat Hunt to list indices) needs both. The cluster-level grant lets the user enumerate indices at all; the index-level grant lets `_cat/indices` and `_mapping` actually return data for those patterns. Neither `editor` nor `viewer` grants cluster `monitor`, so it has to come from this companion role.
+
+No Kibana-feature or application privileges in this companion role — those come from `editor`.
+
+**2. Assign roles to a user**
+
+Stack Management → Users → **Create user** (or edit an existing one) → assign **both** roles:
+
+- `editor` (built-in) — covers all Kibana features for read/write Security workflows.
+- `mcp_app_indexes_full` (the companion role created above).
+
+**3. Create an API key for that user**
+
+Sign in as the new user, then **Stack Management → API keys → Create API key**. Kibana mints the key inheriting the user's combined privileges from both roles. The "Encoded" value is what you set as `ELASTICSEARCH_API_KEY` in the MCP app config.
+
+### Read-only access
+
+**1. Create a companion role for index privileges**
+
+Stack Management → Roles → **Create role** → name it `mcp_app_indexes_readonly`, grant **Cluster privilege** `monitor`, and grant the following **Index privileges**:
+
+| Index pattern | Privileges |
+|---|---|
+| `.alerts-security.alerts-<space-id>` | `read`, `monitor` |
+| `.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `monitor` |
+| `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `monitor` |
+| `.internal.alerts-security.alerts-<space-id>-*` | `read`, `monitor` |
+| `.internal.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `monitor` |
+| `.internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `monitor` |
+| `logs-*` | `read`, `monitor` |
+| `risk-score.risk-score-latest-*` | `read`, `monitor` |
+
+**2. Assign roles to a user**
+
+Assign **both** `viewer` (built-in) and `mcp_app_indexes_readonly` to the user.
+
+**3. Create an API key**
+
+Same as above — sign in as the user and create the key from Stack Management → API keys.
+
+### What the built-ins cover
+
+| Surface | `editor` | `viewer` |
 |---|---|---|
-| **Cluster** | `monitor` | `monitor` |
-| **System indices** (`.alerts-*`, `.adhoc.*`, `.internal.*`) | `read`, `write`, `monitor` | `read`, `monitor` |
-| **Data indices** (`logs-*`, `risk-score.*`) | `read`, `write`, `monitor` | `read`, `monitor` |
-| **Kibana features** | All on most Security features | Read on core Security features |
-| **Attack Discovery** | Yes | No |
-| **Case creation/updates** | Yes | No |
-| **Alert acknowledgment** | Yes | No |
-| **Rule management** | Yes | No |
+| All Kibana features (SIEM, Cases, Timeline, Notes, Rules, Alerts, AI Assistant, Attack Discovery, Actions/Connectors) | All | Read |
+| Alert acknowledgment, case CRUD, rule CRUD | Yes (via Kibana APIs) | No |
+| Sample-data generation | Needs companion `write` on `logs-*` (covered above) | Disabled |
+| Threat Hunt index listing | Needs companion `monitor` on target indices (covered above) | Same |
+
+The built-ins eliminate the need to specify per-feature privileges like `feature_siemV5.all` or `feature_securitySolutionRulesV4.all`. Those names change between minor versions; the built-ins absorb the churn.
 
 ---
 
-## Full-Featured Role
+## Troubleshooting
 
-### Cluster privileges
+### 401 Unauthorized
+
+- API key is invalid, expired, or malformed
+- Verify with: `curl -s -H "Authorization: ApiKey <your-key>" <ELASTICSEARCH_URL>/_security/_authenticate`
+
+### 403 Forbidden on Kibana APIs
+
+- Missing Kibana feature privileges — the role needs application privileges on `kibana-.kibana`. The Quickstart's `editor`/`viewer` covers these by default.
+- Check which features are missing: the 403 response body usually names the required privilege.
+- Common cause: forgetting to grant privileges in the correct Kibana space.
+
+### 403 on Threat Hunt → "list indices"
+
+- The companion role is missing index-level `monitor` on the target index pattern.
+- `_cat/indices/<pattern>` requires index-level `monitor`; cluster-level `monitor` alone is not sufficient.
+
+### Attack Discovery returns 403
+
+- Built-in `editor` covers the AI Assistant, Attack discovery, and Actions/Connectors feature privileges. If you scoped the key narrower than `editor`, restore those grants — Attack Discovery requires **all three** plus Rules and Alerts.
+
+### Sample-data generation returns 403
+
+- Companion role is missing `write` on `logs-*` and the alert backing indices. The `editor` built-in does **not** grant raw index `write`; it must come from the companion role.
+
+### Space ID mismatch
+
+- Index patterns use the Kibana space ID (e.g., `.alerts-security.alerts-default`)
+- If using a non-default space, update all index patterns in the companion role
+- The app currently targets the `default` space
+
+### "No alerts found" but alerts exist in Kibana
+
+- The companion role's index privileges may not cover the alert index for your space
+- Check the space ID in the index pattern matches your Kibana space
+
+---
+
+## Advanced — Custom roles
+
+Use this path when:
+
+- You provision roles via API, Terraform, or other IaC and want a single self-contained role definition.
+- You need finer-grained restriction than the built-ins offer (e.g. Cases-only, no Threat Hunt).
+- Your users' built-in role assignments are managed elsewhere and you can't add `editor`/`viewer` to them.
+
+Each role below is a single self-contained definition — no companion role required.
+
+### Full-Featured Role
+
+#### Cluster privileges
 
 | Privilege | Why |
 |---|---|
 | `monitor` | `_cat/indices` for Threat Hunt, AI Assistant prerequisite |
 
-### Index privileges
+#### Index privileges
 
 **System / alert indices** (`read`, `write`, `monitor`):
 
@@ -51,14 +157,12 @@ For custom roles, see the [per-tool privilege breakdown](#appendix-per-tool-priv
 
 **Data indices** (`read`, `write`, `monitor`):
 
-> The index-level `monitor` privilege (distinct from the cluster-level `monitor` listed above) is required by `_cat/indices/<pattern>` and `_mapping` (used by Threat Hunt to list indices and read field mappings).
-
 | Index pattern | Used by |
 |---|---|
 | `logs-*` | Threat Hunt, Alert Triage (enrichment), Sample Data (write + cleanup) |
 | `risk-score.risk-score-latest-*` | Attack Discovery (entity risk scoring) |
 
-### Kibana feature privileges
+#### Kibana feature privileges
 
 <details open>
 <summary><strong>9.4+</strong> (recommended)</summary>
@@ -94,7 +198,7 @@ For custom roles, see the [per-tool privilege breakdown](#appendix-per-tool-priv
 
 </details>
 
-### Dev Tools: Create the role
+#### Dev Tools: Create the role
 
 ```
 PUT /_security/role/mcp_app_full
@@ -137,77 +241,42 @@ PUT /_security/role/mcp_app_full
 
 > Replace `<space-id>` with your Kibana space ID (typically `default`).
 
-### Kibana UI walkthrough
+#### Create an API key for this role
 
-1. Go to **Stack Management > Roles > Create role**
-2. Under **Cluster privileges**, add `monitor`
-3. Under **Index privileges**, add the index patterns and select `read` + `write`
-4. Under **Kibana privileges**, select the space and grant **All** to each feature listed above
-5. Save the role
+Two-step recipe — assign the role to a user, then mint an API key that inherits the user's privileges:
 
-### Create an API key scoped to this role
+```
+PUT /_security/user/mcp_app_user
+{
+  "password": "<choose-a-strong-password>",
+  "roles": ["mcp_app_full"]
+}
+```
+
+Then, **authenticated as `mcp_app_user`** (or via `POST /_security/api_key/grant` as an admin):
 
 ```
 POST /_security/api_key
 {
-  "name": "mcp-app-full",
-  "role_descriptors": {
-    "mcp_app_full": {
-      "cluster": ["monitor"],
-      "indices": [
-        {
-          "names": [
-            ".alerts-security.alerts-<space-id>",
-            ".alerts-security.attack.discovery.alerts-<space-id>",
-            ".adhoc.alerts-security.attack.discovery.alerts-<space-id>",
-            ".internal.alerts-security.alerts-<space-id>-*",
-            ".internal.alerts-security.attack.discovery.alerts-<space-id>-*",
-            ".internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*",
-            "logs-*",
-            "risk-score.risk-score-latest-*"
-          ],
-          "privileges": ["read", "write", "monitor"]
-        }
-      ],
-      "applications": [
-        {
-          "application": "kibana-.kibana",
-          "privileges": [
-            "feature_siemV5.all",
-            "feature_securitySolutionCasesV3.all",
-            "feature_securitySolutionTimeline.all",
-            "feature_securitySolutionNotes.all",
-            "feature_securitySolutionRulesV4.all",
-            "feature_securitySolutionAlertsV1.all",
-            "feature_securitySolutionAssistant.all",
-            "feature_securitySolutionAttackDiscovery.all",
-            "feature_actions.all"
-          ],
-          "resources": ["space:default"]
-        }
-      ]
-    }
-  }
+  "name": "mcp-app-full"
 }
 ```
 
-The response includes an `encoded` field — use that as your `ELASTICSEARCH_API_KEY`.
+The response includes an `encoded` field — use that as your `ELASTICSEARCH_API_KEY`. No `role_descriptors` needed: the key inherits the user's role privileges directly.
 
----
-
-## Read-Only Role
+### Read-Only Role
 
 A strict read-only role: view everything, change nothing.
 
 > Need to acknowledge alerts or create cases? Use the full-featured role, or build a custom role using the [per-tool privilege breakdown](#appendix-per-tool-privilege-breakdown).
 
-### Cluster privileges
+#### Cluster privileges
 
 | Privilege | Why |
 |---|---|
 | `monitor` | `_cat/indices` for Threat Hunt |
 
-### Index privileges
+#### Index privileges
 
 **All index patterns** (`read`, `monitor`):
 
@@ -222,7 +291,7 @@ A strict read-only role: view everything, change nothing.
 | `logs-*` | Threat Hunt, Alert Triage (enrichment) |
 | `risk-score.risk-score-latest-*` | Attack Discovery (entity risk scoring) |
 
-### Kibana feature privileges (9.4+)
+#### Kibana feature privileges (9.4+)
 
 | Feature | Privilege | Why |
 |---|---|---|
@@ -234,9 +303,9 @@ A strict read-only role: view everything, change nothing.
 | Security > Alerts | Read | View alerts |
 | Security > Elastic AI Assistant | None | Not available in read-only |
 | Security > Attack discovery | None | Not available in read-only |
-| Management > Actions and Connectors | None | Not available in read-only |
+| Management > Actions and Connectors | Read | List configured AI connectors (no execute) |
 
-### Dev Tools: Create the role
+#### Dev Tools: Create the role
 
 ```
 PUT /_security/role/mcp_app_readonly
@@ -266,7 +335,8 @@ PUT /_security/role/mcp_app_readonly
         "feature_securitySolutionTimeline.read",
         "feature_securitySolutionNotes.read",
         "feature_securitySolutionRulesV4.read",
-        "feature_securitySolutionAlertsV1.read"
+        "feature_securitySolutionAlertsV1.read",
+        "feature_actions.read"
       ],
       "resources": ["space:<space-id>"]
     }
@@ -274,79 +344,24 @@ PUT /_security/role/mcp_app_readonly
 }
 ```
 
-### Create an API key scoped to this role
+#### Create an API key for this role
+
+```
+PUT /_security/user/mcp_app_readonly_user
+{
+  "password": "<choose-a-strong-password>",
+  "roles": ["mcp_app_readonly"]
+}
+```
+
+Then, authenticated as the new user:
 
 ```
 POST /_security/api_key
 {
-  "name": "mcp-app-readonly",
-  "role_descriptors": {
-    "mcp_app_readonly": {
-      "cluster": ["monitor"],
-      "indices": [
-        {
-          "names": [
-            ".alerts-security.alerts-<space-id>",
-            ".alerts-security.attack.discovery.alerts-<space-id>",
-            ".adhoc.alerts-security.attack.discovery.alerts-<space-id>",
-            ".internal.alerts-security.alerts-<space-id>-*",
-            ".internal.alerts-security.attack.discovery.alerts-<space-id>-*",
-            ".internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*",
-            "logs-*",
-            "risk-score.risk-score-latest-*"
-          ],
-          "privileges": ["read", "monitor"]
-        }
-      ],
-      "applications": [
-        {
-          "application": "kibana-.kibana",
-          "privileges": [
-            "feature_siemV5.read",
-            "feature_securitySolutionCasesV3.read",
-            "feature_securitySolutionTimeline.read",
-            "feature_securitySolutionNotes.read",
-            "feature_securitySolutionRulesV4.read",
-            "feature_securitySolutionAlertsV1.read"
-          ],
-          "resources": ["space:default"]
-        }
-      ]
-    }
-  }
+  "name": "mcp-app-readonly"
 }
 ```
-
----
-
-## Troubleshooting
-
-### 401 Unauthorized
-
-- API key is invalid, expired, or malformed
-- Verify with: `curl -s -H "Authorization: ApiKey <your-key>" <ELASTICSEARCH_URL>/_security/_authenticate`
-
-### 403 Forbidden on Kibana APIs
-
-- Missing Kibana feature privileges — the role needs application privileges on `kibana-.kibana`
-- Check which features are missing: the 403 response body usually names the required privilege
-- Common cause: forgetting to grant privileges in the correct Kibana space
-
-### Attack Discovery returns 403
-
-- Requires **all three**: Elastic AI Assistant (All), Attack discovery (All), and Actions and Connectors (All)
-- Also requires Rules and Exceptions + Alerts feature privileges as prerequisites
-
-### Space ID mismatch
-
-- Index patterns use the Kibana space ID (e.g., `.alerts-security.alerts-default`)
-- If using a non-default space, update all index patterns and the `resources` field in the role definition
-- The app currently targets the `default` space
-
-### "No alerts found" but alerts exist in Kibana
-
-- The API key's index privileges may not cover the alert index for your space
-- Check the space ID in the index pattern matches your Kibana space
 
 ---
 
