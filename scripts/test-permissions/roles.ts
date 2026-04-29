@@ -498,4 +498,39 @@ export const operationChecks: OperationCheck[] = [
     run: async () => generateSampleData({ count: 1 }),
     expect: { full: "ok", readonly: "403" },
   },
+  {
+    // Bypasses cleanupSampleData() (silently catches per-index errors)
+    // by hitting one logs data stream directly. _delete_by_query on a
+    // data stream may require privileges on the underlying .ds-* backing
+    // indices, which the current `logs-*` glob in DATA_INDICES does NOT
+    // match. If full 403s here, DATA_INDICES needs `.ds-logs-*` too —
+    // the same backing-index pattern PR #18 fixed for alerts.
+    name: "cleanupSampleDataLogs",
+    group: "sample-data",
+    run: async () =>
+      esRequest(
+        `/logs-endpoint.events.process-${SPACE}/_delete_by_query`,
+        {
+          method: "POST",
+          body: { query: { term: { tags: "mcp-app-test" } } },
+        }
+      ),
+    expect: { full: "ok", readonly: "403" },
+  },
+  {
+    // Companion to acknowledgeAlert (which uses _update_by_query on the
+    // alerts data stream). _delete_by_query exercises the delete arm of
+    // the same backing-index privilege PR #18 added.
+    name: "cleanupSampleDataAlerts",
+    group: "sample-data",
+    run: async () =>
+      esRequest(
+        `/.alerts-security.alerts-${SPACE}/_delete_by_query`,
+        {
+          method: "POST",
+          body: { query: { term: { tags: "mcp-app-test" } } },
+        }
+      ),
+    expect: { full: "ok", readonly: "403" },
+  },
 ];
