@@ -25,8 +25,11 @@ import {
   noisyRules,
 } from "../../src/elastic/rules.js";
 import {
+  assessConfidence,
   fetchDiscoveries,
+  getDiscoveryDetail,
   listAIConnectors,
+  type AttackDiscovery,
 } from "../../src/elastic/attack-discovery.js";
 import { esRequest } from "../../src/elastic/client.js";
 import { executeEsql } from "../../src/elastic/esql.js";
@@ -274,6 +277,21 @@ export interface CheckResult {
   detail: string;
 }
 
+function synthDiscovery(f: SeedFixtures): AttackDiscovery {
+  return {
+    id: f.discoveryId!,
+    timestamp: new Date().toISOString(),
+    executionUuid: "",
+    title: "",
+    summaryMarkdown: "",
+    detailsMarkdown: "",
+    mitreTactics: [],
+    alertIds: [f.alertId],
+    alertsContextCount: 1,
+    riskScore: 50,
+  };
+}
+
 function ruleBody(name: string): Record<string, unknown> {
   return {
     type: "query",
@@ -407,6 +425,24 @@ export const operationChecks: OperationCheck[] = [
     name: "listAIConnectors",
     group: "attack-discovery",
     run: async () => listAIConnectors(),
+    expect: { full: "ok", readonly: "ok" },
+  },
+  {
+    // Synthesizes an AttackDiscovery from the seeded discoveryId and a
+    // real alertId so the inner ES|QL queries actually run (the helper
+    // returns early when alertIds is empty). This drives reads against
+    // .alerts-security.alerts-* and risk-score.risk-score-latest-*.
+    name: "assessConfidence",
+    group: "attack-discovery",
+    skipUnless: (f) => f.discoveryId,
+    run: async (f) => assessConfidence([synthDiscovery(f)]),
+    expect: { full: "ok", readonly: "ok" },
+  },
+  {
+    name: "getDiscoveryDetail",
+    group: "attack-discovery",
+    skipUnless: (f) => f.discoveryId,
+    run: async (f) => getDiscoveryDetail(synthDiscovery(f)),
     expect: { full: "ok", readonly: "ok" },
   },
   {
