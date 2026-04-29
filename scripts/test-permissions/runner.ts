@@ -8,7 +8,7 @@
 import "dotenv/config";
 import crypto from "node:crypto";
 
-import { setConfig } from "../../src/elastic/client.js";
+import { esRequest, setConfig } from "../../src/elastic/client.js";
 import {
   checkExistingData,
   generateSampleData,
@@ -280,6 +280,75 @@ async function runOpsObserve(
   return out;
 }
 
+const DISCOVERY_INDEX = ".alerts-security.attack.discovery.alerts-default";
+
+/**
+ * Returns a discovery `_id` to use as fixture for `acknowledgeDiscoveries`.
+ * Reuses an existing discovery if one is present; otherwise seeds a
+ * minimal one via `_bulk` (silent on failure — the check skips when no
+ * discoveryId is captured).
+ */
+async function ensureDiscoveryFixture(opts: CliOptions): Promise<string | undefined> {
+  try {
+    const existing = await esRequest<{
+      hits: { hits: Array<{ _id: string }> };
+    }>(`/${DISCOVERY_INDEX}/_search`, {
+      method: "POST",
+      body: { size: 1, _source: false, query: { match_all: {} } },
+    });
+    const hit = existing.hits?.hits?.[0];
+    if (hit) {
+      if (opts.verbose) console.log(`→ Reusing existing discovery ${hit._id}`);
+      return hit._id;
+    }
+  } catch {
+    /* index may not exist yet — fall through to seed */
+  }
+
+  if (opts.verbose) console.log("→ No discoveries found, seeding one…");
+  const now = new Date().toISOString();
+  const doc = {
+    "@timestamp": now,
+    "kibana.alert.uuid": crypto.randomUUID(),
+    "kibana.alert.workflow_status": "open",
+    "kibana.alert.rule.execution.uuid": crypto.randomUUID(),
+    "kibana.alert.attack_discovery.title": "mcp-app-test seed discovery",
+    "kibana.alert.attack_discovery.summary_markdown": "Permissions test seed (safe to delete)",
+    "kibana.alert.attack_discovery.details_markdown": "Permissions test seed (safe to delete)",
+    "kibana.alert.attack_discovery.alert_ids": [],
+    "kibana.alert.attack_discovery.alerts_context_count": 0,
+    "kibana.alert.risk_score": 0,
+    "kibana.space_ids": ["default"],
+    "kibana.alert.rule.tags": [TEST_TAG],
+  };
+  const body =
+    JSON.stringify({ create: { _index: DISCOVERY_INDEX } }) + "\n" +
+    JSON.stringify(doc) + "\n";
+  try {
+    const result = await esRequest<{
+      items: Array<{ create: { _id: string; status: number; error?: unknown } }>;
+      errors: boolean;
+    }>("/_bulk", {
+      method: "POST",
+      body,
+      params: { refresh: "true" },
+    });
+    if (result.errors) {
+      const err = result.items[0]?.create?.error;
+      console.warn(
+        `  warning: failed to seed discovery, acknowledgeDiscoveries will be skipped: ${JSON.stringify(err)}`
+      );
+      return undefined;
+    }
+    return result.items[0].create._id;
+  } catch (err) {
+    console.warn(
+      `  warning: failed to seed discovery, acknowledgeDiscoveries will be skipped: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return undefined;
+  }
+}
+
 async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixtures> {
   useAdminConfig(admin);
 
@@ -347,6 +416,8 @@ async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixt
     /* rules feature might not be available */
   }
 
+  const discoveryId = await ensureDiscoveryFixture(opts);
+
   return {
     alertId: alertHit._id,
     alertIndex: alertHit._index,
@@ -354,6 +425,7 @@ async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixt
     alertRuleName,
     caseId,
     ruleId,
+    discoveryId,
     suffix: crypto.randomBytes(4).toString("hex"),
   };
 }

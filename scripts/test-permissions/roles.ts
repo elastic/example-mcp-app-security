@@ -28,6 +28,7 @@ import {
   fetchDiscoveries,
   listAIConnectors,
 } from "../../src/elastic/attack-discovery.js";
+import { esRequest } from "../../src/elastic/client.js";
 import { executeEsql } from "../../src/elastic/esql.js";
 import { listIndices } from "../../src/elastic/indices.js";
 import {
@@ -233,6 +234,7 @@ export interface SeedFixtures {
   alertRuleName: string;
   caseId: string;
   ruleId?: string;
+  discoveryId?: string;
   /** Per-run unique suffix used for case titles, rule names, etc. */
   suffix: string;
 }
@@ -406,6 +408,31 @@ export const operationChecks: OperationCheck[] = [
     group: "attack-discovery",
     run: async () => listAIConnectors(),
     expect: { full: "ok", readonly: "ok" },
+  },
+  {
+    // Bypasses the production helper (acknowledgeDiscoveries) which
+    // silently catches per-index errors — a 403 there returns
+    // `updated: 0` instead of throwing, so it can't drive a privilege
+    // assertion. Calling _update_by_query directly lets the 403
+    // propagate, which is what we want here.
+    name: "acknowledgeDiscoveries",
+    group: "attack-discovery",
+    skipUnless: (f) => f.discoveryId,
+    run: async (f) =>
+      esRequest(
+        `/.alerts-security.attack.discovery.alerts-${SPACE}/_update_by_query`,
+        {
+          method: "POST",
+          body: {
+            query: { ids: { values: [f.discoveryId!] } },
+            script: {
+              source: 'ctx._source["kibana.alert.workflow_status"] = "acknowledged"',
+              lang: "painless",
+            },
+          },
+        }
+      ),
+    expect: { full: "ok", readonly: "403" },
   },
 
   // ─── threat-hunt ───────────────────────────────────────────────────────
