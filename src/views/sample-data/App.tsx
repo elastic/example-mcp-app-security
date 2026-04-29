@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { applyTheme } from "../../shared/theme";
 import { extractCallResult } from "../../shared/extract-tool-text";
@@ -479,6 +479,33 @@ interface GenerateResult {
 }
 
 type Phase = "select" | "generating" | "done" | "error";
+type SeverityFilter = "all" | "critical" | "high" | "medium";
+
+const SEVERITY_LABEL: Record<"critical" | "high" | "medium" | "low", string> = {
+  critical: "Critical", high: "High", medium: "Medium", low: "Low",
+};
+
+const SEVERITY_FILTERS: { key: SeverityFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "critical", label: "Critical" },
+  { key: "high", label: "High" },
+  { key: "medium", label: "Medium" },
+];
+
+const AppGlyph = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M23.9506 12.4984C23.9527 11.5265 23.6542 10.5777 23.0961 9.78204C22.538 8.98635 21.7475 8.38267 20.8329 8.05369C20.9165 7.62975 20.9586 7.19872 20.9588 6.76664C20.9593 5.33599 20.5061 3.94206 19.6645 2.78515C18.8228 1.62826 17.6361 0.767973 16.2748 0.327936C14.9135 -0.112099 13.4478 -0.109226 12.0882 0.336144C10.7287 0.781513 9.54534 1.64645 8.70826 2.80664C8.09097 2.32848 7.33466 2.06452 6.55389 2.05472C5.77314 2.04491 5.01045 2.2898 4.38134 2.75229C3.75222 3.21479 3.29095 3.86969 3.0674 4.61782C2.84384 5.36595 2.87015 6.16656 3.14238 6.8984C2.22542 7.23206 1.43269 7.83861 0.870884 8.63641C0.309073 9.43422 0.00515049 10.385 2.34805e-05 11.3608C-0.00305405 12.3366 0.296461 13.2893 0.857326 14.0879C1.41819 14.8864 2.21282 15.4914 3.13179 15.8195C3.05214 16.2435 3.01275 16.6741 3.01414 17.1054C3.01158 18.5358 3.46368 19.9298 4.30518 21.0864C5.14666 22.2429 6.33397 23.1021 7.69564 23.5398C9.05729 23.9775 10.5228 23.9711 11.8806 23.5214C13.2384 23.0718 14.4181 22.2022 15.2494 21.0384C15.8649 21.5186 16.6204 21.7849 17.4009 21.7969C18.1815 21.8089 18.9447 21.566 19.5747 21.1049C20.2047 20.6438 20.6669 19.9898 20.8915 19.242C21.1161 18.4944 21.0906 17.6938 20.8188 16.9619C21.734 16.6265 22.5246 16.0189 23.0845 15.2211C23.6442 14.4232 23.9465 13.4731 23.9506 12.4984ZM9.27296 3.52899C10.0442 2.40726 11.1788 1.586 12.4853 1.20381C13.7919 0.821635 15.1902 0.901957 16.4444 1.43121C17.6986 1.96048 18.7316 2.90626 19.3694 4.10891C20.0071 5.31156 20.2104 6.69741 19.9447 8.03252L14.6576 12.6631L9.41649 10.2749L8.39297 8.09017L9.27296 3.52899ZM6.62238 2.94075C7.24393 2.94062 7.84828 3.14484 8.34238 3.52193L7.54943 7.60311L3.95885 6.75487C3.80314 6.32609 3.75287 5.86614 3.81229 5.41386C3.87172 4.96158 4.03908 4.53022 4.30026 4.15621C4.56145 3.78221 4.90878 3.47653 5.31293 3.26499C5.71708 3.05344 6.1662 2.94224 6.62238 2.94075ZM0.925906 11.3713C0.931192 10.5387 1.19621 9.72838 1.68401 9.05351C2.17182 8.37865 2.85807 7.87284 3.64708 7.60664L7.58826 8.53722L8.51296 10.5149L3.47414 15.0725C2.72441 14.7865 2.07928 14.2793 1.62421 13.6184C1.16915 12.9574 0.925627 12.1738 0.925906 11.3713ZM14.7012 20.3348C13.9892 21.3831 12.9599 22.1753 11.7643 22.5953C10.5688 23.0152 9.27013 23.0407 8.05905 22.668C6.84795 22.2953 5.78828 21.5441 5.03568 20.5247C4.28307 19.5053 3.8772 18.2714 3.87767 17.0042C3.87822 16.6092 3.91764 16.2152 3.99532 15.8278L9.14826 11.1643L14.4094 13.5619L15.5741 15.7878L14.7012 20.3348ZM17.3341 20.9231C16.7144 20.9209 16.1126 20.7142 15.6224 20.3348L16.4035 16.2666L19.9918 17.1054C20.1479 17.5339 20.1986 17.9934 20.1396 18.4455C20.0808 18.8976 19.914 19.3289 19.6534 19.7031C19.3928 20.0772 19.0461 20.3831 18.6425 20.5951C18.2388 20.8069 17.79 20.9187 17.3341 20.9207V20.9231ZM20.3035 16.2513L16.3529 15.3278L15.3035 13.3278L20.4706 8.80075C21.2209 9.08447 21.8672 9.58986 22.3234 10.2497C22.7796 10.9096 23.0242 11.6926 23.0247 12.4948C23.0173 13.3258 22.7512 14.1336 22.2635 14.8065C21.7759 15.4792 21.0908 15.9834 20.3035 16.2489V16.2513Z" fill="currentColor"/>
+  </svg>
+);
+
+function SeverityChip({ severity }: { severity: "critical" | "high" | "medium" | "low" }) {
+  return (
+    <span className={`sev-chip sev-chip-${severity}`}>
+      <span className="sev-chip-dot" />
+      <span className="sev-chip-label">{SEVERITY_LABEL[severity]}</span>
+    </span>
+  );
+}
 
 export function App() {
   const appRef = useRef<McpApp | null>(null);
@@ -495,6 +522,8 @@ export function App() {
   const [cleanupCount, setCleanupCount] = useState<number | null>(null);
   const [rulesCreated, setRulesCreated] = useState(0);
   const [existingData, setExistingData] = useState<{ totalDocs: number; totalAlerts: number; existingRules: number; byScenario: Record<string, { events: number; alerts: number }> } | null>(null);
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
+  const [searchInput, setSearchInput] = useState("");
 
   const loadExistingData = useCallback(async (app: McpApp) => {
     try {
@@ -537,10 +566,22 @@ export function App() {
     });
   }, []);
 
+  const filteredScenarios = useMemo(() => {
+    const q = searchInput.trim().toLowerCase();
+    return SCENARIOS.filter((s) => {
+      if (severityFilter !== "all" && s.severity !== severityFilter) return false;
+      if (q) {
+        const hay = `${s.name} ${s.desc} ${s.tags.join(" ")}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [severityFilter, searchInput]);
+
   const selectAll = useCallback(() => {
-    if (selected.size === SCENARIOS.length) setSelected(new Set());
-    else setSelected(new Set(SCENARIOS.map((s) => s.id)));
-  }, [selected.size]);
+    if (selected.size === filteredScenarios.length) setSelected(new Set());
+    else setSelected(new Set(filteredScenarios.map((s) => s.id)));
+  }, [selected.size, filteredScenarios]);
 
   const generate = async () => {
     if (!appRef.current || selected.size === 0) return;
@@ -553,7 +594,6 @@ export function App() {
     const scenarios = [...selected];
 
     try {
-      // Phase 1: Create rules first (if enabled)
       if (createRulesEnabled) {
         let ruleTotal = 0;
         for (const scenario of scenarios) {
@@ -573,7 +613,6 @@ export function App() {
         setRulesCreated(ruleTotal);
       }
 
-      // Phase 2: Generate data (alerts will use real rule UUIDs if rules were created)
       for (const scenario of scenarios) {
         setCurrentScenario(scenario);
         setStatusMessage(null);
@@ -639,7 +678,7 @@ export function App() {
 
   if (!connected) {
     return (
-      <div className="loading">
+      <div className="loading-state">
         <div className="loading-spinner" />
         <span>Connecting to server...</span>
       </div>
@@ -651,277 +690,331 @@ export function App() {
   return (
     <div className="sample-app">
       <header className="sample-header">
-        <div className="header-icon">🛡️</div>
-        <div>
-          <h1>Sample Data Generator</h1>
-          <p>Generate realistic ECS security events and alerts for demos, testing, and rule development</p>
+        <div className="sample-header-left">
+          <div className="sample-header-brand">
+            <span className="sample-header-glyph" aria-hidden="true"><AppGlyph /></span>
+            <h1 className="sample-header-title">Sample Data Generator</h1>
+          </div>
         </div>
       </header>
 
-      {/* Scenario selection */}
       {phase === "select" && (
-        <>
+        <div className="sample-body">
           {existingData && existingData.totalDocs > 0 && (
             <div className="existing-banner">
-              <span className="existing-dot" />
-              <span><strong>{existingData.totalDocs.toLocaleString()}</strong> existing sample docs ({existingData.totalAlerts} alerts) from a previous generation</span>
-              <button className="btn-ghost" style={{ marginLeft: "auto" }} onClick={cleanup}>Cleanup</button>
+              <span className="existing-banner-dot" />
+              <span className="existing-banner-text">
+                <strong>{existingData.totalDocs.toLocaleString()}</strong> existing sample docs · {existingData.totalAlerts} alerts · {existingData.existingRules} rules from a previous generation
+              </span>
+              <button className="btn btn-sm btn-ghost" onClick={cleanup}>Cleanup</button>
             </div>
           )}
 
-          <div className="section-bar">
-            <span className="section-label">Select Attack Scenarios</span>
-            <button className="btn btn-ghost" onClick={selectAll}>
-              {selected.size === SCENARIOS.length ? "Deselect all" : "Select all"}
+          <div className="sample-toolbar">
+            <div className="sample-severity-tabs" role="tablist">
+              {SEVERITY_FILTERS.map((f) => {
+                const count = f.key === "all"
+                  ? SCENARIOS.length
+                  : SCENARIOS.filter((s) => s.severity === f.key).length;
+                return (
+                  <button
+                    key={f.key}
+                    role="tab"
+                    aria-selected={severityFilter === f.key}
+                    className={`sample-severity-tab${severityFilter === f.key ? " active" : ""}`}
+                    onClick={() => setSeverityFilter(f.key)}
+                  >
+                    <span>{f.label}</span>
+                    <span className="sample-severity-tab-count">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="sample-toolbar-search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.35-4.35" /></svg>
+              <input
+                type="text"
+                placeholder="Filter scenarios..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+            </div>
+            <button className="btn btn-sm btn-ghost" onClick={selectAll}>
+              {selected.size === filteredScenarios.length && filteredScenarios.length > 0 ? "Deselect all" : "Select all"}
             </button>
           </div>
 
           <div className="scenario-grid">
-            {SCENARIOS.map((s) => (
+            {filteredScenarios.map((s) => (
               <div key={s.id} className="scenario-cell">
                 <button
-                  className={`scenario-card ${selected.has(s.id) ? "selected" : ""}`}
+                  className={`scenario-card sev-${s.severity}${selected.has(s.id) ? " selected" : ""}`}
                   onClick={() => toggleScenario(s.id)}
                 >
-                  <div className="card-check">{selected.has(s.id) ? "✓" : ""}</div>
-                  <div className="card-top">
-                    <span className="scenario-icon">{s.icon}</span>
-                    <span className={`severity-badge severity-${s.severity}`}>{s.severity}</span>
+                  <div className="scenario-card-head">
+                    <div className={`scenario-card-check${selected.has(s.id) ? " checked" : ""}`}>
+                      {selected.has(s.id) && <span>✓</span>}
+                    </div>
+                    <span className="scenario-card-icon">{s.icon}</span>
+                    <SeverityChip severity={s.severity} />
                   </div>
-                  <div className="scenario-name">{s.name}</div>
-                  <div className="scenario-desc">{s.desc}</div>
-                  <div className="scenario-tags">
-                    {s.tags.map((t) => <span key={t} className="mitre-tag">{t}</span>)}
+                  <div className="scenario-card-name">{s.name}</div>
+                  <div className="scenario-card-desc">{s.desc}</div>
+                  <div className="scenario-card-tags">
+                    {s.tags.map((t) => <span key={t} className="scenario-mitre-pill">{t}</span>)}
                   </div>
-                  <div className="card-footer">
-                    <div className="card-stats">
+                  <div className="scenario-card-footer">
+                    <div className="scenario-card-meta">
                       {existingData?.byScenario[s.id] ? (
-                        <span className="card-stat existing">{existingData.byScenario[s.id].events} docs exist</span>
+                        <span className="scenario-card-meta-item existing">
+                          <span className="dot" />
+                          {existingData.byScenario[s.id].events} docs exist
+                        </span>
                       ) : (
                         <>
-                          <span className="card-stat">{s.eventSources.length} sources</span>
-                          <span className="card-stat">{s.alerts.length} alerts</span>
+                          <span className="scenario-card-meta-item">{s.eventSources.length} sources</span>
+                          <span className="scenario-card-meta-item">{s.alerts.length} alerts</span>
                         </>
                       )}
                     </div>
                     <button
-                      className="detail-toggle"
+                      type="button"
+                      className="scenario-card-details-btn"
                       onClick={(e) => { e.stopPropagation(); setExpanded(expanded === s.id ? null : s.id); }}
                     >
-                      {expanded === s.id ? "Hide details" : "Details"}
+                      {expanded === s.id ? "Hide" : "Details"}
                     </button>
                   </div>
                 </button>
 
                 {expanded === s.id && (
-                  <div className="detail-panel">
-                    <div className="detail-section">
-                      <div className="detail-section-title">Events Generated</div>
-                      {s.eventSources.map((es, i) => (
-                        <div key={i} className="detail-row">
-                          <span className="detail-index">{es.index}</span>
-                          <span className="detail-label">{es.label}</span>
-                        </div>
-                      ))}
+                  <div className="scenario-detail-panel">
+                    <div className="scenario-detail-section">
+                      <div className="scenario-detail-section-title">Events Generated</div>
+                      <div className="scenario-detail-list">
+                        {s.eventSources.map((es, i) => (
+                          <div key={i} className="scenario-detail-row">
+                            <span className="scenario-detail-index">{es.index}</span>
+                            <span className="scenario-detail-label">{es.label}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="detail-section">
-                      <div className="detail-section-title">Alerts ({s.alerts.length})</div>
-                      {s.alerts.map((a, i) => (
-                        <div key={i} className="detail-row">
-                          <span className={`detail-severity sev-${a.severity}`}>{a.severity}</span>
-                          <span className="detail-label">{a.rule}</span>
-                        </div>
-                      ))}
+                    <div className="scenario-detail-section">
+                      <div className="scenario-detail-section-title">Alerts ({s.alerts.length})</div>
+                      <div className="scenario-detail-list">
+                        {s.alerts.map((a, i) => (
+                          <div key={i} className="scenario-detail-row">
+                            <SeverityChip severity={a.severity} />
+                            <span className="scenario-detail-label">{a.rule}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="detail-section">
-                      <div className="detail-section-title">Expected Outcome</div>
-                      <p className="detail-outcome">{s.outcome}</p>
+                    <div className="scenario-detail-section">
+                      <div className="scenario-detail-section-title">Expected Outcome</div>
+                      <p className="scenario-detail-outcome">{s.outcome}</p>
                     </div>
                   </div>
                 )}
               </div>
             ))}
+            {filteredScenarios.length === 0 && (
+              <div className="empty-state" style={{ gridColumn: "1 / -1" }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🔍</div>
+                <div>No scenarios match your filters</div>
+              </div>
+            )}
           </div>
 
-          <div className="controls-bar">
-            <div className="controls-left">
-              <div className="count-control">
-                <label htmlFor="event-count">Events per scenario</label>
-                <div className="count-stepper">
-                  <button className="stepper-btn" onClick={() => setCount((c) => Math.max(10, c - 10))}>−</button>
-                  <input
-                    id="event-count"
-                    type="number"
-                    value={count}
-                    onChange={(e) => setCount(Math.max(10, Math.min(1000, parseInt(e.target.value) || 50)))}
-                    min={10}
-                    max={1000}
-                  />
-                  <button className="stepper-btn" onClick={() => setCount((c) => Math.min(1000, c + 10))}>+</button>
-                </div>
+          {/* Floating action bar: inline event-count stepper + detection-rule
+              toggle + the primary Generate CTA. The "Cleanup existing" ghost
+              button was removed from here — the same action still lives in the
+              top-of-body banner when previous sample docs are detected. */}
+          <div className="sample-action-bar">
+            <div className="action-bar-setting">
+              <span className="action-bar-label">Events</span>
+              <div className="action-bar-stepper">
+                <button className="stepper-btn" onClick={() => setCount((c) => Math.max(10, c - 10))} aria-label="Decrement">−</button>
+                <input
+                  type="number"
+                  value={count}
+                  onChange={(e) => setCount(Math.max(10, Math.min(1000, parseInt(e.target.value) || 50)))}
+                  min={10}
+                  max={1000}
+                  aria-label="Events per scenario"
+                />
+                <button className="stepper-btn" onClick={() => setCount((c) => Math.min(1000, c + 10))} aria-label="Increment">+</button>
               </div>
-              <label className="toggle-row" onClick={() => setCreateRulesEnabled((v) => !v)}>
-                <span className={`toggle-switch ${createRulesEnabled ? "on" : ""}`} />
-                <span className="toggle-label">
-                  Create detection rules
-                  {existingData && existingData.existingRules > 0 && (
-                    <span className="toggle-existing">{existingData.existingRules} already exist</span>
-                  )}
-                </span>
-              </label>
             </div>
 
-            <div className="action-buttons">
-              <button className="btn btn-secondary" onClick={cleanup}>
-                🗑 Cleanup Existing
-              </button>
+            <div className="action-bar-divider" aria-hidden="true" />
+
+            <div className="action-bar-setting">
+              <span className="action-bar-label">Rules</span>
               <button
-                className="btn btn-primary"
-                onClick={generate}
-                disabled={selected.size === 0}
+                type="button"
+                role="switch"
+                aria-checked={createRulesEnabled}
+                aria-label="Create detection rules"
+                className={`toggle-switch${createRulesEnabled ? " on" : ""}`}
+                onClick={() => setCreateRulesEnabled((v) => !v)}
               >
-                Generate {selected.size === SCENARIOS.length ? "All Scenarios" : `${selected.size} Scenario${selected.size !== 1 ? "s" : ""}`}
-                <span className="btn-detail">≈ {selected.size * count} events{createRulesEnabled ? " + rules" : ""}</span>
+                <span className="toggle-switch-thumb" />
               </button>
             </div>
+
+            <div className="action-bar-divider" aria-hidden="true" />
+
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={generate}
+              disabled={selected.size === 0}
+            >
+              Generate {selected.size === filteredScenarios.length && filteredScenarios.length === SCENARIOS.length ? "all" : selected.size} scenario{selected.size !== 1 ? "s" : ""}
+              <span className="btn-detail">≈ {(selected.size * count).toLocaleString()} events{createRulesEnabled ? " + rules" : ""}</span>
+            </button>
           </div>
-        </>
+        </div>
       )}
 
-      {/* Generating progress */}
       {phase === "generating" && (
-        <div className="progress-panel">
-          <div className="progress-header">
-            <div className="loading-spinner" />
-            <span>{currentScenario === "cleanup" ? "Cleaning up sample data..." : statusMessage || "Generating security events..."}</span>
+        <div className="sample-body">
+          <div className="progress-panel">
+            <div className="progress-header">
+              <div className="loading-spinner" />
+              <span>{currentScenario === "cleanup" ? "Cleaning up sample data..." : statusMessage || "Generating security events..."}</span>
+            </div>
+            {currentScenario && currentScenario !== "cleanup" && (
+              <div className="progress-current">
+                <span style={{ fontSize: 18 }}>{SCENARIOS.find((s) => s.id === currentScenario)?.icon || "⚙️"}</span>
+                <span>{SCENARIOS.find((s) => s.id === currentScenario)?.name || currentScenario}</span>
+              </div>
+            )}
+            {rulesCreated > 0 && results.length === 0 && (
+              <div className="progress-result-row">
+                <span className="progress-check">✓</span>
+                <span>Created {rulesCreated} detection rules</span>
+              </div>
+            )}
+            {results.length > 0 && (
+              <div className="progress-results">
+                {results.map((r, i) => (
+                  <div key={i} className="progress-result-row">
+                    <span className="progress-check">✓</span>
+                    <span className="progress-result-name">{SCENARIOS.find((s) => s.id === r.scenario)?.name || r.scenario}</span>
+                    <span className="progress-count">{r.indexed} docs</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          {currentScenario && currentScenario !== "cleanup" && (
-            <div className="progress-current">
-              {SCENARIOS.find((s) => s.id === currentScenario)?.icon || "⚙️"}{" "}
-              {SCENARIOS.find((s) => s.id === currentScenario)?.name || currentScenario}
-            </div>
-          )}
-          {rulesCreated > 0 && results.length === 0 && (
-            <div className="progress-result-row">
-              <span className="progress-check">✓</span>
-              <span>Created {rulesCreated} detection rules</span>
-            </div>
-          )}
-          {results.length > 0 && (
-            <div className="progress-results">
-              {results.map((r, i) => (
-                <div key={i} className="progress-result-row">
-                  <span className="progress-check">✓</span>
-                  <span>{SCENARIOS.find((s) => s.id === r.scenario)?.name || r.scenario}</span>
-                  <span className="progress-count">{r.indexed} docs</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
-      {/* Done */}
       {phase === "done" && (
-        <div className="done-panel">
-          {cleanupCount !== null ? (
-            <>
-              <div className="done-header-row">
-                <span className="done-header-icon">🗑️</span>
-                <div>
-                  <div className="done-title">Cleanup Complete</div>
-                  <div className="done-subtitle">{cleanupCount.toLocaleString()} documents removed</div>
+        <div className="sample-body">
+          <div className="done-panel">
+            {cleanupCount !== null ? (
+              <>
+                <div className="done-header-row">
+                  <span className="done-header-icon done-header-icon-cleanup">🗑</span>
+                  <div>
+                    <div className="done-title">Cleanup Complete</div>
+                    <div className="done-subtitle">{cleanupCount.toLocaleString()} documents removed</div>
+                  </div>
                 </div>
-              </div>
-              <div className="done-actions">
-                <button className="btn btn-primary" onClick={reset}>Back</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="done-header-row">
-                <span className="done-header-icon">✓</span>
-                <div>
-                  <div className="done-title">{totalIndexed.toLocaleString()} documents across {results.length} scenarios</div>
-                  {rulesCreated > 0 && (
-                    <div className="done-subtitle">{rulesCreated} detection rules created (disabled)</div>
-                  )}
+                <div className="done-footer">
+                  <button className="btn btn-sm btn-primary" onClick={reset}>Back</button>
                 </div>
-              </div>
+              </>
+            ) : (
+              <>
+                <div className="done-header-row">
+                  <span className="done-header-icon">✓</span>
+                  <div>
+                    <div className="done-title">{totalIndexed.toLocaleString()} documents across {results.length} scenarios</div>
+                    {rulesCreated > 0 && (
+                      <div className="done-subtitle">{rulesCreated} detection rules created (disabled)</div>
+                    )}
+                  </div>
+                </div>
 
-              <div className="done-scenarios">
-                {results.map((r, i) => {
-                  const s = SCENARIOS.find((sc) => sc.id === r.scenario);
-                  return (
-                    <div key={i} className="done-scenario">
-                      <div className="done-scenario-header">
-                        <span>{s?.icon || "📊"}</span>
-                        <span className="done-scenario-name">{s?.name || r.scenario}</span>
-                        <span className="done-scenario-count">{r.indexed}</span>
-                      </div>
-                      {s && s.hunts.length > 0 && (
-                        <div className="done-hunts">
-                          {s.hunts.map((h, j) => (
-                            <button
-                              key={j}
-                              className="hunt-btn"
-                              onClick={async () => {
-                                if (!appRef.current) return;
-                                await appRef.current.sendMessage({
-                                  role: "user",
-                                  content: [{ type: "text", text: `Run this threat hunt query using the threat-hunt tool:\n\n${h.query}` }],
-                                });
-                              }}
-                            >
-                              🔍 {h.label}
-                            </button>
-                          ))}
+                <div className="done-scenarios">
+                  {results.map((r, i) => {
+                    const s = SCENARIOS.find((sc) => sc.id === r.scenario);
+                    return (
+                      <div key={i} className="done-scenario-card">
+                        <div className="done-scenario-header">
+                          <span style={{ fontSize: 16 }}>{s?.icon || "📊"}</span>
+                          <span className="done-scenario-name">{s?.name || r.scenario}</span>
+                          <span className="done-scenario-count">{r.indexed}</span>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="done-next-steps">
-                <div className="done-next-title">Next Steps</div>
-                <div className="done-next-actions">
-                  <button className="btn btn-accent" onClick={runAttackDiscovery}>
-                    Run Attack Discovery
-                  </button>
-                  <button className="btn btn-secondary" onClick={async () => {
-                    if (!appRef.current) return;
-                    await appRef.current.sendMessage({
-                      role: "user",
-                      content: [{ type: "text", text: "Show me the security alerts that were just generated. Use the triage-alerts tool." }],
-                    });
-                  }}>
-                    Triage Alerts
-                  </button>
+                        {s && s.hunts.length > 0 && (
+                          <div className="done-hunts">
+                            {s.hunts.map((h, j) => (
+                              <button
+                                key={j}
+                                className="hunt-btn"
+                                onClick={async () => {
+                                  if (!appRef.current) return;
+                                  await appRef.current.sendMessage({
+                                    role: "user",
+                                    content: [{ type: "text", text: `Run this threat hunt query using the threat-hunt tool:\n\n${h.query}` }],
+                                  });
+                                }}
+                              >
+                                <span className="hunt-btn-icon">🔍</span> {h.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
 
-              <div className="done-footer">
-                <button className="btn btn-secondary" onClick={reset}>Generate More</button>
-                <button className="btn btn-secondary" onClick={cleanup}>Cleanup All</button>
-              </div>
-            </>
-          )}
+                <div className="done-next-steps">
+                  <div className="done-next-title">Next Steps</div>
+                  <div className="done-next-actions">
+                    <button className="btn btn-sm btn-primary" onClick={runAttackDiscovery}>
+                      Run Attack Discovery
+                    </button>
+                    <button className="btn btn-sm btn-ghost" onClick={async () => {
+                      if (!appRef.current) return;
+                      await appRef.current.sendMessage({
+                        role: "user",
+                        content: [{ type: "text", text: "Show me the security alerts that were just generated. Use the triage-alerts tool." }],
+                      });
+                    }}>
+                      Triage Alerts
+                    </button>
+                  </div>
+                </div>
+
+                <div className="done-footer">
+                  <button className="btn btn-sm btn-ghost" onClick={reset}>Generate more</button>
+                  <button className="btn btn-sm btn-ghost" onClick={cleanup}>Cleanup all</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Error */}
       {phase === "error" && (
-        <div className="error-panel">
-          <div className="error-icon">⚠️</div>
-          <div className="error-title">Generation Failed</div>
-          <div className="error-message">{errorMsg}</div>
-          {results.length > 0 && (
-            <div className="error-partial">
-              Partial results: {totalIndexed} documents indexed from {results.length} scenario(s)
-            </div>
-          )}
-          <button className="btn btn-primary" onClick={reset}>Try Again</button>
+        <div className="sample-body">
+          <div className="error-panel">
+            <div className="error-icon">⚠</div>
+            <div className="error-title">Generation Failed</div>
+            <div className="error-message">{errorMsg}</div>
+            {results.length > 0 && (
+              <div className="error-partial">
+                Partial results: {totalIndexed} documents indexed from {results.length} scenario(s)
+              </div>
+            )}
+            <button className="btn btn-sm btn-primary" onClick={reset}>Try Again</button>
+          </div>
         </div>
       )}
     </div>

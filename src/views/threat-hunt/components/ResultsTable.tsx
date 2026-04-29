@@ -77,7 +77,7 @@ export function ResultsTable({ results, executing, hasExecuted, queryError, onEn
     <div className="results-panel animate-in">
       <div className="results-header">
         <span className="results-header-title">Results</span>
-        <span className="results-count">{rowCount} rows &middot; {colCount} columns</span>
+        <span className="results-count" title={`${rowCount} rows · ${colCount} columns`}>{rowCount}</span>
         {canChart && (
           <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
             <button

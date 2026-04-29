@@ -16,18 +16,31 @@ interface Props {
   alertLinkedIds?: Set<string>;
 }
 
+// Palette tuned to app's dark theme (see InvestigationGraph for the shared reference)
 const TYPE_CONFIG: Record<string, { color: string; icon: string; order: number }> = {
-  alert:   { color: "#f04040", icon: "\u26A0",     order: 0 },
+  alert:   { color: "#e05757", icon: "\u26A0",     order: 0 },
   user:    { color: "#5c7cfa", icon: "\u{1F464}",  order: 1 },
-  host:    { color: "#40c790", icon: "\u{1F5A5}",  order: 2 },
-  process: { color: "#b07cfa", icon: "\u2699",     order: 3 },
-  ip:      { color: "#f0b840", icon: "\u{1F310}",  order: 4 },
+  host:    { color: "#4cbfa6", icon: "\u{1F5A5}",  order: 2 },
+  process: { color: "#a085e0", icon: "\u2699",     order: 3 },
+  ip:      { color: "#d1a54a", icon: "\u{1F310}",  order: 4 },
 };
 
-const NODE_R = 22;
-const COL_W = 140;
-const ROW_H = 70;
-const BADGE_R = 9;
+const GRAPH_BG = "#262626"; // matches .graph-pane background so node badges punch cleanly
+const NODE_FILL = "#1f1f1e";
+const NODE_FILL_ALT = "#262626";
+const BORDER = "#474745";
+const TEXT_MUTED = "#817f78";
+const TEXT_SECONDARY = "#adaca1";
+const ACCENT = "#5c7cfa";
+const ALERT_RED = "#e05757";
+
+// Node / badge sizes were bumped up for legibility — previous values
+// (NODE_R 22, BADGE_R 9, "+" 16px) felt cramped in the Figma dot-grid pane.
+const NODE_R = 30;
+const COL_W = 170;
+const ROW_H = 96;
+const BADGE_R = 12;
+const EXPAND_R = 12;      // "+" indicator radius (diameter = 24)
 const MAX_PER_GROUP = 4;
 
 interface LayoutItem {
@@ -191,13 +204,11 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
 
   if (nodes.length === 0) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-dim)", fontSize: 13 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: TEXT_MUTED, fontSize: 13, background: "transparent" }}>
         Click an entity in results to start investigating
       </div>
     );
   }
-
-  const rootNode = nodes.find((n) => n.expanded) || nodes[0];
 
   // Compute focused connections
   const focusedNeighbors = useMemo(() => {
@@ -214,13 +225,21 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
 
   return (
     <div ref={containerRef} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
-      style={{ width: "100%", height: "100%", overflow: "auto", position: "relative" }}>
-      <div style={{ position: "sticky", top: 0, left: 0, zIndex: 10, padding: "8px 14px 4px", background: "linear-gradient(var(--bg-primary), var(--bg-primary) 85%, transparent)" }}>
-        <span style={{ fontSize: 13, fontWeight: 700 }}>Exploring: {rootNode.value}</span>
-        <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: 8 }}>{nodes.length} entities &bull; Click to expand</span>
-      </div>
-
-      <div style={{ position: "relative", minWidth: canvasW, minHeight: canvasH }}>
+      style={{ width: "100%", height: "100%", overflow: "auto", position: "relative", background: "transparent" }}>
+      {/* Wrapper flex-centers the fixed-size canvas when the pane is larger than
+          the graph, and lets the canvas overflow (scroll) when the pane is
+          smaller. min-width/min-height 100% + flexShrink 0 on the canvas gives
+          us centering without losing scroll access in either direction. */}
+      <div style={{
+        minWidth: "100%",
+        minHeight: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 48,
+        boxSizing: "border-box",
+      }}>
+      <div style={{ position: "relative", width: canvasW, height: canvasH, flexShrink: 0 }}>
         {/* Edges */}
         <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width={canvasW} height={canvasH}>
           {edgeLines.map((e, i) => {
@@ -234,10 +253,10 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
             const isFocusedEdge = focusedNeighbors ? (focusedNeighbors.has(e.srcId) && focusedNeighbors.has(e.tgtId)) : false;
             const dimmed = focusedNeighbors && !isFocusedEdge;
             const edgeColor = isFocusedEdge
-              ? (e.isAlert ? "rgba(240,64,64,0.8)" : "rgba(255,255,255,0.5)")
+              ? (e.isAlert ? ALERT_RED : ACCENT)
               : dimmed
-                ? "rgba(255,255,255,0.02)"
-                : (e.isAlert ? "rgba(240,64,64,0.25)" : "rgba(255,255,255,0.06)");
+                ? "#262626"
+                : (e.isAlert ? "rgba(224,87,87,0.3)" : BORDER);
             return (
               <g key={i}>
                 <path d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
@@ -247,7 +266,7 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
                   style={{ transition: "stroke 0.2s, stroke-width 0.2s" }} />
                 {isFocusedEdge && (
                   <text x={mx} y={Math.min(y1, y2) + Math.abs(y2 - y1) / 2 - 5}
-                    fill="rgba(255,255,255,0.5)" fontSize={8} textAnchor="middle">{e.label}</text>
+                    fill={TEXT_MUTED} fontSize={9} fontFamily="var(--font-mono)" textAnchor="middle">{e.label}</text>
                 )}
               </g>
             );
@@ -282,11 +301,11 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
               <div style={{
                 width: NODE_R * 2, height: NODE_R * 2, borderRadius: "50%",
                 margin: "0 auto",
-                background: node.expanded ? cfg.color : "var(--bg-secondary)",
-                border: `2px solid ${isAlertLinked ? "#f04040" : cfg.color}`,
-                boxShadow: isAlertLinked ? "0 0 10px rgba(240,64,64,0.3)" : "var(--shadow-sm)",
+                background: node.expanded ? cfg.color : NODE_FILL,
+                border: `2px solid ${isAlertLinked ? ALERT_RED : cfg.color}`,
+                boxShadow: isAlertLinked ? "0 0 10px rgba(224,87,87,0.25)" : "0 1px 3px rgba(0,0,0,0.5)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 16, position: "relative",
+                fontSize: 22, position: "relative",
                 transition: "all 0.2s",
               }}>
                 <span style={{ filter: node.expanded ? "brightness(10)" : "none" }}>{cfg.icon}</span>
@@ -296,24 +315,40 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
                   <span style={{
                     position: "absolute", top: -BADGE_R + 2, right: -BADGE_R + 2,
                     width: BADGE_R * 2, height: BADGE_R * 2, borderRadius: "50%",
-                    background: "#f04040", color: "white",
-                    fontSize: 9, fontWeight: 800,
+                    background: ALERT_RED, color: "#fff",
+                    fontSize: 11, fontWeight: 800,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    border: "2px solid var(--bg-primary)",
+                    border: `2px solid ${GRAPH_BG}`,
                   }}>{alertCount}</span>
                 )}
 
-                {/* Expand indicator */}
+                {/* Expand indicator — the "+" is drawn as an SVG cross rather
+                    than a text glyph. Text "+" inside a 24×24 flex box gets
+                    clipped at the bottom by line-box rounding no matter how we
+                    fiddle with line-height / padding, because the plus
+                    character's em-box extends below its visible strokes and
+                    the browser crops the descender. With SVG we control the
+                    exact stroke geometry — perfectly centred, no clipping. */}
                 {!node.expanded && !node.loading && (
                   <span onClick={(e) => { e.stopPropagation(); onExpand(node); }} style={{
-                    position: "absolute", bottom: -3, right: -3,
-                    width: 16, height: 16, borderRadius: "50%",
-                    background: cfg.color, color: "white",
-                    fontSize: 11, fontWeight: 800, lineHeight: "16px",
-                    textAlign: "center", cursor: "pointer",
-                    border: "2px solid var(--bg-primary)",
+                    position: "absolute", bottom: -4, right: -4,
+                    width: EXPAND_R * 2, height: EXPAND_R * 2, borderRadius: "50%",
+                    background: cfg.color,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer",
+                    border: `2px solid ${GRAPH_BG}`,
+                    boxSizing: "border-box",
                     zIndex: 5,
-                  }}>+</span>
+                  }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"
+                      style={{ display: "block", pointerEvents: "none" }}>
+                      {/* Two 2px-thick strokes centred on (5,5) — perfectly
+                          symmetric both axes. shapeRendering:crispEdges so
+                          the 2px strokes stay axis-aligned without AA fuzz. */}
+                      <rect x="0" y="4" width="10" height="2" fill="#fff" shapeRendering="crispEdges" />
+                      <rect x="4" y="0" width="2" height="10" fill="#fff" shapeRendering="crispEdges" />
+                    </svg>
+                  </span>
                 )}
 
                 {node.loading && (
@@ -326,8 +361,9 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
 
               {/* Label */}
               <div style={{
-                marginTop: 4, fontSize: 10, fontWeight: 600,
-                color: isAlertLinked ? "#f04040" : "var(--text-secondary)",
+                marginTop: 6, fontSize: 12, fontWeight: 600,
+                fontFamily: "var(--font-mono)",
+                color: isAlertLinked ? ALERT_RED : TEXT_SECONDARY,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 maxWidth: NODE_R * 2 + 40,
               }} title={node.value}>
@@ -335,7 +371,7 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
               </div>
 
               {count > 0 && (
-                <div style={{ fontSize: 8, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                <div style={{ fontSize: 10, color: TEXT_MUTED, fontFamily: "var(--font-mono)" }}>
                   {count.toLocaleString()}
                 </div>
               )}
@@ -354,14 +390,15 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
               <div style={{
                 width: NODE_R * 2, height: NODE_R * 2, borderRadius: "50%",
                 margin: "0 auto",
-                background: "var(--bg-tertiary)",
-                border: `2px dashed ${cfg.color}40`,
+                background: NODE_FILL_ALT,
+                border: `2px dashed ${cfg.color}66`,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 12, fontWeight: 700, color: cfg.color,
+                fontSize: 16, fontWeight: 700, color: cfg.color,
+                fontFamily: "var(--font-mono)",
               }}>
                 +{g.count}
               </div>
-              <div style={{ marginTop: 4, fontSize: 9, color: "var(--text-dim)" }}>
+              <div style={{ marginTop: 6, fontSize: 11, color: TEXT_MUTED, fontFamily: "var(--font-mono)" }}>
                 {g.count} more {g.type}s
               </div>
             </div>
@@ -369,15 +406,8 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
         })}
       </div>
 
-      {/* Legend */}
-      <div style={{ position: "sticky", bottom: 0, left: 0, padding: "6px 14px", display: "flex", gap: 12, fontSize: 9, color: "var(--text-dim)", background: "linear-gradient(transparent, var(--bg-primary) 30%)", zIndex: 3 }}>
-        {Object.entries(TYPE_CONFIG).map(([type, cfg]) => (
-          <span key={type} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-            <span style={{ width: 10, height: 10, borderRadius: "50%", border: `2px solid ${cfg.color}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 7 }}>{cfg.icon}</span>
-            {type}
-          </span>
-        ))}
       </div>
+      {/* Legend is rendered by the parent .graph-pane — see App.tsx. */}
     </div>
   );
 }

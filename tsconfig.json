@@ -13,6 +13,6 @@
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/**/*", "main.ts", "vite.config.ts", "scripts/**/*"],
+  "include": ["src/**/*", "main.ts", "vite.config.ts", "vite.harness.config.ts", "scripts/**/*", "harness/**/*"],
   "exclude": ["node_modules", "dist"]
 }
