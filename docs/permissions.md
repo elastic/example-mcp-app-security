@@ -45,7 +45,19 @@ Stack Management → Users → **Create user** (or edit an existing one) → ass
 
 **3. Create an API key for that user**
 
-Sign in as the new user, then **Stack Management → API keys → Create API key**. Kibana mints the key inheriting the user's combined privileges from both roles. The "Encoded" value is what you set as `ELASTICSEARCH_API_KEY` in the MCP app config.
+As an admin (e.g. logged in as `elastic`), open **Dev Tools** and grant a key on the user's behalf:
+
+```
+POST /_security/api_key/grant
+{
+  "grant_type": "password",
+  "username": "<the user you created>",
+  "password": "<their password>",
+  "api_key": { "name": "mcp-app-full" }
+}
+```
+
+The response includes an `encoded` field — that's what you set as `ELASTICSEARCH_API_KEY` in the MCP app config. The key inherits the user's combined privileges from `editor` + the companion role.
 
 ### Read-only access
 
@@ -70,7 +82,7 @@ Assign **both** `viewer` (built-in) and `mcp_app_indexes_readonly` to the user.
 
 **3. Create an API key**
 
-Same as above — sign in as the user and create the key from Stack Management → API keys.
+Same as above — as an admin, run `POST /_security/api_key/grant` with the read-only user's credentials and an `api_key.name` of `mcp-app-readonly`.
 
 ### What the built-ins cover
 
@@ -243,7 +255,7 @@ PUT /_security/role/mcp_app_full
 
 #### Create an API key for this role
 
-Two-step recipe — assign the role to a user, then mint an API key that inherits the user's privileges:
+Two-step recipe — assign the role to a user, then have an admin grant an API key that inherits the user's privileges:
 
 ```
 PUT /_security/user/mcp_app_user
@@ -253,16 +265,19 @@ PUT /_security/user/mcp_app_user
 }
 ```
 
-Then, **authenticated as `mcp_app_user`** (or via `POST /_security/api_key/grant` as an admin):
+Then, authenticated as an admin (e.g. `elastic`):
 
 ```
-POST /_security/api_key
+POST /_security/api_key/grant
 {
-  "name": "mcp-app-full"
+  "grant_type": "password",
+  "username": "mcp_app_user",
+  "password": "<the password you chose above>",
+  "api_key": { "name": "mcp-app-full" }
 }
 ```
 
-The response includes an `encoded` field — use that as your `ELASTICSEARCH_API_KEY`. No `role_descriptors` needed: the key inherits the user's role privileges directly.
+The response includes an `encoded` field — use that as your `ELASTICSEARCH_API_KEY`. The key inherits the user's role privileges directly.
 
 ### Read-Only Role
 
@@ -354,12 +369,15 @@ PUT /_security/user/mcp_app_readonly_user
 }
 ```
 
-Then, authenticated as the new user:
+Then, authenticated as an admin (e.g. `elastic`):
 
 ```
-POST /_security/api_key
+POST /_security/api_key/grant
 {
-  "name": "mcp-app-readonly"
+  "grant_type": "password",
+  "username": "mcp_app_readonly_user",
+  "password": "<the password you chose above>",
+  "api_key": { "name": "mcp-app-readonly" }
 }
 ```
 
