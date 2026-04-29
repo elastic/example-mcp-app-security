@@ -4,13 +4,7 @@
 
 ## Quick Demo
 
-<div align="center">
-
-[![Watch the demo](https://play.vidyard.com/Axjk85zS4bxE7kdU48Xqwe.jpg)](https://videos.elastic.co/watch/Axjk85zS4bxE7kdU48Xqwe)
-
-*Click to watch the full demo*
-
-</div>
+https://github.com/user-attachments/assets/cb62a569-1ef0-4fb0-90c7-587b98fb2049
 
 An [MCP App](https://modelcontextprotocol.io/extensions/apps/overview) that brings interactive blue-team security operations directly into Claude, VS Code, and other MCP-compatible AI hosts. Built on the [Model Context Protocol](https://modelcontextprotocol.io/) with interactive UI extensions that render inline in the conversation.
 
