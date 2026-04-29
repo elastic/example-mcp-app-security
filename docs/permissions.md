@@ -421,7 +421,7 @@ Use this appendix to build custom roles that enable only specific tools.
 | Operation | Cluster | Index privileges | Kibana features |
 |---|---|---|---|
 | Check existing data | `monitor` | `read` on `.alerts-security.alerts-<space-id>`, `logs-*` | Security (Read) |
-| Generate sample data | `monitor` | `read`, `write` on `logs-*` | Security (All), Rules and Exceptions (All) |
+| Generate sample data | `monitor` | `read`, `write` on `logs-*`, `.alerts-security.alerts-<space-id>` and `.internal.alerts-security.alerts-<space-id>-*` | Security (All), Rules and Exceptions (All), Alerts (All) |
 | Cleanup sample data | `monitor` | `read`, `write` on `logs-*`, `.alerts-security.alerts-<space-id>` and `.internal.alerts-security.alerts-<space-id>-*` | Security (All), Rules and Exceptions (All), Alerts (All) |
 
 ---
