@@ -5,8 +5,11 @@ Verifies that the role definitions documented in [`docs/permissions.md`](../../d
 ## Quick Start
 
 ```bash
-# Make sure .env has ELASTICSEARCH_URL, ELASTICSEARCH_API_KEY, KIBANA_URL
-# (the API key must have manage_security plus enough privileges to seed sample data)
+# Make sure .env has ELASTICSEARCH_URL, KIBANA_URL, ELASTIC_PASSWORD
+# (and ELASTIC_USERNAME if not the default "elastic").
+# The runner authenticates as that user via Basic auth to bootstrap an
+# admin API key, so the user must have manage_security plus enough
+# privileges to seed sample data — `superuser` works for local dev.
 
 npm run test:permissions
 ```
@@ -65,8 +68,8 @@ A privilege documented in the full role is missing from `roles.ts`. Diff against
 **Layer A reports `missing privileges: ...`.**
 The role descriptor sent in the `PUT /_security/role` body doesn't include the listed privileges, or Elasticsearch rejected one of them (typo / removed feature). Check that the Kibana feature names match your stack version. The defaults target 9.4+ — see the version-specific tables in `docs/permissions.md`.
 
-**`Fatal error: ELASTICSEARCH_URL is required.`**
-`.env` isn't loading or doesn't have all three of `ELASTICSEARCH_URL`, `ELASTICSEARCH_API_KEY`, `KIBANA_URL`. The script reads them via `dotenv/config`.
+**`Fatal error: ELASTICSEARCH_URL, KIBANA_URL, and ELASTIC_PASSWORD must be set...`**
+`.env` isn't loading or is missing one of `ELASTICSEARCH_URL`, `KIBANA_URL`, `ELASTIC_PASSWORD`. `ELASTIC_USERNAME` is optional (defaults to `elastic`). The script reads them via `dotenv/config`.
 
 **`Seeding completed but no security alerts were created.`**
 `generateSampleData` ran but didn't end up writing alerts. Usually means the admin key lacks `write` on `.alerts-security.alerts-default`. Use a key with at least the privileges in the full role.
