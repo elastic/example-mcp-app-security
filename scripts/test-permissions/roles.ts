@@ -23,6 +23,8 @@ import {
   getRule,
   createRule,
   patchRule,
+  bulkAction,
+  deleteRule,
   noisyRules,
 } from "../../src/elastic/rules.js";
 import {
@@ -481,6 +483,34 @@ export const operationChecks: OperationCheck[] = [
     run: async (f) => {
       const rule = await getRule(f.ruleId!);
       return patchRule(f.ruleId!, { enabled: rule.enabled });
+    },
+    expect: { full: "ok", readonly: "403" },
+  },
+  {
+    // Uses "duplicate" rather than "enable"/"disable"/"delete" — the
+    // first three mutate the source rule (or destroy it), duplicate
+    // leaves the source untouched and surfaces the write privilege via
+    // the new-rule creation. The created duplicate is immediately
+    // deleted to keep runs idempotent: without this, every successful
+    // run leaves a "[Duplicate]" rule behind that countLeftoverTagged-
+    // Resources won't catch (the duplicate inherits the source's tags,
+    // and the source is rarely tagged "mcp-app-test").
+    name: "bulkAction",
+    group: "rules",
+    skipUnless: (f) => f.ruleId,
+    run: async (f) => {
+      const result = (await bulkAction("duplicate", [f.ruleId!])) as {
+        attributes?: { results?: { created?: Array<{ id: string }> } };
+      };
+      const created = result.attributes?.results?.created ?? [];
+      for (const rule of created) {
+        try {
+          await deleteRule(rule.id);
+        } catch {
+          /* best-effort cleanup; surface in leftover count if it sticks */
+        }
+      }
+      return result;
     },
     expect: { full: "ok", readonly: "403" },
   },
