@@ -43,6 +43,20 @@ npm start
 # Server is now running at http://localhost:3001/mcp
 ```
 
+## Updating
+
+To update a local build to the latest version:
+
+```bash
+git pull
+npm install
+npm run build
+```
+
+Then restart the server (`npm start`). Your `.env` configuration is preserved across updates.
+
+**Checking your version:** The current version is in `package.json` (`"version"` field). You can also compare your local HEAD against the [latest release](https://github.com/elastic/example-mcp-app-security/releases/latest).
+
 ## Next Steps
 
 With the server running, connect it to your MCP host:

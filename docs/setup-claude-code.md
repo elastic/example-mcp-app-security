@@ -48,3 +48,22 @@ claude mcp remove elastic-security    # Remove the server
 ```
 
 > **Scope:** Add `-s user` to register the server globally across all projects, or `-s project` (the default) to scope it to the current project.
+
+## Updating
+
+**npx (Option 1):** If your command uses `.../releases/latest/download/elastic-security-mcp-app.tgz`, you're always running the latest version. Just restart Claude Code (or start a new session) to pick up a new release. If you pinned a specific version, re-run `claude mcp add` with the updated tarball filename.
+
+**Build from source (Options 2 & 3):**
+
+```bash
+cd example-mcp-app-security
+git pull
+npm install
+npm run build
+```
+
+Restart Claude Code after updating.
+
+**Skills:** See [Updating skills](./setup-skills.md#updating-skills).
+
+**Checking your version:** Run `claude mcp list` to see registered servers. You can also check `package.json` in your local clone, or compare against the [latest release](https://github.com/elastic/example-mcp-app-security/releases/latest).
