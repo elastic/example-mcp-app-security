@@ -229,6 +229,12 @@ function isPermissionDenied(err: unknown): boolean {
   // contains `"status":403` or `security_exception`.
   if (/security_exception/i.test(msg)) return true;
   if (/"status"\s*:\s*403/.test(msg)) return true;
+  // Kibana bulk-endpoint path (e.g. /api/detection_engine/rules/_bulk_action):
+  // top-level HTTP is 500, but the per-rule denial is reported as
+  // `"status_code":403` inside `attributes.errors[]`. Without this any
+  // op that goes through one of those endpoints would be classified
+  // "other" instead of "403" by the runner.
+  if (/"status_code"\s*:\s*403/.test(msg)) return true;
   return false;
 }
 
