@@ -424,6 +424,7 @@ Use this appendix to build custom roles that enable only specific tools.
 | Create/patch/delete rules | — | — | Security (All), Rules and Exceptions (All) |
 | Bulk action on rules (`_bulk_action`) | — | — | Security (All), Rules and Exceptions (All) |
 | Toggle rules | — | — | Security (All), Rules and Exceptions (All) |
+| List exceptions | — | — | Security (Read), Rules and Exceptions (Read) |
 | Add exceptions | — | — | Security (All), Rules and Exceptions (All) |
 
 ### Threat Hunt

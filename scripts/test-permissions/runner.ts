@@ -8,7 +8,7 @@
 import "dotenv/config";
 import crypto from "node:crypto";
 
-import { esRequest, setConfig } from "../../src/elastic/client.js";
+import { esRequest, kibanaRequest, setConfig } from "../../src/elastic/client.js";
 import {
   checkExistingData,
   generateSampleData,
@@ -355,6 +355,58 @@ async function ensureDiscoveryFixture(opts: CliOptions): Promise<string | undefi
   }
 }
 
+/**
+ * Creates a transient detection-type exception list under a unique
+ * `list_id` so the `listExceptions` / `addException` checks have a
+ * fixture they can read against and write to. Returns the `list_id`
+ * (the value `_find` filters on — not the Saved Object id).
+ *
+ * Why we don't use `endpoint_list`: it's only present after the Endpoint
+ * Security integration is enabled. On a vanilla cluster `_find?list_id=
+ * endpoint_list` returns 404, which the runner classifies as "no fixture"
+ * and the privilege check skips. Seeding our own list keeps the check
+ * deterministic across environments. Mirrors `ensureDiscoveryFixture`.
+ */
+async function ensureExceptionListFixture(
+  opts: CliOptions
+): Promise<string | undefined> {
+  const listId = `mcp-app-test-list-${crypto.randomBytes(4).toString("hex")}`;
+  if (opts.verbose) console.log(`→ Seeding exception list ${listId}…`);
+  try {
+    await kibanaRequest("/api/exception_lists", {
+      method: "POST",
+      apiVersion: "2023-10-31",
+      body: {
+        list_id: listId,
+        name: listId,
+        description: "Permissions test exception list (safe to delete)",
+        type: "detection",
+        namespace_type: "single",
+      },
+    });
+    return listId;
+  } catch (err) {
+    console.warn(
+      `  warning: failed to seed exception list, listExceptions/addException will be skipped: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return undefined;
+  }
+}
+
+async function deleteExceptionListFixture(listId: string): Promise<void> {
+  try {
+    await kibanaRequest("/api/exception_lists", {
+      method: "DELETE",
+      apiVersion: "2023-10-31",
+      params: { list_id: listId, namespace_type: "single" },
+    });
+  } catch (err) {
+    console.warn(
+      `  warning: failed to delete exception list ${listId}: ${formatError(err)}`
+    );
+  }
+}
+
 async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixtures> {
   useAdminConfig(admin);
 
@@ -423,6 +475,7 @@ async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixt
   }
 
   const discoveryId = await ensureDiscoveryFixture(opts);
+  const exceptionListId = await ensureExceptionListFixture(opts);
 
   return {
     alertId: alertHit._id,
@@ -432,6 +485,7 @@ async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixt
     caseId,
     ruleId,
     discoveryId,
+    exceptionListId,
     suffix: crypto.randomBytes(4).toString("hex"),
   };
 }
@@ -761,6 +815,7 @@ async function cleanupRoleArtifacts(
   admin: AdminConfig,
   artifacts: RoleArtifacts[],
   quickstartArtifacts: QuickstartArtifacts[],
+  exceptionListId: string | undefined,
   opts: CliOptions
 ) {
   if (!opts.cleanup) {
@@ -776,9 +831,15 @@ async function cleanupRoleArtifacts(
       console.log(`    api key: ${q.apiKey.name} (id=${q.apiKey.id})`);
       console.log(`    encoded: ${q.apiKey.encoded}`);
     }
+    if (exceptionListId) {
+      console.log(`    exception list: ${exceptionListId} (namespace_type=single)`);
+    }
     return;
   }
   useAdminConfig(admin);
+  if (exceptionListId) {
+    await deleteExceptionListFixture(exceptionListId);
+  }
   for (const a of artifacts) {
     try {
       await deleteApiKey(a.apiKey.id);
@@ -850,6 +911,7 @@ async function main() {
 
   const provisioned: RoleArtifacts[] = [];
   const provisionedQuickstarts: QuickstartArtifacts[] = [];
+  let seededExceptionListId: string | undefined;
   let interrupted = false;
 
   const cleanupBootstrap = async () => {
@@ -866,7 +928,13 @@ async function main() {
   const onSignal = () => {
     interrupted = true;
     console.log("\n→ Caught SIGINT, cleaning up before exit…");
-    cleanupRoleArtifacts(admin, provisioned, provisionedQuickstarts, opts)
+    cleanupRoleArtifacts(
+      admin,
+      provisioned,
+      provisionedQuickstarts,
+      seededExceptionListId,
+      opts
+    )
       .then(() => cleanupBootstrap())
       .catch((err) => console.error(`Cleanup error: ${formatError(err)}`))
       .finally(() => process.exit(130));
@@ -883,13 +951,15 @@ async function main() {
 
     console.log("→ Pre-flight: checking connectivity and seed data…");
     const fixtures = await preflight(admin, opts);
+    seededExceptionListId = fixtures.exceptionListId;
     if (opts.verbose) {
-      console.log(`  alertId:     ${fixtures.alertId}`);
-      console.log(`  alertIndex:  ${fixtures.alertIndex}`);
-      console.log(`  alertRuleId: ${fixtures.alertRuleId}`);
-      console.log(`  caseId:      ${fixtures.caseId}`);
-      console.log(`  ruleId:      ${fixtures.ruleId ?? "(none — patchRule will skip)"}`);
-      console.log(`  suffix:      ${fixtures.suffix}`);
+      console.log(`  alertId:          ${fixtures.alertId}`);
+      console.log(`  alertIndex:       ${fixtures.alertIndex}`);
+      console.log(`  alertRuleId:      ${fixtures.alertRuleId}`);
+      console.log(`  caseId:           ${fixtures.caseId}`);
+      console.log(`  ruleId:           ${fixtures.ruleId ?? "(none — patchRule will skip)"}`);
+      console.log(`  exceptionListId:  ${fixtures.exceptionListId ?? "(none — listExceptions/addException will skip)"}`);
+      console.log(`  suffix:           ${fixtures.suffix}`);
     }
 
     interface AssertedRun {
@@ -971,6 +1041,7 @@ async function main() {
           admin,
           provisioned,
           provisionedQuickstarts,
+          seededExceptionListId,
           opts
         );
       } catch (err) {

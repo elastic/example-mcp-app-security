@@ -26,6 +26,8 @@ import {
   bulkAction,
   deleteRule,
   noisyRules,
+  listExceptions,
+  addException,
 } from "../../src/elastic/rules.js";
 import {
   assessConfidence,
@@ -34,7 +36,7 @@ import {
   listAIConnectors,
   type AttackDiscovery,
 } from "../../src/elastic/attack-discovery.js";
-import { esRequest } from "../../src/elastic/client.js";
+import { esRequest, kibanaRequest } from "../../src/elastic/client.js";
 import { hasPrivileges } from "./elastic-admin.js";
 import { executeEsql } from "../../src/elastic/esql.js";
 import { listIndices, getMapping } from "../../src/elastic/indices.js";
@@ -247,6 +249,12 @@ export interface SeedFixtures {
   caseId: string;
   ruleId?: string;
   discoveryId?: string;
+  /**
+   * `list_id` of a transient detection-type exception list seeded by
+   * preflight. Used by `listExceptions` (read) and `addException`
+   * (write). When undefined (creation failed), both checks skip.
+   */
+  exceptionListId?: string;
   /** Per-run unique suffix used for case titles, rule names, etc. */
   suffix: string;
 }
@@ -508,6 +516,48 @@ export const operationChecks: OperationCheck[] = [
           await deleteRule(rule.id);
         } catch {
           /* best-effort cleanup; surface in leftover count if it sticks */
+        }
+      }
+      return result;
+    },
+    expect: { full: "ok", readonly: "403" },
+  },
+  {
+    name: "listExceptions",
+    group: "rules",
+    skipUnless: (f) => f.exceptionListId,
+    run: async (f) => listExceptions(f.exceptionListId!),
+    expect: { full: "ok", readonly: "ok" },
+  },
+  {
+    // Creates an exception item against the preflight-seeded list. The
+    // created item is immediately deleted to keep runs idempotent —
+    // exceptions don't have a `tags` field, so countLeftoverTagged-
+    // Resources() can't catch them. The seeded list itself is torn
+    // down by cleanupRoleArtifacts at end of run.
+    name: "addException",
+    group: "rules",
+    skipUnless: (f) => f.ruleId && f.exceptionListId,
+    run: async (f) => {
+      const result = (await addException(f.ruleId!, f.exceptionListId!, {
+        name: `mcp-app-test ${f.suffix}`,
+        description: "Permissions test exception (safe to delete)",
+        entries: [
+          { field: "host.name", operator: "included", type: "match", value: "test-host" },
+        ],
+      })) as Array<{ id: string }>;
+      // Inline cleanup of any created items. Best-effort: a 403 here
+      // shouldn't happen on `full` but if it does, the leftover persists
+      // until the seeded list is torn down at end of run.
+      for (const item of Array.isArray(result) ? result : []) {
+        try {
+          await kibanaRequest(`/api/exception_lists/items`, {
+            method: "DELETE",
+            params: { id: item.id, namespace_type: "single" },
+            apiVersion: "2023-10-31",
+          });
+        } catch {
+          /* best-effort cleanup */
         }
       }
       return result;
