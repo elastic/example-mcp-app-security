@@ -8,6 +8,7 @@
 import {
   fetchAlerts,
   acknowledgeAlert,
+  getAlertContext,
 } from "../../src/elastic/alerts.js";
 import {
   listCases,
@@ -32,6 +33,7 @@ import {
   type AttackDiscovery,
 } from "../../src/elastic/attack-discovery.js";
 import { esRequest } from "../../src/elastic/client.js";
+import { hasPrivileges } from "./elastic-admin.js";
 import { executeEsql } from "../../src/elastic/esql.js";
 import { listIndices } from "../../src/elastic/indices.js";
 import {
@@ -324,6 +326,70 @@ export const operationChecks: OperationCheck[] = [
     group: "alerts",
     run: async (f) => acknowledgeAlert(f.alertId),
     expect: { full: "ok", readonly: "403" },
+  },
+  {
+    // Drives parallel reads against logs-endpoint.events.process-*,
+    // logs-endpoint.events.network-*, and .alerts-security.alerts-*.
+    // Picks an alert with host.name set, because getAlertContext
+    // short-circuits the endpoint-event queries otherwise.
+    //
+    // NOTE: this check on its own does not defend the endpoint-event
+    // index privileges — _search against a wildcard pattern (logs-
+    // endpoint.events.process-*) is lenient: when a role has no
+    // concrete index matching the pattern, ES silently returns 0 hits
+    // instead of 403. The companion probe `endpointEventsReadable`
+    // below uses _has_privileges to verify the role actually grants
+    // read on those indices.
+    name: "getAlertContext",
+    group: "alerts",
+    run: async (f) => {
+      const alerts = await fetchAlerts({ days: 365, limit: 50, status: "open" });
+      const alert =
+        alerts.alerts.find((a) => Boolean(a._source.host?.name)) ??
+        alerts.alerts[0];
+      return getAlertContext(f.alertId, alert);
+    },
+    expect: { full: "ok", readonly: "ok" },
+  },
+  {
+    // Companion probe for getAlertContext. Verifies the role grants
+    // `read` on the endpoint-event indices that getAlertContext queries
+    // in parallel. Needed because the production code uses wildcard
+    // _search patterns (logs-endpoint.events.process-*, logs-endpoint.
+    // events.network-*) which ES handles leniently — a role with zero
+    // matching concrete indices gets an empty result, not a 403, so
+    // the getAlertContext check above can't catch a privilege gap on
+    // those indices on its own.
+    //
+    // Tamper test: narrow DATA_INDICES to drop logs-* (or replace with
+    // a non-matching glob like logs-foo-*) and this probe must fail
+    // for both full and readonly.
+    //
+    // Reusable pattern: any other op that queries data via wildcard
+    // _search (M3 getMapping, M4 getEntityDetail) can use the same
+    // shape to defend its index privileges.
+    name: "endpointEventsReadable",
+    group: "alerts",
+    run: async () => {
+      const result = await hasPrivileges({
+        index: [
+          {
+            names: [
+              "logs-endpoint.events.process-*",
+              "logs-endpoint.events.network-*",
+            ],
+            privileges: ["read"],
+          },
+        ],
+      });
+      if (!result.has_all_requested) {
+        throw new Error(
+          `role lacks read on endpoint event indices required by getAlertContext: ${JSON.stringify(result.index)}`
+        );
+      }
+      return result;
+    },
+    expect: { full: "ok", readonly: "ok" },
   },
 
   // ─── cases ─────────────────────────────────────────────────────────────
