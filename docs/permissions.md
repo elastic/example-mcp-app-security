@@ -23,16 +23,16 @@ Stack Management → Roles → **Create role** → name it `mcp_app_indexes_full
 
 | Index pattern | Privileges |
 |---|---|
-| `.alerts-security.alerts-<space-id>` | `read`, `write`, `monitor` |
-| `.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `write`, `monitor` |
-| `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `write`, `monitor` |
-| `.internal.alerts-security.alerts-<space-id>-*` | `read`, `write`, `monitor` |
-| `.internal.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `write`, `monitor` |
-| `.internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `write`, `monitor` |
-| `logs-*` | `read`, `write`, `monitor` |
-| `risk-score.risk-score-latest-*` | `read`, `monitor` |
+| `.alerts-security.alerts-<space-id>` | `read`, `write`, `monitor`, `view_index_metadata` |
+| `.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `write`, `monitor`, `view_index_metadata` |
+| `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `write`, `monitor`, `view_index_metadata` |
+| `.internal.alerts-security.alerts-<space-id>-*` | `read`, `write`, `monitor`, `view_index_metadata` |
+| `.internal.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `write`, `monitor`, `view_index_metadata` |
+| `.internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `write`, `monitor`, `view_index_metadata` |
+| `logs-*` | `read`, `write`, `monitor`, `view_index_metadata` |
+| `risk-score.risk-score-latest-*` | `read`, `monitor`, `view_index_metadata` |
 
-> Why cluster `monitor` *and* index-level `monitor`: `_cat/indices/<pattern>` (used by Threat Hunt to list indices) needs both. The cluster-level grant lets the user enumerate indices at all; the index-level grant lets `_cat/indices` and `_mapping` actually return data for those patterns. Neither `editor` nor `viewer` grants cluster `monitor`, so it has to come from this companion role.
+> Why cluster `monitor`, index-level `monitor`, *and* `view_index_metadata`: `_cat/indices/<pattern>` (Threat Hunt's index list) needs cluster `monitor` (to enumerate indices at all) plus index-level `monitor` (which covers `indices:monitor/stats` and `indices:monitor/settings/get`). `_mapping` (Threat Hunt's field-mapping picker) needs index-level `view_index_metadata` — that's a separate privilege from `monitor`, despite the overlap in name. Neither `editor` nor `viewer` grants cluster `monitor`, so it has to come from this companion role; `viewer` also doesn't grant `view_index_metadata` on the `.internal.alerts-security.*` backing indices, which is why the companion grants it explicitly.
 
 No Kibana-feature or application privileges in this companion role — those come from `editor`.
 
@@ -67,14 +67,14 @@ Stack Management → Roles → **Create role** → name it `mcp_app_indexes_read
 
 | Index pattern | Privileges |
 |---|---|
-| `.alerts-security.alerts-<space-id>` | `read`, `monitor` |
-| `.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `monitor` |
-| `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `monitor` |
-| `.internal.alerts-security.alerts-<space-id>-*` | `read`, `monitor` |
-| `.internal.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `monitor` |
-| `.internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `monitor` |
-| `logs-*` | `read`, `monitor` |
-| `risk-score.risk-score-latest-*` | `read`, `monitor` |
+| `.alerts-security.alerts-<space-id>` | `read`, `monitor`, `view_index_metadata` |
+| `.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `monitor`, `view_index_metadata` |
+| `.adhoc.alerts-security.attack.discovery.alerts-<space-id>` | `read`, `monitor`, `view_index_metadata` |
+| `.internal.alerts-security.alerts-<space-id>-*` | `read`, `monitor`, `view_index_metadata` |
+| `.internal.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `monitor`, `view_index_metadata` |
+| `.internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*` | `read`, `monitor`, `view_index_metadata` |
+| `logs-*` | `read`, `monitor`, `view_index_metadata` |
+| `risk-score.risk-score-latest-*` | `read`, `monitor`, `view_index_metadata` |
 
 **2. Assign roles to a user**
 
@@ -156,7 +156,7 @@ Each role below is a single self-contained definition — no companion role requ
 
 #### Index privileges
 
-**System / alert indices** (`read`, `write`, `monitor`):
+**System / alert indices** (`read`, `write`, `monitor`, `view_index_metadata`):
 
 | Index pattern | Used by |
 |---|---|
@@ -167,7 +167,7 @@ Each role below is a single self-contained definition — no companion role requ
 | `.internal.alerts-security.attack.discovery.alerts-<space-id>-*` | Backing indices for the attack-discovery data stream |
 | `.internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*` | Backing indices for the ad-hoc attack-discovery data stream |
 
-**Data indices** (`read`, `write`, `monitor`):
+**Data indices** (`read`, `write`, `monitor`, `view_index_metadata`):
 
 | Index pattern | Used by |
 |---|---|
@@ -228,7 +228,7 @@ PUT /_security/role/mcp_app_full
         "logs-*",
         "risk-score.risk-score-latest-*"
       ],
-      "privileges": ["read", "write", "monitor"]
+      "privileges": ["read", "write", "monitor", "view_index_metadata"]
     }
   ],
   "applications": [
@@ -293,7 +293,7 @@ A strict read-only role: view everything, change nothing.
 
 #### Index privileges
 
-**All index patterns** (`read`, `monitor`):
+**All index patterns** (`read`, `monitor`, `view_index_metadata`):
 
 | Index pattern | Used by |
 |---|---|
@@ -338,7 +338,7 @@ PUT /_security/role/mcp_app_readonly
         "logs-*",
         "risk-score.risk-score-latest-*"
       ],
-      "privileges": ["read", "monitor"]
+      "privileges": ["read", "monitor", "view_index_metadata"]
     }
   ],
   "applications": [
@@ -431,7 +431,7 @@ Use this appendix to build custom roles that enable only specific tools.
 |---|---|---|---|
 | ES\|QL queries | `monitor` | `read` on target indices (e.g., `logs-*`) | Security (Read) |
 | List indices | `monitor` | `read`, `monitor` on target indices | Security (Read) |
-| Field mappings | `monitor` | `read`, `monitor` on target indices | Security (Read) |
+| Field mappings | `monitor` | `read`, `view_index_metadata` on target indices | Security (Read) |
 | Entity detail | `monitor` | `read` on `logs-endpoint.events.process-*`, `logs-endpoint.events.network-*`, `.alerts-security.alerts-<space-id>` | Security (Read), Alerts (Read) |
 
 ### Sample Data

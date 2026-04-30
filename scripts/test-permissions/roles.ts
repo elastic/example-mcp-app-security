@@ -35,7 +35,7 @@ import {
 import { esRequest } from "../../src/elastic/client.js";
 import { hasPrivileges } from "./elastic-admin.js";
 import { executeEsql } from "../../src/elastic/esql.js";
-import { listIndices } from "../../src/elastic/indices.js";
+import { listIndices, getMapping } from "../../src/elastic/indices.js";
 import {
   checkExistingData,
   generateSampleData,
@@ -87,7 +87,12 @@ export const fullRole: RoleDescriptor = {
       // which only the index-level `monitor` privilege covers in full.
       // The cluster-level `monitor` above is a separate thing and is
       // not sufficient on its own.
-      privileges: ["read", "write", "monitor"],
+      //
+      // `view_index_metadata` is required by `_mapping` (used by Threat
+      // Hunt's getMapping). It is its OWN privilege — `monitor` does
+      // NOT include it. Without it, `_mapping` returns 403 even when
+      // `read` is granted.
+      privileges: ["read", "write", "monitor", "view_index_metadata"],
     },
   ],
   applications: [
@@ -114,7 +119,7 @@ export const readonlyRole: RoleDescriptor = {
   indices: [
     {
       names: DATA_INDICES,
-      privileges: ["read", "monitor"],
+      privileges: ["read", "monitor", "view_index_metadata"],
     },
   ],
   applications: [
@@ -199,7 +204,7 @@ export const QUICKSTART_COMPANION_DESCRIPTORS: Record<
     indices: [
       {
         names: DATA_INDICES,
-        privileges: ["read", "write", "monitor"],
+        privileges: ["read", "write", "monitor", "view_index_metadata"],
       },
     ],
     applications: [],
@@ -209,7 +214,7 @@ export const QUICKSTART_COMPANION_DESCRIPTORS: Record<
     indices: [
       {
         names: DATA_INDICES,
-        privileges: ["read", "monitor"],
+        privileges: ["read", "monitor", "view_index_metadata"],
       },
     ],
     applications: [],
@@ -548,6 +553,18 @@ export const operationChecks: OperationCheck[] = [
     name: "listIndices",
     group: "threat-hunt",
     run: async () => listIndices("logs-*"),
+    expect: { full: "ok", readonly: "ok" },
+  },
+  {
+    // _mapping requires `view_index_metadata`, which is its own privilege
+    // — NOT included in `monitor` (despite a common misconception) and
+    // NOT in `read`. Dropping `"view_index_metadata"` from the privileges
+    // list flips this to 403 cleanly. Uses f.alertIndex (the seeded
+    // alert's concrete backing index) so the test doesn't depend on
+    // sample data being present on the cluster.
+    name: "getMapping",
+    group: "threat-hunt",
+    run: async (f) => getMapping(f.alertIndex),
     expect: { full: "ok", readonly: "ok" },
   },
 
