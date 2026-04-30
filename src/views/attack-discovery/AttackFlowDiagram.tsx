@@ -7,6 +7,7 @@
 
 import React, { useState, useMemo } from "react";
 import type { AttackDiscoveryFinding, DiscoveryDetail } from "../../shared/types";
+import { stripKibanaTemplateSyntax } from "./template-syntax";
 
 const TACTIC_ORDER = [
   "Reconnaissance", "Resource Development", "Initial Access", "Execution",
@@ -100,7 +101,7 @@ function buildGraph(
   add({
     id: "campaign",
     type: "campaign",
-    label: truncate(disc.title, 36),
+    label: truncate(stripKibanaTemplateSyntax(disc.title), 36),
     sublabel: `ATK-${disc.id.slice(0, 12).toUpperCase()}`,
     color: "#e7664c",
   });

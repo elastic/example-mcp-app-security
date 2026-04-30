@@ -12,6 +12,7 @@ import { extractToolText, extractCallResult } from "../../shared/extract-tool-te
 import { RiskScore, SeverityBadge } from "../../shared/severity";
 import type { AttackDiscoveryFinding, DiscoveryDetail } from "../../shared/types";
 import { AttackFlowDiagram } from "./AttackFlowDiagram";
+import { stripKibanaTemplateSyntax } from "./template-syntax";
 import "./styles.css";
 
 interface Verdict {
@@ -552,14 +553,14 @@ export function App() {
                   >
                     {checked.has(d.id) && <span style={{ fontSize: 10 }}>&#10003;</span>}
                   </div>
-                  <span className="discovery-card-title">{d.title}</span>
+                  <span className="discovery-card-title">{stripKibanaTemplateSyntax(d.title)}</span>
                   {d.confidence && <ConfidenceBadge level={d.confidence} />}
                   <RiskScore score={d.riskScore} />
                   <span className="discovery-card-time">{timeAgo(d.timestamp)}</span>
                 </div>
 
                 {!selected && (
-                  <div className="discovery-card-summary">{d.summaryMarkdown?.replace(/[#*_`]/g, "")}</div>
+                  <div className="discovery-card-summary">{stripKibanaTemplateSyntax(d.summaryMarkdown?.replace(/[#*_`]/g, "") || "")}</div>
                 )}
 
                 <div className="discovery-card-meta">
