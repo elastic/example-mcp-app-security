@@ -67,16 +67,17 @@ npm run skills:zip
 
 **One-click install (.mcpb):** Download the latest `example-mcp-app-security.mcpb` from the [Releases page](https://github.com/elastic/example-mcp-app-security/releases/latest) and double-click it. Your existing configuration (Elasticsearch URL, Kibana URL, API key) is preserved — you don't need to re-enter credentials.
 
-**Build from source:** Pull the latest code and rebuild:
+**Build from source:** Pull the latest code, rebuild, and install the updated `.mcpb`:
 
 ```bash
 cd example-mcp-app-security
 git pull
 npm install
 npm run build
+npm run mcpb:pack
 ```
 
-Restart Claude Desktop after updating.
+Then double-click the generated `.mcpb` file in `dist/` to install it. Restart Claude Desktop after updating.
 
 ### Updating skills
 
