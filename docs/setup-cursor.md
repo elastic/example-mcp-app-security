@@ -13,6 +13,8 @@ Click to install:
 <!-- cursor-mcp-config:END -->
 
 > After clicking, replace the placeholder values in Cursor's MCP settings with your actual Elasticsearch URL, Kibana URL, and Elasticsearch API key. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
+>
+> **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
 Or add manually to `.cursor/mcp.json`:
 

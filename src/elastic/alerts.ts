@@ -182,11 +182,13 @@ export async function getAlertContext(
 }
 
 export async function acknowledgeAlert(alertId: string): Promise<void> {
-  await esRequest(`/${ALERTS_INDEX}/_update/${alertId}`, {
-    body: {
-      doc: { "kibana.alert.workflow_status": "acknowledged" },
-    },
-  });
+  // Delegates to the bulk path because `_update/{id}` does not accept
+  // wildcard index expressions, but `_update_by_query` does — and we
+  // don't have the alert's concrete index at this layer.
+  const { updated } = await acknowledgeAlerts([alertId]);
+  if (updated !== 1) {
+    throw new Error(`Alert ${alertId} was not acknowledged (updated=${updated})`);
+  }
 }
 
 export async function acknowledgeAlerts(alertIds: string[]): Promise<{ updated: number }> {

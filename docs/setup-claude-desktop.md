@@ -14,6 +14,8 @@ Claude Desktop opens an install dialog with fields for your Elasticsearch URL, K
 - `ELASTICSEARCH_API_KEY`
 - `KIBANA_URL`
 
+> **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
+
 After install:
 
 - Claude Desktop may show the connector as disabled at first. Toggle it on to enable the server.
