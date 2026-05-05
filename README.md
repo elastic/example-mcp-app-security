@@ -59,6 +59,7 @@ The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/
 | [Add to Claude.ai](docs/setup-claude-ai.md) | Expose the MCP app via a cloudflared tunnel |
 | [Build and run locally](docs/setup-local.md) | Build the MCP server from source and run it on your machine |
 | [Install skills](docs/setup-skills.md) | Install skills via npx, local clone, or zip upload |
+| [Updating](docs/setup-claude-desktop.md#updating) | How to update to a newer release |
 
 ## Development
 
