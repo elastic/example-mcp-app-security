@@ -13,15 +13,29 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
-import { executeEsql } from "../elastic/esql.js";
-import { listIndices, getMapping } from "../elastic/indices.js";
-import { investigateEntity } from "../elastic/investigate.js";
-import { getEntityDetail } from "../elastic/entity-detail.js";
+import type {
+  EntityDetailService,
+  EsqlService,
+  IndicesService,
+  InvestigateService,
+} from "../elastic/service/index.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://threat-hunt/mcp-app.html";
 
-export function registerThreatHuntTools(server: McpServer) {
+/** Services the threat-hunt tools depend on (default cluster only, for now). */
+export interface ThreatHuntToolDeps {
+  readonly esqlService: EsqlService;
+  readonly indicesService: IndicesService;
+  readonly investigateService: InvestigateService;
+  readonly entityDetailService: EntityDetailService;
+}
+
+export function registerThreatHuntTools(
+  server: McpServer,
+  deps: ThreatHuntToolDeps
+) {
+  const { esqlService, indicesService, investigateService, entityDetailService } = deps;
   registerAppTool(
     server,
     "threat-hunt",
@@ -40,14 +54,14 @@ export function registerThreatHuntTools(server: McpServer) {
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ query, description, entity }) => {
-      const indices = await listIndices();
+      const indices = await indicesService.listIndices();
       const compact: Record<string, unknown> = {
         indexCount: indices.length,
         indices: indices.slice(0, 20).map((i) => i.index),
       };
       if (query) {
         try {
-          const qr = await executeEsql(query);
+          const qr = await esqlService.executeEsql(query);
           compact.query = query;
           compact.rowCount = qr.values.length;
           compact.columns = qr.columns.map((c) => c.name);
@@ -66,7 +80,7 @@ export function registerThreatHuntTools(server: McpServer) {
       if (description) compact.description = description;
       if (entity) {
         try {
-          const graph = await investigateEntity(entity.type, entity.value);
+          const graph = await investigateService.investigateEntity(entity.type, entity.value);
           compact.entity = entity;
           compact.graph = { nodeCount: graph.nodes.length, edgeCount: graph.edges.length };
         } catch { /* ignore */ }
@@ -89,7 +103,7 @@ export function registerThreatHuntTools(server: McpServer) {
     },
     async ({ query }) => {
       try {
-        const result = await executeEsql(query);
+        const result = await esqlService.executeEsql(query);
         return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
       } catch (e) {
         return {
@@ -111,7 +125,7 @@ export function registerThreatHuntTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ pattern }) => {
-      const result = await listIndices(pattern);
+      const result = await indicesService.listIndices(pattern);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -126,7 +140,7 @@ export function registerThreatHuntTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ index }) => {
-      const result = await getMapping(index);
+      const result = await indicesService.getMapping(index);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -144,7 +158,7 @@ export function registerThreatHuntTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ entityType, entityValue }) => {
-      const result = await getEntityDetail(entityType, entityValue);
+      const result = await entityDetailService.getEntityDetail(entityType, entityValue);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -163,7 +177,7 @@ export function registerThreatHuntTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ entityType, entityValue, timeRange }) => {
-      const result = await investigateEntity(entityType, entityValue, timeRange);
+      const result = await investigateService.investigateEntity(entityType, entityValue, timeRange);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],
       };

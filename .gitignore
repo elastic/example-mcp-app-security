@@ -11,3 +11,6 @@ dist/
 *.mcpb
 .claude/
 .agents/
+.cursor/
+coverage/
+openspec/

@@ -13,20 +13,26 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
-import {
-  fetchDiscoveries,
-  assessConfidence,
-  acknowledgeDiscoveries,
-  getDiscoveryDetail,
-} from "../elastic/attack-discovery.js";
-import type { AttackDiscovery } from "../elastic/attack-discovery.js";
-import { createCase, attachAlert, addComment } from "../elastic/cases.js";
-import { esRequest } from "../elastic/client.js";
+import type { AttackDiscovery } from "../elastic/client/index.js";
+import type {
+  AttackDiscoveryService,
+  CasesService,
+} from "../elastic/service/index.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-attack-discoveries/mcp-app.html";
 
-export function registerAttackDiscoveryTools(server: McpServer) {
+/** Services the attack-discovery tools depend on (default cluster only, for now). */
+export interface AttackDiscoveryToolDeps {
+  readonly attackDiscoveryService: AttackDiscoveryService;
+  readonly casesService: CasesService;
+}
+
+export function registerAttackDiscoveryTools(
+  server: McpServer,
+  deps: AttackDiscoveryToolDeps
+) {
+  const { attackDiscoveryService, casesService } = deps;
   registerAppTool(
     server,
     "triage-attack-discoveries",
@@ -41,12 +47,12 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ days, limit }) => {
-      const summary = await fetchDiscoveries({ days, limit });
+      const summary = await attackDiscoveryService.getDiscoveries({ days, limit });
 
       let triaged = null;
       if (summary.discoveries.length > 0) {
         try {
-          triaged = await assessConfidence(summary.discoveries);
+          triaged = await attackDiscoveryService.assessConfidence(summary.discoveries);
         } catch {
           triaged = null;
         }
@@ -99,7 +105,7 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ days, limit }) => {
-      const summary = await fetchDiscoveries({ days, limit });
+      const summary = await attackDiscoveryService.getDiscoveries({ days, limit });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(summary) }],
       };
@@ -119,7 +125,7 @@ export function registerAttackDiscoveryTools(server: McpServer) {
     },
     async ({ discoveries: discoveriesJson }) => {
       const discoveries: AttackDiscovery[] = JSON.parse(discoveriesJson);
-      const triaged = await assessConfidence(discoveries);
+      const triaged = await attackDiscoveryService.assessConfidence(discoveries);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(triaged) }],
       };
@@ -139,7 +145,7 @@ export function registerAttackDiscoveryTools(server: McpServer) {
     },
     async ({ discovery: discoveryJson }) => {
       const discovery: AttackDiscovery = JSON.parse(discoveryJson);
-      const detail = await getDiscoveryDetail(discovery);
+      const detail = await attackDiscoveryService.getDiscoveryDetail(discovery);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(detail) }],
       };
@@ -172,7 +178,7 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       const results: { findingId: string; caseId: string; caseTitle: string; alertsAttached: number }[] = [];
 
       for (const finding of findings) {
-        const caseData = await createCase({
+        const caseData = await casesService.createCase({
           title: `[Attack Discovery] ${finding.title}`,
           description: [
             `## Attack Discovery Finding`,
@@ -192,36 +198,16 @@ export function registerAttackDiscoveryTools(server: McpServer) {
 
         if (finding.detailsMarkdown) {
           try {
-            await addComment(caseData.id, finding.detailsMarkdown);
+            await casesService.addComment(caseData.id, finding.detailsMarkdown);
           } catch {
             // comment failed — case still created
           }
         }
 
-        let alertsAttached = 0;
-        if (finding.alertIds.length > 0) {
-          try {
-            const alertDocs = await esRequest<{
-              docs: Array<{ _index: string; _id: string; found: boolean; _source?: Record<string, unknown> }>;
-            }>(`/.alerts-security.alerts-default/_mget`, {
-              body: { ids: finding.alertIds },
-            });
-
-            for (const doc of alertDocs.docs) {
-              if (!doc.found || !doc._source) continue;
-              try {
-                const ruleId = (doc._source["kibana.alert.rule.uuid"] as string) || "";
-                const ruleName = (doc._source["kibana.alert.rule.name"] as string) || "Unknown Rule";
-                await attachAlert(caseData.id, doc._id, doc._index, ruleId, ruleName);
-                alertsAttached++;
-              } catch {
-                // skip individual alert attachment failures
-              }
-            }
-          } catch {
-            // alert lookup failed — case still created without attachments
-          }
-        }
+        const alertsAttached = await casesService.attachAlertsByIds(
+          caseData.id,
+          finding.alertIds
+        );
 
         results.push({ findingId: finding.id, caseId: caseData.id, caseTitle: caseData.title, alertsAttached });
       }
@@ -244,7 +230,7 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ discoveryIds }) => {
-      const result = await acknowledgeDiscoveries(discoveryIds);
+      const result = await attackDiscoveryService.acknowledgeDiscoveries(discoveryIds);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],
       };
@@ -270,8 +256,7 @@ export function registerAttackDiscoveryTools(server: McpServer) {
     },
     async ({ connectorName, size, start, end, filter }) => {
       try {
-        const { generateAttackDiscovery, listAIConnectors } = await import("../elastic/attack-discovery.js");
-        const connectors = await listAIConnectors();
+        const connectors = await attackDiscoveryService.listAIConnectors();
         let connector = connectors.find((c) => c.name.toLowerCase().includes(connectorName.toLowerCase()));
         if (!connector && connectors.length === 1) {
           connector = connectors[0];
@@ -279,8 +264,16 @@ export function registerAttackDiscoveryTools(server: McpServer) {
         if (!connector) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No matching connector. Available: " + connectors.map((c) => c.name).join(", ") }) }] };
         }
-        const filterObj = filter ? JSON.parse(filter) : undefined;
-        const result = await generateAttackDiscovery({ connectorId: connector.id, actionTypeId: connector.actionTypeId, connectorName: connector.name, size, start, end, filter: filterObj });
+        const filterObj = filter ? (JSON.parse(filter) as Record<string, unknown>) : undefined;
+        const result = await attackDiscoveryService.generateAttackDiscovery({
+          connectorId: connector.id,
+          actionTypeId: connector.actionTypeId,
+          connectorName: connector.name,
+          size,
+          start,
+          end,
+          filter: filterObj,
+        });
         return { content: [{ type: "text" as const, text: JSON.stringify({ status: "generation_started", execution_uuid: result.execution_uuid, connector: connector.name, message: "Attack discovery generation has been started using " + connector.name + ". This typically takes 1-3 minutes. The interactive dashboard will show a progress banner and auto-refresh when results are ready. Do NOT call triage-attack-discoveries yet — wait for the user to tell you the results are in, or let them view results directly in the dashboard." }) }] };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -303,12 +296,7 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ size, start, end }) => {
-      const { kibanaRequest } = await import("../elastic/client.js");
-      const params: Record<string, string> = {};
-      if (size) params.size = String(size);
-      if (start) params.start = start;
-      if (end) params.end = end;
-      const result = await kibanaRequest("/api/attack_discovery/generations", { params, apiVersion: "2023-10-31" });
+      const result = await attackDiscoveryService.getGenerations({ size, start, end });
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -323,8 +311,7 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       _meta: { ui: {} },
     },
     async () => {
-      const { listAIConnectors } = await import("../elastic/attack-discovery.js");
-      const connectors = await listAIConnectors();
+      const connectors = await attackDiscoveryService.listAIConnectors();
       return { content: [{ type: "text" as const, text: JSON.stringify(connectors) }] };
     }
   );

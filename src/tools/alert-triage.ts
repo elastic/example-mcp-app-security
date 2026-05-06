@@ -13,12 +13,22 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
-import { fetchAlerts, getAlertContext, acknowledgeAlert, acknowledgeAlerts } from "../elastic/alerts.js";
+import type { SecurityAlert } from "../shared/types.js";
+import type { AlertsService } from "../elastic/service/index.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-alerts/mcp-app.html";
 
-export function registerAlertTriageTools(server: McpServer) {
+/** Services the alert-triage tools depend on (default cluster only, for now). */
+export interface AlertTriageToolDeps {
+  readonly alertsService: AlertsService;
+}
+
+export function registerAlertTriageTools(
+  server: McpServer,
+  deps: AlertTriageToolDeps
+) {
+  const { alertsService } = deps;
   registerAppTool(
     server,
     "triage-alerts",
@@ -46,7 +56,7 @@ export function registerAlertTriageTools(server: McpServer) {
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ days, severity, limit, query, verdicts }) => {
-      const summary = await fetchAlerts({ days, severity, limit, query });
+      const summary = await alertsService.getAlerts({ days, severity, limit, query });
       const compact = {
         total: summary.total,
         bySeverity: summary.bySeverity,
@@ -105,7 +115,7 @@ export function registerAlertTriageTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ days, severity, limit, status, query }) => {
-      const summary = await fetchAlerts({ days, severity, limit, status, query });
+      const summary = await alertsService.getAlerts({ days, severity, limit, status, query });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(summary) }],
       };
@@ -125,8 +135,8 @@ export function registerAlertTriageTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ alertId, alert: alertJson }) => {
-      const alert = JSON.parse(alertJson);
-      const context = await getAlertContext(alertId, alert);
+      const alert = JSON.parse(alertJson) as SecurityAlert;
+      const context = await alertsService.getAlertContext(alertId, alert);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(context) }],
       };
@@ -145,7 +155,7 @@ export function registerAlertTriageTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ alertId }) => {
-      await acknowledgeAlert(alertId);
+      await alertsService.acknowledgeAlert(alertId);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ success: true, alertId }) }],
       };
@@ -164,7 +174,7 @@ export function registerAlertTriageTools(server: McpServer) {
       _meta: { ui: {} },
     },
     async ({ alertIds }) => {
-      const result = await acknowledgeAlerts(alertIds);
+      const result = await alertsService.acknowledgeAlerts(alertIds);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],
       };
