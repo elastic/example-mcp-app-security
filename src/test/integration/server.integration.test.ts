@@ -597,16 +597,69 @@ describe("MCP server integration (in-process Client + Server)", () => {
   });
 
   describe("startup", () => {
-    it("crashes with a clear error when no cluster config is set", () => {
-      // `createCredentialClient()` reads `process.env` at call time, not at
-      // import time, so we don't need to re-import the module here.
-      const previousJson = process.env.CLUSTERS_JSON;
-      delete process.env.CLUSTERS_JSON;
+    /**
+     * `createCredentialClient()` reads `process.env` at call time (not at
+     * import time), so each scenario only needs to swap the env var around
+     * the `createServer()` call.
+     */
+    function withClustersJson(
+      raw: string | undefined,
+      run: () => void
+    ): void {
+      const previous = process.env.CLUSTERS_JSON;
+      if (raw === undefined) delete process.env.CLUSTERS_JSON;
+      else process.env.CLUSTERS_JSON = raw;
       try {
-        expect(() => createServer()).toThrowError(/No clusters configured/);
+        run();
       } finally {
-        process.env.CLUSTERS_JSON = previousJson;
+        process.env.CLUSTERS_JSON = previous;
       }
+    }
+
+    it("crashes with a clear error when no cluster config is set", () => {
+      withClustersJson(undefined, () => {
+        expect(() => createServer()).toThrowError(/No clusters configured/);
+      });
     });
+
+    it("crashes when CLUSTERS_JSON is an empty array", () => {
+      withClustersJson("[]", () => {
+        expect(() => createServer()).toThrowError(
+          /at least one cluster is required/
+        );
+      });
+    });
+
+    it("crashes when CLUSTERS_JSON is malformed JSON", () => {
+      withClustersJson("{not json", () => {
+        expect(() => createServer()).toThrowError(
+          /CLUSTERS_JSON: invalid JSON/
+        );
+      });
+    });
+
+    it.each([
+      "name",
+      "elasticsearchUrl",
+      "kibanaUrl",
+      "elasticsearchApiKey",
+    ])(
+      "crashes when CLUSTERS_JSON is missing the required `%s` property",
+      (field) => {
+        const cluster: Record<string, unknown> = {
+          name: "primary",
+          elasticsearchUrl: ES_BASE_URL,
+          kibanaUrl: KIBANA_BASE_URL,
+          elasticsearchApiKey: "test-key",
+        };
+        delete cluster[field];
+
+        withClustersJson(JSON.stringify([cluster]), () => {
+          expect(() => createServer()).toThrowError(
+            new RegExp(`invalid clusters config[\\s\\S]*0\\.${field}`)
+          );
+        });
+      }
+    );
   });
 });

@@ -20,6 +20,26 @@ const ClusterSchema = z.object({
   elasticsearchApiKey: z.string().min(1),
 });
 
+/**
+ * The exact placeholder values shipped in our install templates
+ * (`.github/cursor-mcp-config.json`, `.env.example`, host setup docs). If a
+ * cluster still contains any of these, the user installed the server but
+ * never replaced the placeholders — fail loud at startup so they don't
+ * silently hit the first tool call against a fake hostname.
+ *
+ * Hostnames are matched as substrings of the URL so trailing paths /
+ * trailing slashes don't matter; API keys are matched case-insensitively
+ * against the full string.
+ */
+const PLACEHOLDER_URL_FRAGMENTS: readonly string[] = [
+  "your-cluster.es.cloud.example.com",
+  "your-cluster.kb.cloud.example.com",
+];
+const PLACEHOLDER_API_KEYS: readonly string[] = [
+  "your-api-key",
+  "your-elasticsearch-api-key",
+];
+
 const ClustersConfigSchema = z
   .array(ClusterSchema)
   .min(1, "at least one cluster is required")
@@ -34,6 +54,31 @@ const ClustersConfigSchema = z
         });
       }
       seen.add(c.name);
+
+      if (PLACEHOLDER_URL_FRAGMENTS.some((p) => c.elasticsearchUrl.includes(p))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [i, "elasticsearchUrl"],
+          message:
+            "looks like an unmodified placeholder — replace with your real Elasticsearch URL",
+        });
+      }
+      if (PLACEHOLDER_URL_FRAGMENTS.some((p) => c.kibanaUrl.includes(p))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [i, "kibanaUrl"],
+          message:
+            "looks like an unmodified placeholder — replace with your real Kibana URL",
+        });
+      }
+      if (PLACEHOLDER_API_KEYS.includes(c.elasticsearchApiKey.toLowerCase())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [i, "elasticsearchApiKey"],
+          message:
+            "looks like an unmodified placeholder — replace with your real Elasticsearch API key",
+        });
+      }
     });
   });
 
@@ -49,9 +94,39 @@ interface ParsedClusters {
 
 const stripTrailingSlash = (url: string): string => url.replace(/\/$/, "");
 
+/**
+ * Detect the "all-empty placeholder" shape produced by the Claude Desktop
+ * (.mcpb) install dialog when the user picks a Clusters File and leaves the
+ * inline single-cluster fields blank.
+ *
+ * The manifest's env templating substitutes empty strings for unset
+ * `user_config` values, yielding e.g. `[{"name":"primary",
+ * "elasticsearchUrl":"","kibanaUrl":"","elasticsearchApiKey":""}]`. We treat
+ * that as "the user didn't fill in inline credentials" rather than a
+ * malformed config.
+ */
+function isEmptyTemplatePlaceholder(raw: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return false;
+  return parsed.every(
+    (c) =>
+      c !== null &&
+      typeof c === "object" &&
+      ((c as Record<string, unknown>).elasticsearchUrl ?? "") === "" &&
+      ((c as Record<string, unknown>).kibanaUrl ?? "") === "" &&
+      ((c as Record<string, unknown>).elasticsearchApiKey ?? "") === ""
+  );
+}
+
 function readSource(): RawSource {
   const file = process.env.CLUSTERS_FILE?.trim();
-  const json = process.env.CLUSTERS_JSON?.trim();
+  const rawJson = process.env.CLUSTERS_JSON?.trim();
+  const json = rawJson && !isEmptyTemplatePlaceholder(rawJson) ? rawJson : undefined;
 
   if (file && json) {
     console.warn(
@@ -72,7 +147,10 @@ function readSource(): RawSource {
     return { raw: json, source: "CLUSTERS_JSON" };
   }
   throw new Error(
-    "No clusters configured. Set CLUSTERS_JSON or CLUSTERS_FILE in your MCP config."
+    "No clusters configured. Either point CLUSTERS_FILE at a JSON file " +
+      "describing your cluster(s), or set CLUSTERS_JSON to an inline JSON " +
+      "array. In the Claude Desktop install dialog, pick a Clusters File or " +
+      "fill in the Elasticsearch URL, Kibana URL, and API key fields."
   );
 }
 

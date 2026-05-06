@@ -25,9 +25,8 @@
         "--stdio"
       ],
       "env": {
-        "ELASTICSEARCH_URL": "${user_config.elasticsearch_url}",
-        "ELASTICSEARCH_API_KEY": "${user_config.elasticsearch_api_key}",
-        "KIBANA_URL": "${user_config.kibana_url}"
+        "CLUSTERS_FILE": "${user_config.clusters_file}",
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"${user_config.elasticsearch_url}\",\"kibanaUrl\":\"${user_config.kibana_url}\",\"elasticsearchApiKey\":\"${user_config.elasticsearch_api_key}\"}]"
       }
     }
   },
@@ -63,26 +62,39 @@
   ],
   "tools_generated": true,
   "user_config": {
+    "clusters_file": {
+      "type": "file",
+      "title": "Clusters File (multi-cluster setups)",
+      "description": "Pick a JSON file describing one or more clusters. Use this to connect to multiple clusters. If set, the inline fields below are ignored. See README for the file format.",
+      "required": false
+    },
     "elasticsearch_url": {
       "type": "string",
-      "title": "Elasticsearch URL",
-      "description": "Elasticsearch URL (e.g. https://your-cluster.es.cloud.example.com)",
-      "required": true,
+      "title": "Elasticsearch URL (single-cluster setup)",
+      "description": "Elasticsearch URL (e.g. https://your-cluster.es.cloud.example.com). Leave blank if you picked a Clusters File above.",
+      "required": false,
       "sensitive": false
     },
     "elasticsearch_api_key": {
       "type": "string",
-      "title": "Elasticsearch API Key",
-      "description": "API key for Elasticsearch authentication",
-      "required": true,
+      "title": "Elasticsearch API Key (single-cluster setup)",
+      "description": "API key for Elasticsearch authentication. Leave blank if you picked a Clusters File above.",
+      "required": false,
       "sensitive": true
     },
     "kibana_url": {
       "type": "string",
-      "title": "Kibana URL",
-      "description": "Kibana URL (e.g. https://your-cluster.kb.cloud.example.com)",
-      "required": true,
+      "title": "Kibana URL (single-cluster setup)",
+      "description": "Kibana URL (e.g. https://your-cluster.kb.cloud.example.com). Leave blank if you picked a Clusters File above.",
+      "required": false,
       "sensitive": false
+    },
+    "configuration_acknowledged": {
+      "type": "boolean",
+      "title": "I have configured my cluster(s) above",
+      "description": "Tick this box once you've EITHER picked a Clusters File OR filled in the Elasticsearch URL, Kibana URL, and API key fields above.",
+      "required": true,
+      "default": false
     }
   },
   "keywords": [

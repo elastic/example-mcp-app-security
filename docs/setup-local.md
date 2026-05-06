@@ -7,10 +7,9 @@ Build from source and run the MCP server on your machine.
 - **Node.js 22+**
 - **Elasticsearch 8.x or 9.x** with Security enabled
 - **Kibana 8.x or 9.x** (for cases, rules, and attack discovery)
-- **`ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY`**
-- **`KIBANA_URL`**
+- One of `CLUSTERS_JSON` or `CLUSTERS_FILE` (see [Cluster configuration](#cluster-configuration) below)
 
-You need both service URLs plus a single Elasticsearch API key for full functionality.
+You need both service URLs plus a single Elasticsearch API key per cluster for full functionality.
 
 ## Creating an API key
 
@@ -21,7 +20,52 @@ You need an Elasticsearch API key with sufficient privileges for the operations 
 
 For a quick start, a key with the `superuser` role works for all tools. For production, scope the key to the minimum required privileges.
 
-Kibana API keys and Elasticsearch API keys are the same underlying credential type. This project uses `ELASTICSEARCH_API_KEY` for both Elasticsearch and Kibana requests, so you only need to configure one API key value.
+Kibana API keys and Elasticsearch API keys are the same underlying credential type. This project uses each cluster's `elasticsearchApiKey` for both Elasticsearch and Kibana requests, so you only need to configure one API key value per cluster.
+
+## Cluster configuration
+
+The server reads its cluster list from one of:
+
+- `CLUSTERS_JSON` — a JSON-encoded array passed inline.
+- `CLUSTERS_FILE` — the absolute path to a JSON file with the same shape. Wins if both are set.
+
+Each cluster needs a unique `name`. The first entry is used as the default until per-tool cluster selection lands.
+
+### Single cluster
+
+```json
+[
+  {
+    "name": "primary",
+    "elasticsearchUrl": "https://your-cluster.es.cloud.example.com",
+    "kibanaUrl": "https://your-cluster.kb.cloud.example.com",
+    "elasticsearchApiKey": "your-elasticsearch-api-key"
+  }
+]
+```
+
+### Multiple clusters
+
+Same shape, more entries. The first entry (`prod-eu` below) is the default.
+
+```json
+[
+  {
+    "name": "prod-eu",
+    "elasticsearchUrl": "https://prod-eu.es.cloud.example.com",
+    "kibanaUrl": "https://prod-eu.kb.cloud.example.com",
+    "elasticsearchApiKey": "your-prod-eu-api-key"
+  },
+  {
+    "name": "prod-us",
+    "elasticsearchUrl": "https://prod-us.es.cloud.example.com",
+    "kibanaUrl": "https://prod-us.kb.cloud.example.com",
+    "elasticsearchApiKey": "your-prod-us-api-key"
+  }
+]
+```
+
+The config is validated at startup — bad JSON, missing fields, duplicate cluster names, or unmodified placeholder URLs/keys fail fast.
 
 ## Steps
 
@@ -33,7 +77,7 @@ npm install
 
 # Configure
 cp .env.example .env
-# Edit .env with your Elasticsearch URL, Kibana URL, and Elasticsearch API key
+# Edit .env and set CLUSTERS_JSON (or CLUSTERS_FILE) for your cluster(s)
 
 # Build
 npm run build

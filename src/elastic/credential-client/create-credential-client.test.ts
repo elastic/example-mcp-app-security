@@ -48,6 +48,55 @@ describe("createCredentialClient", () => {
   describe("source resolution", () => {
     it("throws when neither CLUSTERS_FILE nor CLUSTERS_JSON is set", () => {
       expect(() => createCredentialClient()).toThrow(
+        /No clusters configured.*pick a Clusters File or/s
+      );
+    });
+
+    it("treats an empty CLUSTERS_FILE (template substitution) as unset", () => {
+      process.env.CLUSTERS_FILE = "";
+      setClustersJson([validCluster()]);
+
+      const client = createCredentialClient();
+      expect(client.defaultName()).toBe("primary");
+    });
+
+    it("treats the .mcpb empty-template CLUSTERS_JSON as unset and falls through to CLUSTERS_FILE", () => {
+      const dir = mkdtempSync(join(tmpdir(), "creds-test-"));
+      try {
+        const file = join(dir, "clusters.json");
+        writeFileSync(file, JSON.stringify([validCluster({ name: "from-file" })]));
+        process.env.CLUSTERS_FILE = file;
+        process.env.CLUSTERS_JSON = JSON.stringify([
+          {
+            name: "primary",
+            elasticsearchUrl: "",
+            kibanaUrl: "",
+            elasticsearchApiKey: "",
+          },
+        ]);
+
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        const client = createCredentialClient();
+        expect(client.defaultName()).toBe("from-file");
+        // Empty placeholder should not trigger the "both are set" warning.
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("throws the friendly no-config error when only the empty-template CLUSTERS_JSON is set", () => {
+      process.env.CLUSTERS_JSON = JSON.stringify([
+        {
+          name: "primary",
+          elasticsearchUrl: "",
+          kibanaUrl: "",
+          elasticsearchApiKey: "",
+        },
+      ]);
+
+      expect(() => createCredentialClient()).toThrow(
         /No clusters configured/
       );
     });
@@ -122,6 +171,77 @@ describe("createCredentialClient", () => {
       expect(() => createCredentialClient()).toThrow(
         /invalid clusters config/
       );
+    });
+
+    it.each([
+      ["name"],
+      ["elasticsearchUrl"],
+      ["kibanaUrl"],
+      ["elasticsearchApiKey"],
+    ])("rejects clusters missing the required `%s` property", (field) => {
+      const cluster = validCluster() as Record<string, unknown>;
+      delete cluster[field];
+      setClustersJson([cluster]);
+
+      expect(() => createCredentialClient()).toThrow(
+        new RegExp(`invalid clusters config[\\s\\S]*0\\.${field}`)
+      );
+    });
+
+    it("rejects when the JSON root is not an array", () => {
+      setClustersJson({ name: "primary" } as object);
+      expect(() => createCredentialClient()).toThrow(
+        /invalid clusters config/
+      );
+    });
+
+    it("rejects unedited example placeholder URLs and API key from the install template", () => {
+      setClustersJson([
+        {
+          name: "primary",
+          elasticsearchUrl: "https://your-cluster.es.cloud.example.com",
+          kibanaUrl: "https://your-cluster.kb.cloud.example.com",
+          elasticsearchApiKey: "your-api-key",
+        },
+      ]);
+
+      expect(() => createCredentialClient()).toThrow(
+        /elasticsearchUrl[\s\S]*placeholder[\s\S]*kibanaUrl[\s\S]*placeholder[\s\S]*elasticsearchApiKey[\s\S]*placeholder/
+      );
+    });
+
+    it("rejects the alternative `your-elasticsearch-api-key` placeholder", () => {
+      setClustersJson([
+        validCluster({ elasticsearchApiKey: "your-elasticsearch-api-key" }),
+      ]);
+
+      expect(() => createCredentialClient()).toThrow(
+        /elasticsearchApiKey[\s\S]*placeholder/
+      );
+    });
+
+    it("rejects placeholder URL with a trailing path or slash", () => {
+      setClustersJson([
+        validCluster({
+          elasticsearchUrl: "https://your-cluster.es.cloud.example.com/",
+        }),
+      ]);
+
+      expect(() => createCredentialClient()).toThrow(
+        /elasticsearchUrl[\s\S]*placeholder/
+      );
+    });
+
+    it("accepts a real-looking config that just happens to have `your` in it", () => {
+      setClustersJson([
+        validCluster({
+          elasticsearchUrl: "https://your-real-cluster.es.cloud.io",
+          kibanaUrl: "https://your-real-cluster.kb.cloud.io",
+          elasticsearchApiKey: "abcdef-not-a-placeholder",
+        }),
+      ]);
+
+      expect(() => createCredentialClient()).not.toThrow();
     });
 
     it("rejects duplicate cluster names", () => {

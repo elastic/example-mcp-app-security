@@ -16,7 +16,7 @@ git clone https://github.com/elastic/example-mcp-app-security.git
 cd example-mcp-app-security
 npm install
 cp .env.example .env
-# Edit .env with your Elasticsearch/Kibana URLs and API keys
+# Edit .env and set CLUSTERS_JSON (or CLUSTERS_FILE) for your cluster(s) — see docs/setup-local.md#cluster-configuration
 ```
 
 ## Development
@@ -75,6 +75,8 @@ The resulting file is `example-mcp-app-security.mcpb` in the repo root.
 
 - `manifest.json` — MCPB spec v0.3 manifest declaring server config, user-configurable credentials, tool metadata, and compatibility
 - `.mcpbignore` — controls which files are excluded from the bundle (keeps it lean by only including the esbuild bundle + views)
+
+> **About the `configuration_acknowledged` user-config field:** this is a required boolean checkbox that exists purely to force Claude Desktop's install dialog to appear. The MCPB spec doesn't support conditional/grouped/either-or required fields ([modelcontextprotocol/mcpb#196](https://github.com/modelcontextprotocol/mcpb/issues/196), closed `not_planned`), and without at least one `required: true` field the dialog is skipped entirely — the server would launch with empty credentials. The field is **not** read by the server and is intentionally not referenced in `mcp_config.env`; runtime credential handling lives in `src/elastic/credential-client/create-credential-client.ts`. See [docs/setup-claude-desktop.md](./docs/setup-claude-desktop.md) for the user-facing explanation.
 
 ### npm Tarball (for VS Code / npx)
 
