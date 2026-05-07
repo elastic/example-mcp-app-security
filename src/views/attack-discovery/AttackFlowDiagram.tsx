@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import type { AttackDiscoveryFinding, DiscoveryDetail } from "../../shared/types";
 
 const TACTIC_ORDER = [
@@ -252,6 +252,38 @@ function positionTree(
 
 export function AttackFlowDiagram({ discovery, detail }: Props) {
   const [scale, setScale] = useState<"compact" | "default" | "expand">("default");
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const panRef = useRef<{ startX: number; startY: number; left: number; top: number } | null>(null);
+
+  // Click-and-drag panning on the scroll container. Without this users have
+  // to grab the (thin) scrollbars to navigate the graph, which is fiddly.
+  const onPanDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // Ignore drags that originate from a card so they remain interactive.
+    if ((e.target as HTMLElement).closest(".ag-card")) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    panRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      left: el.scrollLeft,
+      top: el.scrollTop,
+    };
+    el.setPointerCapture(e.pointerId);
+  }, []);
+
+  const onPanMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const state = panRef.current;
+    const el = scrollRef.current;
+    if (!state || !el) return;
+    el.scrollLeft = state.left - (e.clientX - state.startX);
+    el.scrollTop = state.top - (e.clientY - state.startY);
+  }, []);
+
+  const onPanUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (el && el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    panRef.current = null;
+  }, []);
 
   const dims = {
     compact:  { cardW: 130, cardH: 50, layerGap: 48, nodeGap: 12 },
@@ -326,7 +358,14 @@ export function AttackFlowDiagram({ discovery, detail }: Props) {
         )}
       </div>
 
-      <div className="ag-scroll">
+      <div
+        ref={scrollRef}
+        className="ag-scroll"
+        onPointerDown={onPanDown}
+        onPointerMove={onPanMove}
+        onPointerUp={onPanUp}
+        onPointerCancel={onPanUp}
+      >
         <div className="ag-canvas" style={{ width: totalW, height: totalH }}>
           <svg
             className="ag-edges"

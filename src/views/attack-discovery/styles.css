@@ -5,77 +5,15 @@
  * 2.0.
  */
 
-@import "../../shared/base.css";
+@import "../../shared/components/base.css";
 
-/* ─── Shell ─── */
+/* Attack-discovery-only overrides. The generic shell, header, search input,
+ * query pill, two-pane body, list subheader, dropdowns, toggle switch, KPI
+ * strip, severity chip/donut, group card, detail pane, and loading/empty
+ * states all live in src/shared/components and are imported via the App
+ * component itself. */
 
-.discoveries-app {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background: #1f1f1e;
-  color: #e6e6e5;
-  font-family: var(--font-sans, "Fira Sans", system-ui, sans-serif);
-  /* 1px neutral stroke around every view for a consistent picture-frame look
-     — matches .rules-app, .cases-app, .triage-app. */
-  border: 1px solid #474745;
-}
-
-/* ─── Header ───
- * Shared visual language with detection-rules / alert-triage so the page
- * chrome (title, glyph, search field, icon buttons) is identical across the
- * suite. The only view-specific content is the confidence-tabs strip.
- */
-
-.discoveries-header {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 16px;
-  background: #1f1f1e;
-  border-bottom: 1px solid #474745;
-  flex-shrink: 0;
-  z-index: 10;
-}
-
-.discoveries-header-left {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.discoveries-header-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.discoveries-header-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  color: #e6e6e5;
-  flex-shrink: 0;
-}
-
-.discoveries-header-glyph svg { display: block; }
-
-.discoveries-header-title {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 16px;
-  color: #e6e6e5;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
+/* ─── Confidence tabs (header left-extras) ─── */
 
 .discoveries-confidence-tabs {
   display: flex;
@@ -129,208 +67,27 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* Compact confidence dropdown — shown in place of the tabs on narrow screens.
-   Mirrors detection-rules' rules-status-dropdown so the header interaction is
-   consistent across every view. */
-.discoveries-confidence-dropdown {
-  position: relative;
-  display: none;
-}
+/* On wider viewports the tabs are visible and the dropdown is hidden; on
+ * narrow viewports the tabs collapse and we show the Confidence dropdown
+ * (see header actions) instead. */
+.discoveries-confidence-dropdown-wrap { display: none; }
 
-.discoveries-confidence-dropdown-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: #262626;
-  border: 1px solid #474745;
-  border-radius: 7px;
-  color: #b9b9ae;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.discoveries-confidence-dropdown-trigger:hover {
-  border-color: #5a5a58;
-  color: #e6e6e5;
-}
-
-.discoveries-confidence-dropdown-value {
-  color: #ffffff;
-  font-weight: 400;
-}
-
-.discoveries-confidence-dropdown-trigger svg {
-  display: block;
-  flex-shrink: 0;
-}
-
-.discoveries-confidence-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  min-width: 200px;
-  padding: 4px 0;
-  background: #1f1f1e;
-  border: 1px solid #474745;
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-.discoveries-confidence-dropdown-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 8px 12px;
-  background: transparent;
-  border: none;
-  text-align: left;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  color: #b9b9ae;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.discoveries-confidence-dropdown-option:hover { background: #262626; color: #e6e6e5; }
-.discoveries-confidence-dropdown-option.active { color: #ffffff; }
-
-.discoveries-confidence-dropdown-option-count {
-  font-family: var(--font-mono, "Fira Mono", monospace);
-  font-size: 10.5px;
-  color: #817f78;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  flex-shrink: 0;
-}
-
-.discoveries-confidence-dropdown-option.active .discoveries-confidence-dropdown-option-count {
-  color: #b9b9ae;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.discoveries-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.discoveries-header-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 280px;
-  max-width: 100%;
-  padding: 10px 24px 10px 8px;
-  background: #262626;
-  border: 1px solid #474745;
-  border-radius: 6px;
-  transition: border-color 0.15s;
-}
-
-.discoveries-header-search:focus-within { border-color: var(--accent, #5c7cfa); }
-.discoveries-header-search svg { color: #817f78; flex-shrink: 0; }
-
-.discoveries-header-search input {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  color: #e6e6e5;
-}
-
-.discoveries-header-search input::placeholder { color: #817f78; }
-
-.discoveries-header-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: #817f78;
-  cursor: pointer;
-  transition: color 0.15s;
-}
-.discoveries-header-icon-btn:hover { color: #e6e6e5; }
-
-/* Narrow viewport behavior, mirrors detection-rules. */
 @media (max-width: 1100px) {
-  .discoveries-header-search { width: 200px; }
-  /* Confidence labels are wordier than detection-rules' status labels
-     ("High confidence" vs "Enabled"), so the tab strip needs to collapse
-     into a dropdown sooner to avoid overflowing the search input. */
   .discoveries-confidence-tabs { display: none; }
-  .discoveries-confidence-dropdown { display: inline-block; }
-}
-@media (max-width: 900px) {
-  .discoveries-header { flex-wrap: wrap; gap: 12px; }
-  .discoveries-header-search { width: 180px; }
-}
-@media (max-width: 640px) {
-  /* Mirrors detection-rules: tighten header padding and shrink the title
-     on narrow viewports so it stops crashing into the adjacent controls. */
-  .discoveries-header { padding: 12px; }
-  .discoveries-header-title { font-size: 16px; }
+  .discoveries-confidence-dropdown-wrap { display: inline-block; }
 }
 
-/* ─── Query pill ─── */
+/* ─── KPI strip — tighter grid for 4 tiles ─── */
 
-.query-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 4px 3px 10px;
-  background: rgba(240, 184, 64, 0.08);
-  border: 1px solid rgba(240, 184, 64, 0.25);
-  border-radius: 999px;
-  color: #f0b840;
-  font-family: var(--font-mono, "Fira Mono", monospace);
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.discoveries-kpi-strip {
+  /* Override default 3-tile grid: attack-discovery has 4 number tiles. */
+  grid-template-columns: repeat(4, 1fr);
 }
 
-.query-pill button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  color: currentColor;
-  cursor: pointer;
-  border-radius: 50%;
-  opacity: 0.8;
-  transition: background 0.15s, opacity 0.15s;
-}
-
-.query-pill button:hover {
-  background: rgba(240, 184, 64, 0.2);
-  opacity: 1;
+@media (min-width: 1100px) {
+  .discoveries-kpi-strip {
+    grid-template-columns: minmax(260px, 1.4fr) repeat(4, 1fr);
+  }
 }
 
 /* ─── Generation banners ─── */
@@ -409,586 +166,7 @@
   color: #e6e6e5;
 }
 
-/* ─── Body ─── */
-
-.discoveries-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* ─── List pane ─── */
-
-.discoveries-list-pane {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  background: #1f1f1e;
-  overflow-y: auto;
-}
-
-.discoveries-list-pane.narrow {
-  flex: 0 0 420px;
-  max-width: 420px;
-  border-right: 1px solid #30302f;
-}
-
-.discoveries-list-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 12px 20px 0;
-  padding: 5px 10px;
-  background: transparent;
-  border: 1px solid #30302f;
-  border-radius: 6px;
-  color: #adaca1;
-  font-size: 11.5px;
-  font-family: inherit;
-  cursor: pointer;
-  align-self: flex-start;
-  transition: background 0.15s, color 0.15s;
-}
-
-.discoveries-list-back:hover {
-  background: #262626;
-  color: #e6e6e5;
-}
-
-/* ─── KPI strip ───
- * Matches the flat grid layout used in detection-rules and case-management so
- * the top-of-list widgets are visually consistent across every view. Base grid
- * is 4 number tiles across with the severity section wrapping to a full-width
- * row above on narrow screens, and sitting inline on the same row on wide.
- */
-
-.discoveries-kpi-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  background: #1f1f1e;
-  border-bottom: 1px solid #474745;
-  animation: fadeIn 0.3s ease-out;
-  flex-shrink: 0;
-}
-
-/* Narrow default: severity section spans the full row above the KPI tiles. */
-.discoveries-kpi-strip > .summary-section {
-  grid-column: 1 / -1;
-  border-right: none;
-  border-bottom: 1px solid #474745;
-}
-
-/* Wide: severity sits on the same row as the KPI tiles. */
-@media (min-width: 1100px) {
-  .discoveries-kpi-strip {
-    grid-template-columns: minmax(260px, 1.4fr) repeat(4, 1fr);
-  }
-  .discoveries-kpi-strip > .summary-section {
-    grid-column: auto;
-    border-right: 1px solid #474745;
-    border-bottom: none;
-  }
-}
-
-.kpi-tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 16px 18px;
-  border-right: 1px solid #474745;
-  min-width: 0;
-  min-height: 92px;
-  /* Each tile is its own inline-size container so the title and value
-   * typography can react to the tile's actual rendered width, not just the
-   * viewport. Detection-rules has 3 tiles per strip, attack-discovery has 4,
-   * so at the same viewport the attack-discovery tiles are ~25% narrower and
-   * would overflow their labels without this. */
-  container-type: inline-size;
-  container-name: discoverytile;
-}
-
-.kpi-tile:last-child {
-  border-right: none;
-}
-
-.kpi-tile-label {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  line-height: 14px;
-  color: #817f78;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Tile under ~180px wide: compact label/value treatment so wordier labels
-   like "Active attacks", "MITRE tactics", "Entities at risk" still fit. */
-@container discoverytile (max-width: 180px) {
-  .kpi-tile-label {
-    font-size: 10px;
-    letter-spacing: 0.3px;
-  }
-  .kpi-tile-value {
-    font-size: 22px;
-    line-height: 26px;
-  }
-  .kpi-tile-meta-inline {
-    font-size: 10px;
-  }
-}
-
-/* Tile under ~140px wide: go to the smallest legible size and drop the
-   secondary meta line so the primary label/value dominates. */
-@container discoverytile (max-width: 140px) {
-  .kpi-tile {
-    padding: 12px 10px;
-    min-height: 78px;
-    gap: 4px;
-  }
-  .kpi-tile-label {
-    font-size: 9px;
-    letter-spacing: 0.2px;
-  }
-  .kpi-tile-value {
-    font-size: 18px;
-    line-height: 22px;
-  }
-  .kpi-tile-meta-inline {
-    display: none;
-  }
-}
-
-.kpi-tile-value {
-  font-family: var(--font-mono);
-  font-size: 26px;
-  font-weight: 500;
-  line-height: 30px;
-  color: #ffffff;
-  font-variant-numeric: tabular-nums;
-}
-
-.kpi-tile-value-row {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.kpi-tile-meta-inline {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 14px;
-  color: #b9b9ae;
-  white-space: nowrap;
-}
-
-.kpi-tile-accent-critical { box-shadow: inset 3px 0 0 0 var(--severity-critical); }
-
-/* Severity section — shared visual language with alert-triage / detection-rules */
-
-.summary-section {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px;
-  background: #1f1f1e;
-}
-
-.summary-section-title {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16px;
-  color: #817f78;
-  letter-spacing: 0;
-  text-transform: none;
-  /* Reset the global shared/base.css rule that adds a divider line under
-     the title — detection-rules and alert-triage don't import base.css so
-     they never picked it up. */
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
-/* Severity donut + legend (shared with alert-triage / detection-rules) */
-
-.severity-donut {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 8px;
-  width: 100%;
-}
-
-.severity-donut-svg {
-  flex-shrink: 0;
-  display: block;
-}
-
-.severity-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.severity-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  height: 16px;
-}
-
-.severity-legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.severity-legend-dot.sev-critical { background: var(--severity-critical); }
-.severity-legend-dot.sev-high     { background: var(--severity-high); }
-.severity-legend-dot.sev-medium   { background: var(--severity-medium); }
-.severity-legend-dot.sev-low      { background: var(--severity-low); }
-
-.severity-legend-label {
-  flex: 1 1 0;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: #b9b9ae;
-}
-
-.severity-legend-value {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: #b9b9ae;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  min-width: 20px;
-}
-
-/* Very small viewports: thin the critical accent stripe so the narrower
-   tile padding doesn't make it feel too chunky. The rest of the tile
-   responsive typography is driven by the @container rules on .kpi-tile
-   above, which react to the actual tile width rather than the viewport. */
-@media (max-width: 560px) {
-  .kpi-tile-accent-critical {
-    box-shadow: inset 2px 0 0 0 currentColor;
-  }
-}
-
-/* ─── Subheader ─── */
-
-.discoveries-list-subheader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 20px 8px;
-  flex-shrink: 0;
-}
-
-.discoveries-list-subheader-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.discoveries-list-subheader-count {
-  font-size: 11.5px;
-  color: #817f78;
-}
-
-.discoveries-list-subheader-count strong {
-  color: #e6e6e5;
-  font-weight: 600;
-}
-
-.discoveries-list-subheader-sort {
-  position: relative;
-}
-
-.discoveries-list-subheader-sort-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  background: transparent;
-  border: 1px solid #30302f;
-  border-radius: 6px;
-  color: #adaca1;
-  font-size: 11.5px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.discoveries-list-subheader-sort-trigger:hover {
-  background: #262626;
-  color: #e6e6e5;
-}
-
-.discoveries-list-subheader-sort-value {
-  color: #e6e6e5;
-  font-weight: 500;
-}
-
-.discoveries-list-subheader-sort-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  min-width: 180px;
-  background: #262626;
-  border: 1px solid #474745;
-  border-radius: 8px;
-  padding: 4px;
-  z-index: 50;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.discoveries-list-subheader-sort-option {
-  display: flex;
-  align-items: center;
-  padding: 6px 10px;
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  color: #adaca1;
-  font-size: 11.5px;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s;
-}
-
-.discoveries-list-subheader-sort-option:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #e6e6e5;
-}
-
-.discoveries-list-subheader-sort-option.active {
-  background: rgba(92, 124, 250, 0.1);
-  color: #e6e6e5;
-}
-
-/* Right-anchor the group-by menu so it doesn't spill past the panel edge */
-.discoveries-list-subheader-sort-menu.discoveries-list-subheader-sort-menu-right {
-  left: auto;
-  right: 0;
-}
-
-/* ─── Group-by cards ────────────────────────────────────────────────────── */
-
-.group-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  width: 100%;
-  padding: 18px 20px;
-  background: #262626;
-  border: 1px solid #474745;
-  border-radius: 0;
-  color: #e6e6e5;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-  margin-bottom: 8px;
-}
-
-.group-card:hover {
-  background: #2b2b2a;
-  border-color: #5c5c58;
-}
-
-.group-card:focus-visible {
-  outline: 2px solid #5c7cfa;
-  outline-offset: -2px;
-}
-
-.group-card.expanded {
-  margin-bottom: 0;
-}
-
-.group-card.sev-low     { box-shadow: inset 3px 0 0 0 #40c790; }
-.group-card.sev-medium  { box-shadow: inset 3px 0 0 0 #f0b840; }
-.group-card.sev-high    { box-shadow: inset 3px 0 0 0 #ff8a50; }
-.group-card.sev-critical{ box-shadow: inset 3px 0 0 0 #f04040; }
-
-.group-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.group-card-identity {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.group-card-name {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 20px;
-  color: #e6e6e5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.group-card-subtitle {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  color: #817f78;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.group-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-shrink: 0;
-}
-
-.group-card-count {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: #817f78;
-}
-
-.group-card-count-value {
-  color: #5c7cfa;
-  font-weight: 600;
-  margin-left: 4px;
-}
-
-.group-card-chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #b9b9ae;
-  transition: transform 0.15s ease;
-}
-
-.group-card-chevron.open {
-  transform: rotate(180deg);
-}
-
-.group-card-sev .sev-chip-dot { display: none; }
-
-.group-children {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin-bottom: 8px;
-  background: #1c1c1b;
-  border: 1px solid #474745;
-  border-top: 0;
-}
-
-.group-children .discovery-card {
-  border-left: 0;
-  border-right: 0;
-  border-top: 0;
-  border-radius: 0;
-  margin: 0;
-}
-
-.group-children .discovery-card:last-child {
-  border-bottom: 0;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.discoveries-list-subheader-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.discoveries-list-subheader-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  color: #adaca1;
-}
-
-.discoveries-list-subheader-toggle-label {
-  font-weight: 500;
-}
-
-.discoveries-list-subheader-groupby {
-  font-size: 11.5px;
-  color: #817f78;
-}
-
-/* ─── Toggle switch ─── */
-
-.toggle-switch {
-  display: inline-flex;
-  align-items: center;
-  width: 28px;
-  height: 16px;
-  padding: 2px;
-  background: #474745;
-  border: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.toggle-switch.on {
-  background: #5c7cfa;
-}
-
-.toggle-switch-thumb {
-  width: 12px;
-  height: 12px;
-  background: #e6e6e5;
-  border-radius: 50%;
-  transition: transform 0.15s;
-}
-
-.toggle-switch.on .toggle-switch-thumb {
-  transform: translateX(12px);
-}
-
-/* ─── List content ─── */
+/* ─── List content (cards container) ─── */
 
 .discoveries-list-content {
   display: flex;
@@ -998,9 +176,8 @@
   overflow: visible;
 }
 
-/* ─── Severity + Confidence chips ─── */
+/* ─── Confidence chip (no shared equivalent) ─── */
 
-.sev-chip,
 .conf-chip {
   display: inline-flex;
   align-items: center;
@@ -1015,22 +192,12 @@
   background: transparent;
 }
 
-.sev-chip-dot,
 .conf-chip-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-
-.sev-chip-critical { color: #f04040; border-color: rgba(240, 64, 64, 0.35); background: rgba(240, 64, 64, 0.08); }
-.sev-chip-critical .sev-chip-dot { background: #f04040; }
-.sev-chip-high { color: #ff8a50; border-color: rgba(255, 138, 80, 0.3); background: rgba(255, 138, 80, 0.08); }
-.sev-chip-high .sev-chip-dot { background: #ff8a50; }
-.sev-chip-medium { color: #f0b840; border-color: rgba(240, 184, 64, 0.3); background: rgba(240, 184, 64, 0.08); }
-.sev-chip-medium .sev-chip-dot { background: #f0b840; }
-.sev-chip-low { color: #40c790; border-color: rgba(64, 199, 144, 0.3); background: rgba(64, 199, 144, 0.08); }
-.sev-chip-low .sev-chip-dot { background: #40c790; }
 
 .conf-chip-high { color: #b07cfa; border-color: rgba(176, 124, 250, 0.3); background: rgba(176, 124, 250, 0.08); }
 .conf-chip-high .conf-chip-dot { background: #b07cfa; }
@@ -1129,9 +296,7 @@
   flex-shrink: 0;
 }
 
-.discovery-card-check:hover {
-  border-color: #b9b9ae;
-}
+.discovery-card-check:hover { border-color: #b9b9ae; }
 
 .discovery-card-check.checked {
   background: #5c7cfa;
@@ -1265,46 +430,37 @@
   margin-top: 6px;
 }
 
-/* ─── Detail pane ─── */
+/* ─── Group children container (rendered beneath shared GroupCard) ─── */
 
-.detail-pane {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 24px 28px 40px;
-  position: relative;
-  background: #1f1f1e;
+.group-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 8px;
+  background: #1c1c1b;
+  border: 1px solid #474745;
+  border-top: 0;
 }
 
-.detail-pane-close {
-  position: absolute;
-  top: 14px;
-  right: 18px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  color: #817f78;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  z-index: 5;
+.group-children .discovery-card {
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-radius: 0;
+  margin: 0;
 }
 
-.detail-pane-close:hover {
-  background: #262626;
-  color: #e6e6e5;
+.group-children .discovery-card:last-child {
+  border-bottom: 0;
 }
+
+/* ─── Detail pane (view-local layout inside shared DetailPane) ─── */
 
 .discovery-detail {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 960px;
+  padding: 24px;
 }
 
 .discovery-detail-top {
@@ -1312,12 +468,24 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  /* Leave room for the absolutely-positioned close button in the
+   * top-right corner of the shared DetailPane (top: 16px, right: 16px,
+   * 24px wide). */
+  padding-right: 36px;
 }
 
 .discovery-detail-top-chips {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* SeverityChip ships with `align-self: flex-start` so it sits at the top of
+ * tall card layouts. Inside the detail header and card tag rows we need it
+ * to vertically center alongside the Confidence chip and MITRE pill. */
+.discovery-detail-top-chips .sev-chip,
+.discovery-card-tags .sev-chip {
+  align-self: center;
 }
 
 .discovery-detail-action {
@@ -1337,6 +505,51 @@
 }
 
 .discovery-detail-action:hover { filter: brightness(1.1); }
+
+.take-action-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.take-action-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.take-action-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  z-index: 30;
+  min-width: 200px;
+  padding: 4px 0;
+  background: #1f1f1e;
+  border: 1px solid #474745;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.take-action-option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-family: var(--font-sans, "Fira Sans", system-ui, sans-serif);
+  font-size: 13px;
+  line-height: 16px;
+  color: #b9b9ae;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.take-action-option:hover {
+  background: #262626;
+  color: #e6e6e5;
+}
 
 .discovery-detail-head {
   display: flex;
@@ -1365,7 +578,7 @@
   line-height: 1.55;
 }
 
-/* ─── Facts strip ─── */
+/* ─── Facts strip (detail) ─── */
 
 .discovery-detail-facts {
   display: grid;
@@ -1415,7 +628,6 @@
   text-overflow: ellipsis;
 }
 
-/* Clickable entity values inside fact columns (hosts/users) */
 .discovery-detail-fact-entity {
   background: transparent;
   border: 0;
@@ -1442,11 +654,9 @@
   border-radius: 2px;
 }
 
-.discovery-detail-fact-sep {
-  color: #817f78;
-}
+.discovery-detail-fact-sep { color: #817f78; }
 
-/* ─── Tabs ─── */
+/* ─── Tabs (detail) ─── */
 
 .discovery-detail-tabs {
   display: flex;
@@ -1492,9 +702,7 @@
   font-weight: 500;
 }
 
-.discovery-detail-section {
-  padding: 8px 0;
-}
+.discovery-detail-section { padding: 8px 0; }
 
 .discovery-detail-description {
   font-size: 13px;
@@ -1549,7 +757,7 @@
   line-height: 1.55;
 }
 
-/* ─── Entity badges ─── */
+/* ─── Entity badges + flyout ─── */
 
 .entity-badge {
   display: inline-flex;
@@ -1606,8 +814,6 @@
   font-family: var(--font-mono, "Fira Mono", monospace);
   font-size: 11px;
 }
-
-/* ─── Entity flyout ─── */
 
 .entity-flyout {
   position: fixed;
@@ -1979,7 +1185,7 @@
   font-weight: 500;
 }
 
-/* ─── Fallback buttons ─── */
+/* ─── Buttons ─── */
 
 .btn {
   display: inline-flex;
@@ -2031,46 +1237,186 @@
   border-color: #0b64dd;
 }
 
-/* ─── Loading / empty ─── */
+/* ─── Attack Flow diagram (Attack Flow tab) ─── */
 
-.loading-state,
-.empty-state {
+.attack-graph {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.ag-controls {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 50px 20px;
-  color: #817f78;
-  font-size: 12.5px;
-  text-align: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #1c1c1b;
+  border: 1px solid #30302f;
+  border-radius: 8px;
 }
 
-.loading-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2.5px solid #30302f;
-  border-top-color: #5c7cfa;
+.ag-ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #262626;
+  border: 1px solid #474745;
+  border-radius: 6px;
+  color: #b9b9ae;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.ag-ctrl:hover {
+  background: #2b2b2a;
+  color: #e6e6e5;
+  border-color: #5a5a58;
+}
+
+.ag-ctrl.active {
+  background: rgba(92, 124, 250, 0.12);
+  color: #e6e6e5;
+  border-color: rgba(92, 124, 250, 0.45);
+}
+
+.ag-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 11px;
+  color: #adaca1;
+}
+
+.ag-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.ag-legend-dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.ag-scroll {
+  position: relative;
+  overflow: auto;
+  max-height: min(60vh, 640px);
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 18px 18px,
+    #161615;
+  border: 1px solid #30302f;
+  border-radius: 8px;
+  cursor: grab;
+  overscroll-behavior: contain;
 }
 
-/* ─── Entrance animations ─── */
+.ag-scroll:active { cursor: grabbing; }
 
-.animate-in {
-  opacity: 0;
-  transform: translateY(4px);
-  animation: fadeUp 0.25s ease-out forwards;
-  animation-delay: calc(var(--i, 0) * 20ms);
+.ag-canvas {
+  position: relative;
 }
 
-@keyframes fadeUp {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.ag-edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
+
+.ag-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #1f1f1e;
+  border: 1px solid var(--nc, #474745);
+  border-left-width: 3px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+  overflow: hidden;
+}
+
+.ag-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+}
+
+.ag-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ag-card-icon {
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ag-card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono, "Fira Mono", monospace);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.ag-card-title {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: #e6e6e5;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.ag-card-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9.5px;
+  color: #817f78;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ag-sev-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ag-sev-label { font-weight: 600; }

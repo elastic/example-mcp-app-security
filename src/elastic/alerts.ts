@@ -182,11 +182,10 @@ export async function getAlertContext(
 }
 
 export async function acknowledgeAlert(alertId: string): Promise<void> {
-  await esRequest(`/${ALERTS_INDEX}/_update/${alertId}`, {
-    body: {
-      doc: { "kibana.alert.workflow_status": "acknowledged" },
-    },
-  });
+  // The single-document `_update` API does not accept wildcard index patterns
+  // (`.alerts-security.alerts-*`), so we delegate to the bulk `_update_by_query`
+  // path which does. See https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
+  await acknowledgeAlerts([alertId]);
 }
 
 export async function acknowledgeAlerts(alertIds: string[]): Promise<{ updated: number }> {

@@ -35,11 +35,9 @@ const ExitFullscreenIcon = () => (
 );
 
 /**
- * Default state for the view. Seeds a realistic hunt scenario so the page
- * isn't empty on first load — the user sees a query, a populated results
- * table, and the investigation graph already expanded for the primary host.
- * The scenario matches the "domain-controller compromise" storyline used
- * across the fixtures (win-dc-01 + LSASS memory dump).
+ * Default state seeds a realistic ES|QL scenario on first load (results table).
+ * The investigation graph stays hidden until the user runs a query that returns
+ * rows and clicks entities, or uses "Example graph".
  */
 const DEFAULT_QUERY = `FROM logs-*
 | WHERE host.name == "win-dc-01"
@@ -66,27 +64,6 @@ const DEFAULT_RESULTS: EsqlResult = {
   ],
 };
 
-const DEFAULT_GRAPH_NODES: GNode[] = [
-  { id: "host:win-dc-01",          type: "host",    value: "win-dc-01",        expanded: true },
-  { id: "user:svc_backup",         type: "user",    value: "svc_backup",       expanded: true },
-  { id: "user:admin.backup",       type: "user",    value: "admin.backup" },
-  { id: "process:powershell.exe",  type: "process", value: "powershell.exe" },
-  { id: "process:procdump.exe",    type: "process", value: "procdump.exe" },
-  { id: "ip:185.220.101.42",       type: "ip",      value: "185.220.101.42" },
-  { id: "alert:al-1001",           type: "alert",   value: "LSASS memory dump" },
-  { id: "host:fs01",               type: "host",    value: "fs01" },
-];
-
-const DEFAULT_GRAPH_EDGES: GEdge[] = [
-  { source: "host:win-dc-01", target: "user:svc_backup",        label: "ran-as" },
-  { source: "host:win-dc-01", target: "user:admin.backup",      label: "ran-as" },
-  { source: "host:win-dc-01", target: "process:powershell.exe", label: "executed" },
-  { source: "host:win-dc-01", target: "process:procdump.exe",   label: "executed" },
-  { source: "host:win-dc-01", target: "ip:185.220.101.42",      label: "connected-to" },
-  { source: "host:win-dc-01", target: "alert:al-1001",          label: "triggered" },
-  { source: "user:svc_backup", target: "host:fs01",             label: "accessed" },
-];
-
 export function App() {
   const appRef = useRef<McpApp | null>(null);
   const [connected, setConnected] = useState(false);
@@ -97,9 +74,9 @@ export function App() {
   const [hasExecuted, setHasExecuted] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const [graphNodes, setGraphNodes] = useState<GNode[]>(DEFAULT_GRAPH_NODES);
-  const [graphEdges, setGraphEdges] = useState<GEdge[]>(DEFAULT_GRAPH_EDGES);
-  const [graphActive, setGraphActive] = useState(true);
+  const [graphNodes, setGraphNodes] = useState<GNode[]>([]);
+  const [graphEdges, setGraphEdges] = useState<GEdge[]>([]);
+  const [graphActive, setGraphActive] = useState(false);
   const [graphView, setGraphView] = useState<"card" | "force">("card");
   const [selectedNode, setSelectedNode] = useState<GNode | null>(null);
   const [nodeDetail, setNodeDetail] = useState<Record<string, unknown> | null>(null);
@@ -117,7 +94,16 @@ export function App() {
       if (text) {
         const data = JSON.parse(text) as { error?: string } & EsqlResult;
         if (data.error) setQueryError(data.error);
-        else setResults(data);
+        else {
+          setResults(data);
+          const rowCount = Array.isArray(data.values) ? data.values.length : 0;
+          if (rowCount === 0) {
+            setGraphNodes([]);
+            setGraphEdges([]);
+            setGraphActive(false);
+            setSelectedNode(null);
+          }
+        }
       }
     } catch (e) { setQueryError(e instanceof Error ? e.message : String(e)); }
     finally { setExecuting(false); }

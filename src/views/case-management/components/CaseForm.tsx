@@ -10,11 +10,12 @@ import { SeverityBadge } from "../../../shared/severity";
 
 interface CaseFormProps {
   onSubmit: (data: { title: string; description: string; tags: string; severity: string }) => void;
+  onCancel?: () => void;
 }
 
 const SEVERITIES = ["low", "medium", "high", "critical"] as const;
 
-export function CaseForm({ onSubmit }: CaseFormProps) {
+export function CaseForm({ onSubmit, onCancel }: Readonly<CaseFormProps>) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
@@ -27,71 +28,109 @@ export function CaseForm({ onSubmit }: CaseFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h2>Create security case</h2>
+    <form className="case-form" onSubmit={handleSubmit} noValidate>
+      <header className="case-form-header">
+        <h2 className="case-form-title">Create security case</h2>
+        <p className="case-form-subtitle">
+          Track an investigation, attach alerts, and collaborate with your team.
+        </p>
+      </header>
 
-      <div className="form-field">
-        <label htmlFor="case-title">Title</label>
-        <input
-          id="case-title"
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Short, actionable title"
-          required
-          autoComplete="off"
-        />
-      </div>
-
-      <div className="form-field">
-        <label htmlFor="case-desc">Description</label>
-        <textarea
-          id="case-desc"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Scope, affected assets, initial findings, links…"
-        />
-      </div>
-
-      <div className="form-field">
-        <span className="case-sev-label" id="case-sev-label">
-          Severity
-        </span>
-        <div
-          className="case-form-severity-row"
-          role="group"
-          aria-labelledby="case-sev-label"
-        >
-          {SEVERITIES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={`case-severity-option ${severity === s ? "active" : ""}`}
-              onClick={() => setSeverity(s)}
-            >
-              <SeverityBadge severity={s} />
-            </button>
-          ))}
+      <section className="case-form-section">
+        <div className="case-form-section-head">
+          <span className="case-form-step" aria-hidden="true">1</span>
+          <h3 className="case-form-section-title">Case fields</h3>
         </div>
-      </div>
 
-      <div className="form-field">
-        <label htmlFor="case-tags">Tags</label>
-        <input
-          id="case-tags"
-          type="text"
-          value={tags}
-          onChange={(e) => setTags(e.target.value)}
-          placeholder="Comma-separated, e.g. malware, IR-2025, mitre:T1059"
-          autoComplete="off"
-        />
-      </div>
+        <div className="case-form-grid">
+          <div className="form-field">
+            <div className="form-field-label">
+              <label htmlFor="case-title">Name</label>
+              <span className="form-field-required">Required</span>
+            </div>
+            <input
+              id="case-title"
+              className="form-input"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Short, actionable title"
+              required
+              autoComplete="off"
+            />
+          </div>
 
-      <div className="case-form-actions">
-        <button type="submit" className="btn btn-primary" disabled={!title.trim()}>
+          <fieldset className="form-field form-fieldset">
+            <legend className="form-field-label">
+              <span>Severity</span>
+            </legend>
+            <div className="case-form-severity-row">
+              {SEVERITIES.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`case-severity-option ${severity === s ? "active" : ""}`}
+                  onClick={() => setSeverity(s)}
+                  aria-pressed={severity === s}
+                >
+                  <SeverityBadge severity={s} />
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="form-field">
+            <div className="form-field-label">
+              <label htmlFor="case-tags">Tags</label>
+              <span className="form-field-optional">Optional</span>
+            </div>
+            <input
+              id="case-tags"
+              className="form-input"
+              type="text"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="malware, IR-2025, mitre:T1059"
+              autoComplete="off"
+            />
+            <p className="form-field-helper">Comma-separated.</p>
+          </div>
+
+          <div className="form-field">
+            <div className="form-field-label">
+              <label htmlFor="case-desc">Description</label>
+              <span className="form-field-optional">Optional</span>
+            </div>
+            <textarea
+              id="case-desc"
+              className="form-textarea"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Scope, affected assets, initial findings, links…"
+              rows={6}
+            />
+          </div>
+        </div>
+      </section>
+
+      <footer className="case-form-actions">
+        {onCancel && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        )}
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={!title.trim()}
+        >
           Create case
         </button>
-      </div>
+      </footer>
     </form>
   );
 }

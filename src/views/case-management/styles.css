@@ -5,804 +5,115 @@
  * 2.0.
  */
 
-@import "tailwindcss";
+@import "../../shared/components/base.css";
 
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+/* Case-management-only overrides. Generic shell, header, search, query pill,
+ * two-pane body, list subheader, dropdowns, toggle switch, KPI strip,
+ * severity chip/donut, group card, detail pane, and loading/empty states all
+ * live in src/shared/components and are imported via the App component. */
 
-body {
-  font-family: var(--font-sans);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 13px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-}
-
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
-
-/* ─── Animations ─── */
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideInRight {
-  from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-.animate-in {
-  animation: fadeInUp 0.3s var(--transition-normal) both;
-  animation-delay: calc(var(--i, 0) * 30ms);
-}
-
-/* ─── App shell ─── */
-
-.cases-app {
-  height: 100vh;
-  min-height: 500px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid #474745;
-}
-
-/* ─── Header ─── */
-
-.cases-header {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 16px;
-  background: #1f1f1e;
-  border-bottom: 1px solid #474745;
-  flex-shrink: 0;
-  z-index: 10;
-}
-
-.cases-header-left {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.cases-header-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.cases-header-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  color: #e6e6e5;
-  flex-shrink: 0;
-}
-
-.cases-header-glyph svg { display: block; }
-
-.cases-header-title {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 16px;
-  color: #e6e6e5;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.cases-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
+/* ─── Status tabs (header left-extras) ─── */
 
 .cases-status-tabs {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 2px;
-  background: #262626;
-  border: 1px solid #474745;
-  border-radius: 7px;
+  background: #171716;
+  border: 1px solid #30302f;
+  border-radius: 8px;
+  padding: 3px;
 }
 
 .cases-status-tab {
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 0;
   background: transparent;
-  border: none;
-  border-radius: 5px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  color: #817f78;
+  color: #adaca1;
+  font-size: 11.5px;
+  font-weight: 500;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background 0.15s, color 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
 }
 
 .cases-status-tab:hover { color: #e6e6e5; }
 
 .cases-status-tab.active {
-  background: #1f1f1e;
-  color: #e6e6e5;
-}
-
-/* Compact status dropdown — shown in place of the tabs on narrow screens */
-.cases-status-dropdown {
-  position: relative;
-  display: none;
-}
-
-.cases-status-dropdown-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
   background: #262626;
-  border: 1px solid #474745;
-  border-radius: 7px;
-  color: #b9b9ae;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.cases-status-dropdown-trigger:hover {
-  border-color: #5a5a58;
   color: #e6e6e5;
+  box-shadow: 0 0 0 1px #474745 inset;
 }
 
-.cases-status-dropdown-value {
-  color: #ffffff;
-  font-weight: 400;
+/* On wide viewports the tabs are visible; on narrow ones they collapse and
+ * we expose a Status dropdown next to the search input. */
+.cases-status-dropdown-wrap { display: none; }
+
+@media (max-width: 1100px) {
+  .cases-status-tabs { display: none; }
+  .cases-status-dropdown-wrap { display: inline-block; }
 }
 
-.cases-status-dropdown-trigger svg {
-  display: block;
-  flex-shrink: 0;
-}
-
-.cases-status-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  min-width: 160px;
-  padding: 4px 0;
-  background: #1f1f1e;
-  border: 1px solid #474745;
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-.cases-status-dropdown-option {
-  display: block;
-  width: 100%;
-  padding: 8px 12px;
-  background: transparent;
-  border: none;
-  text-align: left;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  color: #b9b9ae;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.cases-status-dropdown-option:hover { background: #262626; color: #e6e6e5; }
-.cases-status-dropdown-option.active { color: #ffffff; }
-
-.cases-header-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 280px;
-  max-width: 100%;
-  padding: 10px 24px 10px 8px;
-  background: #262626;
-  border: 1px solid #474745;
-  border-radius: 7px;
-  transition: border-color var(--transition-fast);
-}
-
-.cases-header-search:focus-within { border-color: var(--accent); }
-
-.cases-header-search svg {
-  color: #817f78;
-  flex-shrink: 0;
-}
-
-.cases-header-search input {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  color: #e6e6e5;
-}
-
-.cases-header-search input::placeholder { color: #817f78; }
+/* ─── New case button ─── */
 
 .cases-header-new-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 8px 14px;
-  background: #0b64dd;
-  border: 1px solid #0b64dd;
+  background: #5c7cfa;
+  border: 1px solid #5c7cfa;
   border-radius: 6px;
-  color: #e6e6e5;
+  color: #ffffff;
   font-family: var(--font-sans);
   font-size: 12px;
-  line-height: 16px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
-  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 .cases-header-new-btn:hover {
-  background: #0b58c2;
-  border-color: #0b58c2;
+  background: #4d6fee;
+  border-color: #4d6fee;
 }
 
-.cases-header-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: #817f78;
-  cursor: pointer;
-  transition: color var(--transition-fast);
+/* Reserve space for the Cursor chat composer so case detail (alerts list)
+ * stays scrollable above it. The shared DetailPane uses .detail-pane-content,
+ * not .detail-pane, so target the actual containing element. */
+.cases-app .detail-pane { padding-bottom: 96px; }
+
+/* ─── KPI strip override (3 tiles) ─── */
+
+.cases-kpi-strip {
+  grid-template-columns: repeat(3, 1fr);
 }
 
-.cases-header-icon-btn:hover { color: #e6e6e5; }
-
-@media (max-width: 1100px) {
-  .cases-header-search { width: 200px; }
-}
-@media (max-width: 900px) {
-  .cases-header { flex-wrap: wrap; gap: 12px; }
-  .cases-header-search { width: 180px; }
-  .cases-status-tabs { display: none; }
-  .cases-status-dropdown { display: inline-block; }
-}
-@media (max-width: 640px) {
-  .cases-header { padding: 12px; }
-  .cases-header-title { font-size: 16px; }
+@media (min-width: 1000px) {
+  .cases-kpi-strip {
+    grid-template-columns: minmax(260px, 1.4fr) repeat(3, 1fr);
+  }
 }
 
-/* Query pill (amber) — matches alert-triage */
-.query-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16px;
-  background: transparent;
-  color: #f0b840;
-  border: 1px solid #f0b840;
-  white-space: nowrap;
-  flex-shrink: 0;
+@media (max-width: 360px) {
+  .cases-kpi-strip {
+    grid-template-columns: repeat(3, minmax(60px, 1fr));
+    overflow-x: auto;
+  }
 }
 
-.query-pill button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  height: 12px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #f0b840;
-  cursor: pointer;
-  line-height: 1;
-  transition: opacity var(--transition-fast);
-}
-
-.query-pill button svg { display: block; }
-.query-pill button:hover { opacity: 0.75; }
-
-/* ─── Two-pane body ─── */
-
-.cases-body {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-.case-list-pane {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0;
-}
-
-.case-list-pane.narrow {
-  flex: 0 0 385px;
-  max-width: 385px;
-  padding: 16px;
-  background: #1f1f1e;
-}
-
-.case-list-pane.narrow .case-list-content {
-  padding: 0;
-  gap: 12px;
-}
-
-.case-list-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  margin-bottom: 12px;
-  background: transparent;
-  border: none;
-  color: #b9b9ae;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  cursor: pointer;
-  align-self: flex-start;
-  transition: color var(--transition-fast);
-}
-
-.case-list-back:hover { color: #e6e6e5; }
+/* ─── List content ─── */
 
 .case-list-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 0 16px 16px;
+  gap: 8px;
+  padding: 4px 20px 120px;
+  overflow: visible;
 }
-
-/* Subheader ("Showing N cases · Sort by · Details · Group by") */
-.case-list-subheader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: #b9b9ae;
-  white-space: nowrap;
-}
-
-.case-list-subheader-count strong {
-  font-weight: 400;
-  color: #ffffff;
-}
-
-.case-list-subheader-left {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.case-list-subheader-controls {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.case-list-subheader-sort { position: relative; }
-
-.case-list-subheader-sort-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: #b9b9ae;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  cursor: pointer;
-  transition: color var(--transition-fast);
-}
-
-.case-list-subheader-sort-trigger:hover { color: #e6e6e5; }
-
-.case-list-subheader-sort-value {
-  color: #ffffff;
-  font-weight: 400;
-}
-
-.case-list-subheader-sort-trigger svg {
-  display: block;
-  flex-shrink: 0;
-}
-
-.case-list-subheader-sort-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
-  min-width: 180px;
-  padding: 4px 0;
-  background: #1f1f1e;
-  border: 1px solid #474745;
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-.case-list-subheader-sort-option {
-  display: block;
-  width: 100%;
-  padding: 8px 12px;
-  background: transparent;
-  border: none;
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: #b9b9ae;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.case-list-subheader-sort-option:hover {
-  background: #262626;
-  color: #e6e6e5;
-}
-
-.case-list-subheader-sort-option.active { color: #ffffff; }
-
-.case-list-subheader-groupby { color: #b9b9ae; }
-
-/* Right-anchor the group-by menu so it doesn't spill past the panel edge */
-.case-list-subheader-sort-menu.case-list-subheader-sort-menu-right {
-  left: auto;
-  right: 0;
-}
-
-/* ─── Group-by cards ────────────────────────────────────────────────────── */
-
-.group-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  width: 100%;
-  padding: 18px 20px;
-  background: #262626;
-  border: 1px solid #474745;
-  border-radius: 0;
-  color: #e6e6e5;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-  margin-bottom: 8px;
-}
-
-.group-card:hover {
-  background: #2b2b2a;
-  border-color: #5c5c58;
-}
-
-.group-card:focus-visible {
-  outline: 2px solid #5c7cfa;
-  outline-offset: -2px;
-}
-
-.group-card.expanded {
-  margin-bottom: 0;
-}
-
-.group-card.sev-low     { box-shadow: inset 3px 0 0 0 var(--severity-low); }
-.group-card.sev-medium  { box-shadow: inset 3px 0 0 0 var(--severity-medium); }
-.group-card.sev-high    { box-shadow: inset 3px 0 0 0 var(--severity-high); }
-.group-card.sev-critical{ box-shadow: inset 3px 0 0 0 var(--severity-critical); }
-
-.group-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.group-card-identity {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.group-card-name {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 20px;
-  color: #e6e6e5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.group-card-subtitle {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  color: #817f78;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.group-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-shrink: 0;
-}
-
-.group-card-count {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: #817f78;
-}
-
-.group-card-count-value {
-  color: #5c7cfa;
-  font-weight: 600;
-  margin-left: 4px;
-}
-
-.group-card-chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #b9b9ae;
-  transition: transform 0.15s ease;
-}
-
-.group-card-chevron.open {
-  transform: rotate(180deg);
-}
-
-/* Severity chip reused on group cards */
-.sev-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 14px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  border: 1px solid transparent;
-  background: transparent;
-  align-self: flex-start;
-}
-
-.sev-chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.9;
-}
-
-.sev-chip-low      { color: var(--severity-low);      border-color: color-mix(in srgb, var(--severity-low) 40%, transparent); }
-.sev-chip-medium   { color: var(--severity-medium);   border-color: color-mix(in srgb, var(--severity-medium) 40%, transparent); }
-.sev-chip-high     { color: var(--severity-high);     border-color: color-mix(in srgb, var(--severity-high) 40%, transparent); }
-.sev-chip-critical { color: var(--severity-critical); border-color: color-mix(in srgb, var(--severity-critical) 45%, transparent); }
-
-.group-card-sev .sev-chip-dot { display: none; }
-
-.group-children {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin-bottom: 8px;
-  background: #1c1c1b;
-  border: 1px solid #474745;
-  border-top: 0;
-}
-
-.group-children .case-card {
-  border-left: 0;
-  border-right: 0;
-  border-top: 0;
-  border-radius: 0;
-  margin: 0;
-}
-
-.group-children .case-card:last-child {
-  border-bottom: 0;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.case-list-subheader-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.case-list-subheader-toggle-label { color: #b9b9ae; }
-
-/* Toggle switch (shared with alert-triage) */
-.toggle-switch {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  width: 28px;
-  height: 16px;
-  padding: 0;
-  border: 1px solid #474745;
-  border-radius: 999px;
-  background: #171716;
-  cursor: pointer;
-  transition: background var(--transition-fast), border-color var(--transition-fast);
-}
-
-.toggle-switch-thumb {
-  position: absolute;
-  top: 50%;
-  left: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #817f78;
-  transform: translateY(-50%);
-  transition: left var(--transition-fast), background var(--transition-fast);
-}
-
-.toggle-switch.on {
-  background: #5c7cfa;
-  border-color: #5c7cfa;
-}
-
-.toggle-switch.on .toggle-switch-thumb {
-  left: 14px;
-  background: #ffffff;
-}
-
-.toggle-switch:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ─── Detail pane (right side) ─── */
-
-.detail-pane {
-  position: relative;
-  flex: 1;
-  overflow-y: auto;
-  padding: 0;
-  background: #262626;
-  border-left: 1px solid #474745;
-  animation: slideInRight 0.25s ease-out;
-}
-
-.detail-pane-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: #817f78;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: color var(--transition-fast), background var(--transition-fast);
-}
-
-.detail-pane-close:hover {
-  color: #e6e6e5;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-/* ─── Severity chip (replaces score ring) ─── */
-
-.sev-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px 3px 6px;
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 16px;
-  white-space: nowrap;
-  border: 1px solid transparent;
-}
-
-.sev-chip-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.sev-chip-label {
-  font-weight: 500;
-}
-
-.sev-chip.sev-chip-critical {
-  color: var(--severity-critical);
-  border-color: var(--severity-critical);
-}
-.sev-chip.sev-chip-critical .sev-chip-dot { background: var(--severity-critical); }
-
-.sev-chip.sev-chip-high {
-  color: #ff8a50;
-  border-color: #ff8a50;
-}
-.sev-chip.sev-chip-high .sev-chip-dot { background: #ff8a50; }
-
-.sev-chip.sev-chip-medium {
-  color: var(--severity-medium);
-  border-color: var(--severity-medium);
-}
-.sev-chip.sev-chip-medium .sev-chip-dot { background: var(--severity-medium); }
-
-.sev-chip.sev-chip-low {
-  color: var(--severity-low);
-  border-color: var(--severity-low);
-}
-.sev-chip.sev-chip-low .sev-chip-dot { background: var(--severity-low); }
 
 /* ─── Case card ─── */
 
@@ -904,7 +215,7 @@ body {
   flex-wrap: wrap;
 }
 
-/* Status tag (replaces MITRE tactic tag) */
+/* Status tag */
 .case-status-tag {
   display: inline-flex;
   align-items: center;
@@ -936,7 +247,7 @@ body {
   background: transparent;
 }
 
-/* Tag pill (replaces MITRE technique tag) */
+/* Tag pill */
 .case-tag-pill {
   display: inline-flex;
   align-items: center;
@@ -1087,7 +398,7 @@ body {
   white-space: nowrap;
 }
 
-/* ─── Compact case card (narrow list context) ─── */
+/* Compact case card (when detail/create pane is open) */
 .case-card.compact {
   gap: 12px;
   padding: 12px 14px 12px 17px;
@@ -1106,6 +417,30 @@ body {
   font-size: 11px;
 }
 .case-card.compact .case-card-time { font-size: 11px; }
+
+/* ─── Group children container (rendered beneath shared GroupCard) ─── */
+
+.group-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 8px;
+  background: #1c1c1b;
+  border: 1px solid #474745;
+  border-top: 0;
+}
+
+.group-children .case-card {
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-radius: 0;
+  margin: 0;
+}
+
+.group-children .case-card:last-child {
+  border-bottom: 0;
+}
 
 /* ─── Case detail view ─── */
 
@@ -1481,49 +816,201 @@ button.case-detail-fact-value.case-detail-fact-filter:focus-visible {
   word-break: break-word;
 }
 
-/* Narrow viewport tweaks for detail pane */
 @media (max-width: 900px) {
   .case-detail { padding: 16px; gap: 20px; }
   .case-detail-facts { flex-wrap: wrap; }
   .case-detail-fact { flex: 1 1 45%; }
 }
 
-/* ─── Create case pane ─── */
+/* ─── Create case pane ──────────────────────────────────────────────── */
 
 .case-create-pane {
-  padding: 24px 40px 24px 24px;
-  max-width: 720px;
+  padding: 32px 40px 32px 32px;
+  max-width: 760px;
 }
 
-.case-create-pane h2 {
+/* The wrapping form */
+.case-form {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.case-form-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 36px; /* leave room for the close button */
+}
+
+.case-form-title {
+  margin: 0;
   font-family: var(--font-sans);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
-  line-height: 24px;
-  color: #e6e6e5;
-  margin: 0 0 16px 0;
+  line-height: 1.2;
+  color: var(--text-primary);
 }
 
-/* CaseForm legacy styling — keep inputs readable against the dark detail pane */
-.case-form-panel { padding: 4px 0; }
-
-.case-form-panel h2 {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 20px;
-  color: #e6e6e5;
+.case-form-subtitle {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-secondary);
 }
 
-.case-sev-label {
-  display: block;
+/* Section block (numbered, like a wizard step) */
+.case-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 22px 24px;
+  background: #1f1f1e;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.case-form-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.case-form-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.case-form-section-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-primary);
+}
+
+.case-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ─── Form fields ─── */
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Reset fieldset/legend so it aligns with regular .form-field rows */
+.form-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.form-fieldset > legend {
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
+.form-field-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.form-field-label > label,
+.form-field-label > span:first-child {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--text-primary);
+}
+
+.form-field-required,
+.form-field-optional {
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: #b9b9ae;
-  margin-bottom: 6px;
-  text-transform: uppercase;
+  line-height: 16px;
+  color: var(--text-muted);
 }
+
+.form-field-required {
+  color: var(--severity-high);
+}
+
+.form-field-helper {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+}
+
+/* Inputs */
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 9px 12px;
+  background: #171716;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 18px;
+  transition: border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: var(--text-dim);
+}
+
+.form-input:hover,
+.form-textarea:hover {
+  border-color: #5a5a58;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: #1c1c1b;
+  box-shadow: 0 0 0 3px rgba(92, 124, 250, 0.18);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 96px;
+  font-family: var(--font-sans);
+}
+
+/* ─── Severity option buttons (segmented chip group) ─── */
 
 .case-form-severity-row {
   display: flex;
@@ -1532,13 +1019,21 @@ button.case-detail-fact-value.case-detail-fact-filter:focus-visible {
 }
 
 .case-severity-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 7px 12px;
-  border-radius: 6px;
-  border: 1px solid #474745;
-  background: #1f1f1e;
-  color: #e6e6e5;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #171716;
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  transition: background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .case-severity-option:hover {
@@ -1547,317 +1042,84 @@ button.case-detail-fact-value.case-detail-fact-filter:focus-visible {
 }
 
 .case-severity-option.active {
-  background: #262626;
+  background: #1c1c1b;
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(92, 124, 250, 0.15);
+  box-shadow: 0 0 0 1px rgba(92, 124, 250, 0.4) inset;
 }
+
+.case-severity-option:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(92, 124, 250, 0.18);
+}
+
+/* ─── Actions footer ─── */
 
 .case-form-actions {
-  margin-top: 16px;
-}
-
-/* ─── KPI strip (top of case list) ─── */
-
-.cases-kpi-strip {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  background: #1f1f1e;
-  border-bottom: 1px solid #474745;
-  animation: fadeIn 0.3s ease-out;
-}
-
-/* Narrow default: severity section spans the full row above the KPI tiles. */
-.cases-kpi-strip > .summary-section {
-  grid-column: 1 / -1;
-  border-right: none;
-  border-bottom: 1px solid #474745;
-}
-
-/* Wide: severity sits on the same row as the KPI tiles. */
-@media (min-width: 1000px) {
-  .cases-kpi-strip {
-    grid-template-columns: minmax(260px, 1.4fr) repeat(3, 1fr);
-  }
-  .cases-kpi-strip > .summary-section {
-    grid-column: auto;
-    border-right: 1px solid #474745;
-    border-bottom: none;
-  }
-}
-
-.kpi-tile {
-  position: relative;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 16px 18px;
-  border-right: 1px solid #474745;
-  min-width: 0;
-  min-height: 92px;
-  /* Per-tile inline-size container so the label/value typography reacts to the
-   * tile's actual rendered width rather than the viewport. Same pattern as
-   * attack-discovery so the three views share tile sizing behavior. */
-  container-type: inline-size;
-  container-name: casetile;
-}
-
-.kpi-tile-label {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  line-height: 14px;
-  color: #817f78;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Tile under ~180px wide: compact label/value. */
-@container casetile (max-width: 180px) {
-  .kpi-tile-label {
-    font-size: 10px;
-    letter-spacing: 0.3px;
-  }
-  .kpi-tile-value {
-    font-size: 22px;
-    line-height: 26px;
-  }
-  .kpi-tile-meta,
-  .kpi-tile-meta-inline {
-    font-size: 10px;
-    gap: 6px;
-  }
-}
-
-/* Tile under ~140px wide: smallest legible sizes, drop secondary meta line. */
-@container casetile (max-width: 140px) {
-  .kpi-tile {
-    padding: 12px 10px;
-    min-height: 78px;
-    gap: 4px;
-  }
-  .kpi-tile-label {
-    font-size: 9px;
-    letter-spacing: 0.2px;
-  }
-  .kpi-tile-value {
-    font-size: 18px;
-    line-height: 22px;
-  }
-  .kpi-tile-meta,
-  .kpi-tile-meta-inline {
-    display: none;
-  }
-}
-
-.kpi-tile-value {
-  font-family: var(--font-mono);
-  font-size: 26px;
-  font-weight: 500;
-  line-height: 30px;
-  color: #ffffff;
-  font-variant-numeric: tabular-nums;
-}
-
-.kpi-tile-value-row {
-  display: flex;
-  align-items: baseline;
+  justify-content: flex-end;
   gap: 10px;
-  flex-wrap: wrap;
+  padding-top: 4px;
 }
 
-.kpi-tile-meta-inline {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 14px;
-  color: #b9b9ae;
-  white-space: nowrap;
-}
-
-.kpi-tile-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 14px;
-  color: #b9b9ae;
-  flex-wrap: wrap;
-}
-
-.kpi-tile-meta-item {
+.btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.kpi-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.kpi-dot.sev-critical { background: var(--severity-critical); }
-.kpi-dot.sev-high     { background: #ff8a50; }
-.kpi-dot.sev-medium   { background: var(--severity-medium); }
-.kpi-dot.sev-low      { background: var(--severity-low); }
-
-/* Left color accent on certain tiles */
-.kpi-tile-accent-critical { box-shadow: inset 3px 0 0 0 var(--severity-critical); }
-.kpi-tile-accent-open     { box-shadow: inset 3px 0 0 0 #61a2ff; }
-
-/* Top-of-list severity panel — matches alert-triage's summary-panel styling
-   so the "By severity" widget has the same height/padding on every view. */
-.summary-panel {
-  animation: fadeIn 0.3s ease-out;
-}
-
-.summary-grid {
-  display: flex;
-  align-items: stretch;
-}
-
-.summary-section {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px;
-  background: #1f1f1e;
-  border-right: 1px solid #474745;
-  border-bottom: 1px solid #474745;
-}
-
-.summary-section:last-child {
-  border-right: none;
-}
-
-.summary-section-title {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16px;
-  color: #817f78;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-/* Severity donut + legend (shared with alert-triage) */
-.severity-donut {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 8px;
-  width: 100%;
-}
-
-.severity-donut-svg {
-  flex-shrink: 0;
-  display: block;
-}
-
-.severity-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.severity-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  height: 16px;
-}
-
-.severity-legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.severity-legend-dot.sev-critical { background: var(--severity-critical); }
-.severity-legend-dot.sev-high     { background: var(--severity-high); }
-.severity-legend-dot.sev-medium   { background: var(--severity-medium); }
-.severity-legend-dot.sev-low      { background: var(--severity-low); }
-
-.severity-legend-label {
-  flex: 1 1 0;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: #b9b9ae;
-}
-
-.severity-legend-value {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: #b9b9ae;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  min-width: 20px;
-}
-
-/* The severity panel lives in its own .summary-panel row above the tiles;
-   the KPI strip just carries the 4 number tiles. */
-
-/* Tile sizing is driven by the @container rules on .kpi-tile above, so the
-   tiles stay consistent with attack-discovery's sizing. Only the accent
-   stripe thickness is viewport-driven (purely visual, not tile-width-driven). */
-@media (max-width: 560px) {
-  .kpi-tile-accent-critical,
-  .kpi-tile-accent-open {
-    box-shadow: inset 2px 0 0 0 currentColor;
-  }
-}
-
-/* Very narrow: still single-row, but allow horizontal scroll as a safety net
-   in case the container goes below ~360px */
-@media (max-width: 360px) {
-  .cases-kpi-strip {
-    grid-template-columns: repeat(3, minmax(60px, 1fr));
-    overflow-x: auto;
-  }
-}
-
-/* ─── Loading / empty ─── */
-
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  padding: 60px 20px;
-  gap: 12px;
-  color: var(--text-muted);
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
   font-size: 13px;
+  font-weight: 500;
+  line-height: 16px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
-.loading-spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(92, 124, 250, 0.25);
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn-primary:disabled {
+  background: #2a2a2a;
+  border-color: var(--border);
   color: var(--text-dim);
-  font-size: 14px;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.btn-secondary:hover {
+  background: #262626;
+  border-color: #5a5a58;
+  color: var(--text-primary);
+}
+
+@media (max-width: 720px) {
+  .case-create-pane {
+    padding: 20px 20px 24px;
+  }
+  .case-form-section {
+    padding: 18px;
+  }
 }

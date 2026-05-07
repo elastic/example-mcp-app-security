@@ -340,7 +340,7 @@
  * Full-width flat panel separated from the body below by a single divider.
  * Structure matches the Figma exactly:
  *   1. Header row  — "ES|QL Query" label (left) + "Clear" text button (right)
- *   2. Code row    — line-number gutter + textarea, gap 26px
+ *   2. Code row    — Monaco ES|QL editor (Elastic Monarch grammar)
  *   3. Footer      — 1px horizontal divider + action row with Execute (left)
  *                    and "Cmd+Enter to execute" hint (right)
  */
@@ -394,133 +394,45 @@
   cursor: not-allowed;
 }
 
-/* Row 2 — two-column code area: line-number gutter + query text.
-   Both columns use Fira Sans 14px / line-height 19px per the Figma. */
+/* Row 2 — Monaco editor (ES|QL grammar from @elastic/monaco-esql).
+   Fira Sans 14px / line-height 19px per Figma; theme colours match prior pill palette. */
 .query-editor-code {
   display: flex;
-  align-items: flex-start;
-  gap: 26px;
+  align-items: stretch;
   min-height: 95px; /* baseline ~5 lines × 19px */
 }
 
-.query-editor-gutter {
-  flex-shrink: 0;
-  min-width: 14px;
-  font-family: var(--font-sans, "Fira Sans", system-ui, sans-serif);
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 19px;
-  color: #817f78;
-  white-space: pre;
-  text-align: right;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* Syntax-highlight layering
- * ─────────────────────────
- *
- *   .query-textarea-wrap (relative, explicit pixel height from rows × 19px)
- *     ├── <pre class="query-highlight">   position:absolute, inset:0, z:1
- *     └── <textarea class="query-textarea"> position:absolute, inset:0, z:2
- *
- * Both children are absolutely positioned inside a wrap whose height is set
- * inline from React. This gives each layer the same deterministic box to
- * paint into — no flex/flow math, no zero-height collapse, no UA quirks.
- *
- * The textarea sits on top (z:2) with transparent glyphs + a visible caret,
- * so click/selection/IME all work normally. The <pre> below (z:1) paints
- * the coloured tokens that the user actually sees.
- */
-.query-textarea-wrap {
+.query-monaco-wrap {
   position: relative;
   flex: 1;
   min-width: 0;
-  isolation: isolate;          /* scope the z-indices below */
-  color-scheme: dark;          /* stop browsers from auto-inverting */
+  isolation: isolate;
 }
 
-/* Shared font metrics for BOTH layers — they must agree pixel-for-pixel or
-   the caret will drift from the rendered characters. */
-.query-highlight,
-.query-textarea {
+/* Hint text when the buffer is empty — Monaco has no multiline placeholder API. */
+.query-monaco-placeholder {
   position: absolute;
+  left: 52px; /* gutter (~26px) + line-number column (~26px), aligns with first text column */
   top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  box-sizing: border-box;
+  right: 12px;
+  z-index: 1;
+  pointer-events: none;
+  white-space: pre;
   font-family: var(--font-sans, "Fira Sans", system-ui, sans-serif);
   font-size: 14px;
   font-weight: 400;
   line-height: 19px;
-  tab-size: 2;
-  white-space: pre;
-  word-wrap: normal;
-  overflow-wrap: normal;
-  letter-spacing: 0;
-}
-
-/* Highlight layer — coloured tokens painted behind the textarea. */
-.query-highlight {
-  z-index: 1;
-  color: #e6e6e5;              /* fallback colour for any plain tokens */
-  background: transparent;
-  pointer-events: none;
-  overflow: hidden;            /* any overflow is matched by scroll-sync */
-  /* white-space: pre inherited from the shared rule above */
-  /* Defensive: make sure the browser's forced-colors / auto-dark mode
-     can't repaint the tokens into solid blocks. */
-  forced-color-adjust: none;
-}
-
-/* Input textarea — fully overlays the highlight layer, transparent glyphs
-   so the colours below show through, visible caret via caret-color. */
-.query-textarea {
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  display: block;
-  background: transparent !important;
-  background-color: transparent !important;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  caret-color: #e6e6e5;
-  resize: none;
-  outline: none;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-appearance: none;    /* kill native field chrome in some UAs */
-  appearance: none;
-}
-
-/* Placeholder stays visible even with transparent text-fill (it's rendered
-   by a pseudo-element and gets its own fill). */
-.query-textarea::placeholder {
   color: #474745;
-  -webkit-text-fill-color: #474745;
-  opacity: 1;
 }
 
-/* Selection: a translucent blue highlight over the selected range. */
-.query-textarea::selection {
-  background: rgba(92, 124, 250, 0.3);
-  color: transparent;
-  -webkit-text-fill-color: transparent;
+.query-monaco-wrap .monaco-editor,
+.query-monaco-wrap .monaco-editor-background {
+  background-color: #1f1f1e !important;
 }
 
-/* ─── ES|QL syntax-highlight token palette ─── */
-
-.esql-command  { color: #5c7cfa; font-weight: 600; } /* FROM, WHERE, STATS, BY, SORT, LIMIT… */
-.esql-operator { color: #a085e0; font-weight: 600; } /* AND, OR, NOT, IN, IS, NULL, TRUE, FALSE */
-.esql-function { color: #4cbfa6; }                   /* COUNT, SUM, NOW, TO_STRING… */
-.esql-string   { color: #d1a54a; }                   /* "quoted" / 'quoted' */
-.esql-number   { color: #ff8a50; }                   /* 10, 3.14 */
-.esql-pipe     { color: #f0b840; font-weight: 700; } /* | separator */
-.esql-comment  { color: #817f78; font-style: italic;}/* // line  /* block */
+.query-monaco-wrap .margin {
+  background-color: #1f1f1e !important;
+}
 
 /* Row 3 — divider + action row. Flex column gap 16px per Figma. */
 .query-editor-footer {
