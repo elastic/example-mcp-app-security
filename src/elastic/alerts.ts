@@ -189,14 +189,28 @@ export async function acknowledgeAlert(alertId: string): Promise<void> {
 }
 
 export async function acknowledgeAlerts(alertIds: string[]): Promise<{ updated: number }> {
+  return setAlertWorkflowStatus(alertIds, "acknowledged");
+}
+
+/**
+ * Set the workflow status (`open` | `acknowledged` | `closed`) on a set of
+ * security alerts in bulk. Used by the acknowledge / unacknowledge tools so
+ * the Alert Triage UI can offer an Undo affordance after acknowledging.
+ */
+export async function setAlertWorkflowStatus(
+  alertIds: string[],
+  status: "open" | "acknowledged" | "closed",
+): Promise<{ updated: number }> {
+  if (alertIds.length === 0) return { updated: 0 };
   const result = await esRequest<{ updated: number }>(
     `/${ALERTS_INDEX}/_update_by_query`,
     {
       body: {
         query: { ids: { values: alertIds } },
         script: {
-          source: 'ctx._source["kibana.alert.workflow_status"] = "acknowledged"',
+          source: 'ctx._source["kibana.alert.workflow_status"] = params.status',
           lang: "painless",
+          params: { status },
         },
       },
     }

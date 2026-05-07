@@ -544,6 +544,11 @@ export function App() {
           context={caseContext}
           contextLoading={contextLoading}
           onUpdateStatus={(s) => updateCaseStatus(selectedCase.id, selectedCase.version, s)}
+          onSuggestedAction={(prompt) => {
+            const liveApp = getApp();
+            if (!liveApp) return;
+            liveApp.sendMessage({ role: "user", content: [{ type: "text", text: prompt }] }).catch((e) => console.error("sendMessage failed:", e));
+          }}
           onFilter={(q) => {
             const value = q.trim();
             if (!value) return;
@@ -718,12 +723,13 @@ function CaseCard({ caseData, compact, selected, showDetails = true, onClick, on
 const ALERTS_PREVIEW = 3;
 const COMMENTS_PREVIEW = 3;
 
-function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onFilter }: {
+function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onFilter, onSuggestedAction }: {
   caseData: KibanaCase;
   context: { alerts: unknown[]; comments: unknown[] } | null;
   contextLoading: boolean;
   onUpdateStatus: (status: string) => void;
   onFilter?: (q: string) => void;
+  onSuggestedAction?: (prompt: string) => void;
 }) {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -732,21 +738,26 @@ function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onF
   const statusLabel = STATUS_LABEL[caseData.status];
   const creator = caseData.created_by.full_name || caseData.created_by.username;
 
-  // Decide Take Action target: open → in-progress → closed → open
-  const nextStatus: Record<StatusKey, { label: string; value: string }> = {
-    open: { label: "Move to In Progress", value: "in-progress" },
-    "in-progress": { label: "Close Case", value: "closed" },
-    closed: { label: "Reopen Case", value: "open" },
-  };
-  const action = nextStatus[caseData.status];
+  const STATUS_OPTIONS: { value: StatusKey; label: string }[] = [
+    { value: "open", label: STATUS_LABEL.open },
+    { value: "in-progress", label: STATUS_LABEL["in-progress"] },
+    { value: "closed", label: STATUS_LABEL.closed },
+  ];
 
   return (
     <div className="case-detail">
       <div className="case-detail-top">
         <SeverityChip severity={sev} />
-        <button type="button" className="case-detail-action" onClick={() => onUpdateStatus(action.value)}>
-          {action.label}
-        </button>
+        <Dropdown<StatusKey>
+          label="Status:"
+          options={STATUS_OPTIONS}
+          value={caseData.status}
+          onChange={(s) => {
+            if (s !== caseData.status) onUpdateStatus(s);
+          }}
+          align="right"
+          ariaLabel="Change case status"
+        />
       </div>
 
       <div className="case-detail-head">
@@ -761,6 +772,10 @@ function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onF
           <div className="case-detail-subtitle">Case #{caseData.incremental_id}</div>
         )}
       </div>
+
+      {onSuggestedAction && (
+        <SuggestedActionsRow caseData={caseData} onSuggestedAction={onSuggestedAction} />
+      )}
 
       <div className="case-detail-facts">
         <FactCol label="STATUS" value={statusLabel} icon={FactIcon.status} />
@@ -816,6 +831,55 @@ function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onF
           )}
         </>
       ) : null}
+    </div>
+  );
+}
+
+function SuggestedActionsRow({ caseData, onSuggestedAction }: {
+  caseData: KibanaCase;
+  onSuggestedAction: (prompt: string) => void;
+}) {
+  const caseLabel = `case #${caseData.incremental_id ?? ""} ${JSON.stringify(caseData.title)}`.trim();
+  const actions: { id: string; label: string; icon: string; prompt: string }[] = [
+    {
+      id: "summarize",
+      label: "Summarize case",
+      icon: "\u2728",
+      prompt: `Summarize security ${caseLabel} — give me a concise executive summary of the current state, key findings, and what remains to be done.`,
+    },
+    {
+      id: "next-steps",
+      label: "Suggest next steps",
+      icon: "\u27A1",
+      prompt: `For security ${caseLabel} (status: ${caseData.status}, severity: ${caseData.severity}, ${caseData.totalAlerts} alerts) — what are the recommended next investigation steps? Be specific and actionable.`,
+    },
+    {
+      id: "extract-iocs",
+      label: "Extract IOCs",
+      icon: "\u{1F50D}",
+      prompt: `Extract all indicators of compromise (IOCs) from ${caseLabel}. Look at the description, attached alerts, comments, and tags. List each IOC with its type (hash, IP, domain, URL, filename) and the context it appeared in.`,
+    },
+    {
+      id: "timeline",
+      label: "Generate timeline",
+      icon: "\u{1F4C5}",
+      prompt: `Create a chronological investigation timeline for ${caseLabel} based on the available data — alert timestamps, case creation, status changes, and any events mentioned in comments.`,
+    },
+  ];
+
+  return (
+    <div className="case-suggested-actions" role="group" aria-label="Suggested AI actions">
+      {actions.map((a) => (
+        <button
+          key={a.id}
+          type="button"
+          className="case-suggested-action"
+          onClick={() => onSuggestedAction(a.prompt)}
+        >
+          <span className="case-suggested-action-icon" aria-hidden="true">{a.icon}</span>
+          {a.label}
+        </button>
+      ))}
     </div>
   );
 }

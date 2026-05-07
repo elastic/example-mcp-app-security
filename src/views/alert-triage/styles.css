@@ -81,10 +81,21 @@
   border-top: 0;
   border-radius: 0;
   margin: 0;
+  /* A clearly-visible divider so adjacent rows in a group don't blur together. */
+  border-bottom-color: #3a3a39;
 }
 
 .group-children .alert-card:last-child {
   border-bottom: 0;
+}
+
+/* Subtle alternating row tint inside groups to aid scanning. */
+.group-children .alert-card:nth-child(even) {
+  background: #232322;
+}
+
+.group-children .alert-card:nth-child(even):hover {
+  background: #2a2a2a;
 }
 
 /* ─── Alert detail (Figma 10447:157239) ─────────────────────────────── */
@@ -522,7 +533,7 @@ button.alert-detail-fact-value {
   gap: 26px;
   background: #262626;
   border: 1px solid #474745;
-  border-radius: 0;
+  border-radius: 6px;
   padding: 24px;
   cursor: pointer;
   transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);

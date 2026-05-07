@@ -47,6 +47,9 @@ export type { DetailPaneProps } from "./DetailPane/DetailPane";
 export { DetailTabs } from "./DetailTabs/DetailTabs";
 export type { DetailTabsProps, DetailTab } from "./DetailTabs/DetailTabs";
 
+export { ToastProvider, useToast } from "./Toast/Toast";
+export type { ToastInput, ToastTone, ToastProviderProps } from "./Toast/Toast";
+
 export {
   SeverityChip,
   SEVERITY_LABEL,

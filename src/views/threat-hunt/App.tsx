@@ -12,7 +12,9 @@ import { extractToolText, extractCallResult } from "../../shared/extract-tool-te
 import type { EsqlResult } from "../../shared/types";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
-import { InvestigationGraph, type GNode, type GEdge } from "./components/InvestigationGraph";
+// TODO: re-enable the force-directed Network view once it's stable.
+// import { InvestigationGraph } from "./components/InvestigationGraph";
+import type { GNode, GEdge } from "./components/InvestigationGraph";
 import { CardGraph } from "./components/CardGraph";
 import "./styles.css";
 
@@ -77,7 +79,9 @@ export function App() {
   const [graphNodes, setGraphNodes] = useState<GNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GEdge[]>([]);
   const [graphActive, setGraphActive] = useState(false);
-  const [graphView, setGraphView] = useState<"card" | "force">("card");
+  // The force-directed "Network" view is hidden for now — it gets messy fast
+  // when hunting across many alerts/users/hosts. We default to the Cards view
+  // and leave the toggle out of the UI until the network layout is improved.
   const [selectedNode, setSelectedNode] = useState<GNode | null>(null);
   const [nodeDetail, setNodeDetail] = useState<Record<string, unknown> | null>(null);
   const [nodeDetailLoading, setNodeDetailLoading] = useState(false);
@@ -207,25 +211,8 @@ export function App() {
     setSelectedNode(null);
   }, []);
 
-  const collapseEntity = useCallback((node: GNode) => {
-    setGraphNodes((prev) => {
-      const childIds = new Set<string>();
-      setGraphEdges((edges) => {
-        for (const e of edges) {
-          const src = typeof e.source === "string" ? e.source : e.source.id;
-          const tgt = typeof e.target === "string" ? e.target : e.target.id;
-          if (src === node.id) childIds.add(tgt);
-        }
-        return edges.filter((e) => {
-          const src = typeof e.source === "string" ? e.source : e.source.id;
-          return src !== node.id;
-        });
-      });
-      return prev
-        .filter((n) => !childIds.has(n.id) || n.expanded)
-        .map((n) => n.id === node.id ? { ...n, expanded: false } : n);
-    });
-  }, []);
+  // collapseEntity was used by the hidden InvestigationGraph (force-directed)
+  // view; restore alongside that component when re-enabling the Network view.
 
   useEffect(() => {
     const app = new McpApp({ name: "threat-hunt", version: "1.0.0" });
@@ -370,35 +357,11 @@ export function App() {
                   {rootNode ? `Exploring: ${rootNode.value}` : "Investigation graph"}
                 </div>
 
-                <div className="graph-pane-toolbar">
-                  <div className="graph-pane-view-toggle" role="tablist">
-                    <button
-                      role="tab"
-                      aria-selected={graphView === "card"}
-                      className={`graph-pane-view-option${graphView === "card" ? " active" : ""}`}
-                      onClick={() => setGraphView("card")}
-                    >Cards</button>
-                    <button
-                      role="tab"
-                      aria-selected={graphView === "force"}
-                      className={`graph-pane-view-option${graphView === "force" ? " active" : ""}`}
-                      onClick={() => setGraphView("force")}
-                    >Network</button>
-                  </div>
-                </div>
-
                 <div className="graph-pane-canvas">
-                  {graphView === "card" ? (
-                    <CardGraph nodes={graphNodes} edges={graphEdges}
-                      onExpand={(n) => expandEntity(n.type, n.value)}
-                      onSelect={selectNode}
-                      alertLinkedIds={alertLinkedIds} />
-                  ) : (
-                    <InvestigationGraph nodes={graphNodes} edges={graphEdges}
-                      onExpand={(n) => expandEntity(n.type, n.value)}
-                      onCollapse={collapseEntity}
-                      alertLinkedIds={alertLinkedIds} />
-                  )}
+                  <CardGraph nodes={graphNodes} edges={graphEdges}
+                    onExpand={(n) => expandEntity(n.type, n.value)}
+                    onSelect={selectNode}
+                    alertLinkedIds={alertLinkedIds} />
                 </div>
 
                 <div className="graph-pane-legend" aria-hidden="true">

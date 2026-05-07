@@ -29,8 +29,10 @@ import {
   SearchInput,
   SeverityChip,
   SeverityDonut,
+  ToastProvider,
   ToggleSwitch,
   TwoPaneLayout,
+  useToast,
 } from "../../shared/components";
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
@@ -237,6 +239,14 @@ function entityRiskColor(level: string): string {
 }
 
 export function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
+  );
+}
+
+function AppContent() {
   const [discoveries, setDiscoveries] = useState<AttackDiscoveryFinding[]>([]);
   const [selected, setSelected] = useState<AttackDiscoveryFinding | null>(null);
   const [detail, setDetail] = useState<DiscoveryDetail | null>(null);
@@ -381,6 +391,8 @@ export function App() {
     }
   }, [getApp]);
 
+  const toast = useToast();
+
   const handleApprove = useCallback(async () => {
     const mcpApp = getApp();
     if (!mcpApp || checked.size === 0) return;
@@ -391,15 +403,25 @@ export function App() {
         arguments: { findings },
       });
       const text = extractCallResult(result);
-      if (text) {
-        const data = JSON.parse(text);
-        setActionResult(`Created ${data.created} case(s)`);
-        setTimeout(() => setActionResult(null), 5000);
-      }
+      const data = text ? JSON.parse(text) : { created: findings.length };
+      const created = Number(data.created ?? findings.length);
+      toast.show({
+        message: created === 1 ? "Case created from Attack Discovery." : `Created ${created} cases from Attack Discoveries.`,
+        tone: "success",
+        actionLabel: "Open in chat",
+        onAction: () => {
+          const liveApp = getApp();
+          liveApp?.sendMessage({
+            role: "user",
+            content: [{ type: "text", text: "Use manage-cases to open the cases dashboard so I can review the cases just created from Attack Discoveries." }],
+          }).catch(() => {});
+        },
+      });
     } catch (e) {
       console.error("Approve failed:", e);
+      toast.show({ message: "Couldn't create case(s) — see console.", tone: "danger" });
     }
-  }, [getApp, checked, discoveries]);
+  }, [getApp, checked, discoveries, toast]);
 
   const handleAcknowledge = useCallback(async () => {
     const mcpApp = getApp();
@@ -449,26 +471,42 @@ export function App() {
     const mcpApp = getApp();
     if (!mcpApp) return;
     try {
-      const result = await mcpApp.callServerTool({
+      await mcpApp.callServerTool({
         name: "approve-discoveries",
         arguments: { findings: [finding] },
       });
-      const text = extractCallResult(result);
-      if (text) {
-        const data = JSON.parse(text);
-        setActionResult(`Created ${data.created ?? 0} case(s)`);
-        setTimeout(() => setActionResult(null), 5000);
-      }
+      const title = finding.title || "Attack Discovery";
+      toast.show({
+        message: `Case created from "${title}".`,
+        tone: "success",
+        actionLabel: "Open Cases",
+        onAction: () => {
+          const liveApp = getApp();
+          liveApp?.sendMessage({
+            role: "user",
+            content: [{ type: "text", text: "Use manage-cases to open the cases dashboard." }],
+          }).catch(() => {});
+        },
+      });
     } catch (e) {
       console.error("Approve failed:", e);
+      toast.show({ message: "Couldn't create case — see console.", tone: "danger" });
     }
-  }, [getApp]);
+  }, [getApp, toast]);
 
   const sendDiscoveryCasePrompt = useCallback(async (d: AttackDiscoveryFinding) => {
     const app = getApp();
     if (!app) return;
     const ids = (d.alertIds || []).join(", ") || "none";
-    const prompt = `Use manage-cases to create or update a case for this Attack Discovery: ${JSON.stringify(d.title)} (discovery id: ${d.id}). Linked alert IDs: ${ids}.`;
+    const prompt = [
+      `Use manage-cases to create or update a case for this Attack Discovery: ${JSON.stringify(d.title)} (discovery id: ${d.id}).`,
+      `Linked alert IDs: ${ids}.`,
+      ``,
+      `Structure the case predictably:`,
+      `- **Description**: an "Attack Discovery Finding" header with risk score, confidence, MITRE tactics, alert count, the discovery summary, and an "Immediate actions" bullet list (parse from the discovery details if available, otherwise propose 3 concise next steps).`,
+      `- **First comment**: the full attack chain narrative (everything from the discovery details *except* the Immediate actions section, which is already in the description).`,
+      `- Attach all linked alerts via the alertIds parameter. Do not duplicate the summary or attack chain across description and comments.`,
+    ].join("\n");
     try {
       await app.sendMessage({ role: "user", content: [{ type: "text", text: prompt }] });
     } catch (e) {
@@ -876,6 +914,7 @@ export function App() {
         expandedAlerts={expandedAlerts}
         setExpandedAlerts={setExpandedAlerts}
         openFlyout={openFlyout}
+        getApp={getApp}
         onAcknowledge={() => { void acknowledgeSingleDiscovery(selected.id); }}
         onCreateCase={() => { void approveSingleDiscovery(selected); }}
         onOpenCaseChat={() => { void sendDiscoveryCasePrompt(selected); }}
@@ -1082,6 +1121,7 @@ function DetailView({
   expandedAlerts,
   setExpandedAlerts,
   openFlyout,
+  getApp,
   onAcknowledge,
   onCreateCase,
   onOpenCaseChat,
@@ -1094,6 +1134,7 @@ function DetailView({
   expandedAlerts: Set<string>;
   setExpandedAlerts: React.Dispatch<React.SetStateAction<Set<string>>>;
   openFlyout: (type: string, value: string, x: number, y: number) => void;
+  getApp: () => McpApp | null;
   onAcknowledge: () => void;
   onCreateCase: () => void;
   onOpenCaseChat: () => void;
@@ -1283,7 +1324,7 @@ function DetailView({
 
       {tab === "flow" && discovery.mitreTactics && discovery.mitreTactics.length > 0 && (
         <div className="discovery-detail-section">
-          <AttackFlowDiagram discovery={discovery} detail={detail} />
+          <AttackFlowDiagram discovery={discovery} detail={detail} getApp={getApp} />
         </div>
       )}
 

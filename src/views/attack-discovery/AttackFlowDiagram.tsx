@@ -5,7 +5,9 @@
  * 2.0.
  */
 
-import React, { useState, useMemo, useRef, useCallback } from "react";
+import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
+import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import type { AttackDiscoveryFinding, DiscoveryDetail } from "../../shared/types";
 import { stripKibanaTemplateSyntax } from "./template-syntax";
 
@@ -70,6 +72,12 @@ interface Positioned {
 interface Props {
   discovery: AttackDiscoveryFinding;
   detail: DiscoveryDetail | null;
+  /**
+   * Optional accessor for the host MCP app. When supplied, the Maximize
+   * button will additionally request host fullscreen mode while the
+   * portal overlay is open.
+   */
+  getApp?: () => McpApp | null;
 }
 
 function matchTactic(ruleName: string, tactics: string[]): string | undefined {
@@ -251,10 +259,40 @@ function positionTree(
   }
 }
 
-export function AttackFlowDiagram({ discovery, detail }: Props) {
+export function AttackFlowDiagram({ discovery, detail, getApp }: Props) {
   const [scale, setScale] = useState<"compact" | "default" | "expand">("default");
+  const [maximized, setMaximized] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef<{ startX: number; startY: number; left: number; top: number } | null>(null);
+
+  const closeMaximized = useCallback(() => {
+    setMaximized(false);
+    try { getApp?.()?.requestDisplayMode({ mode: "inline" }); } catch { /* ignore */ }
+  }, [getApp]);
+
+  const openMaximized = useCallback(() => {
+    setMaximized(true);
+    try { getApp?.()?.requestDisplayMode({ mode: "fullscreen" }); } catch { /* ignore */ }
+  }, [getApp]);
+
+  useEffect(() => {
+    if (!maximized) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeMaximized(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [maximized, closeMaximized]);
+
+  useEffect(() => {
+    // If the component unmounts while maximized (e.g. user navigates away),
+    // ensure we don't leave the host stuck in fullscreen.
+    return () => {
+      if (maximized) {
+        try { getApp?.()?.requestDisplayMode({ mode: "inline" }); } catch { /* ignore */ }
+      }
+    };
+    // We only want to fire the cleanup with the latest closure values, so
+    // depend on `maximized` is intentional here.
+  }, [maximized, getApp]);
 
   // Click-and-drag panning on the scroll container. Without this users have
   // to grab the (thin) scrollbars to navigate the graph, which is fiddly.
@@ -328,46 +366,54 @@ export function AttackFlowDiagram({ discovery, detail }: Props) {
     );
   }
 
-  return (
-    <div className="attack-graph">
-      <div className="ag-controls">
-        <button
-          className={`ag-ctrl ${scale === "compact" ? "active" : ""}`}
-          onClick={() => setScale("compact")}
-        >
-          {"\u25FC"} Compact
-        </button>
-        <button className="ag-ctrl" onClick={() => setScale("default")}>
-          {"\u21BA"} Reset
-        </button>
-        <button
-          className={`ag-ctrl ${scale === "expand" ? "active" : ""}`}
-          onClick={() => setScale("expand")}
-        >
-          {"\u2922"} Expand
-        </button>
-
-        {tacticsInView.length > 0 && (
-          <div className="ag-legend">
-            {tacticsInView.map((t) => (
-              <span key={t} className="ag-legend-item">
-                <span className="ag-legend-dot" style={{ background: TACTIC_COLOR[t] }} />
-                {t}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div
-        ref={scrollRef}
-        className="ag-scroll"
-        onPointerDown={onPanDown}
-        onPointerMove={onPanMove}
-        onPointerUp={onPanUp}
-        onPointerCancel={onPanUp}
+  const controls = (
+    <div className="ag-controls">
+      <button
+        className={`ag-ctrl ${scale === "compact" ? "active" : ""}`}
+        onClick={() => setScale("compact")}
       >
-        <div className="ag-canvas" style={{ width: totalW, height: totalH }}>
+        {"\u25FC"} Compact
+      </button>
+      <button className="ag-ctrl" onClick={() => setScale("default")}>
+        {"\u21BA"} Reset
+      </button>
+      <button
+        className={`ag-ctrl ${scale === "expand" ? "active" : ""}`}
+        onClick={() => setScale("expand")}
+      >
+        {"\u2922"} Expand
+      </button>
+      <button
+        className="ag-ctrl ag-ctrl-maximize"
+        onClick={maximized ? closeMaximized : openMaximized}
+        title={maximized ? "Exit fullscreen (Esc)" : "Maximize attack flow"}
+      >
+        {maximized ? "\u2924 Exit fullscreen" : "\u2921 Maximize"}
+      </button>
+
+      {tacticsInView.length > 0 && (
+        <div className="ag-legend">
+          {tacticsInView.map((t) => (
+            <span key={t} className="ag-legend-item">
+              <span className="ag-legend-dot" style={{ background: TACTIC_COLOR[t] }} />
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const scroll = (
+    <div
+      ref={scrollRef}
+      className="ag-scroll"
+      onPointerDown={onPanDown}
+      onPointerMove={onPanMove}
+      onPointerUp={onPanUp}
+      onPointerCancel={onPanUp}
+    >
+      <div className="ag-canvas" style={{ width: totalW, height: totalH }}>
           <svg
             className="ag-edges"
             width={totalW}
@@ -476,8 +522,42 @@ export function AttackFlowDiagram({ discovery, detail }: Props) {
               </div>
             );
           })}
-        </div>
       </div>
     </div>
+  );
+
+  const inline = (
+    <div className="attack-graph">
+      {controls}
+      {scroll}
+    </div>
+  );
+
+  if (!maximized) return inline;
+
+  // Maximized overlay: portal-rendered so it's never clipped by the detail
+  // pane / two-pane layout. The host MCP app is also asked to enter
+  // fullscreen mode (see openMaximized) so this overlay can fill the
+  // window when the host honors the request.
+  if (typeof document === "undefined") return inline;
+  return createPortal(
+    <div className="ag-maximize-overlay" role="dialog" aria-label="Attack flow (maximized)">
+      <div className="ag-maximize-header">
+        <span className="ag-maximize-title">Attack Flow</span>
+        <button
+          type="button"
+          className="ag-maximize-close"
+          onClick={closeMaximized}
+          aria-label="Close maximized attack flow"
+        >
+          {"\u00D7"}
+        </button>
+      </div>
+      <div className="attack-graph attack-graph-maximized">
+        {controls}
+        {scroll}
+      </div>
+    </div>,
+    document.body,
   );
 }

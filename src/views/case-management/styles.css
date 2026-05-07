@@ -486,6 +486,43 @@
   gap: 15px;
 }
 
+/* ─── Suggested AI actions chip row (under the case detail head) ─── */
+
+.case-suggested-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.case-suggested-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #262626;
+  border: 1px solid #474745;
+  border-radius: 6px;
+  color: #b9b9ae;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.case-suggested-action:hover {
+  background: #2b2b2a;
+  color: #e6e6e5;
+  border-color: rgba(92, 124, 250, 0.45);
+}
+
+.case-suggested-action-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
 .case-detail-title {
   margin: 0;
   font-family: var(--font-sans);

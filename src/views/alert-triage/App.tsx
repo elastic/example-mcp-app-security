@@ -23,9 +23,11 @@ import {
   QueryPill,
   SearchInput,
   SeverityDonut,
+  ToastProvider,
   ToggleSwitch,
   TwoPaneLayout,
   SEVERITY_RANK as SEV_RANK,
+  useToast,
 } from "../../shared/components";
 import type { Severity } from "../../shared/components";
 import { useClickOutside } from "../../shared/hooks/useClickOutside";
@@ -76,6 +78,14 @@ const isLimitKey = (v: string): v is LimitKey =>
   LIMIT_OPTIONS.some((o) => o.value === v);
 
 export function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
+  );
+}
+
+function AppContent() {
   const [summary, setSummary] = useState<AlertSummary | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<SecurityAlert | null>(null);
   const [alertContext, setAlertContext] = useState<AlertContext | null>(null);
@@ -296,17 +306,128 @@ export function App() {
     finally { setContextLoading(false); }
   }, [getApp]);
 
-  const acknowledgeAlert = useCallback(async (alertId: string) => {
+  const toast = useToast();
+
+  const acknowledgeAlert = useCallback(async (alert: SecurityAlert) => {
     const app = getApp();
     if (!app) return;
+    const alertId = alert._id;
+    // Capture the alert's position in the current list so we can splice it
+    // back at the same index if the user hits Undo within the toast window.
+    const originalAlerts = summary?.alerts ?? [];
+    const originalIndex = originalAlerts.findIndex((a) => a._id === alertId);
+    const wasSelected = selectedAlert?._id === alertId;
+
     try {
       await app.callServerTool({ name: "acknowledge-alert", arguments: { alertId } });
       setSummary((prev) => prev ? { ...prev, total: prev.total - 1, alerts: prev.alerts.filter((a) => a._id !== alertId) } : prev);
-      if (selectedAlert?._id === alertId) setSelectedAlert(null);
+      if (wasSelected) setSelectedAlert(null);
+
+      toast.show({
+        message: "Alert acknowledged",
+        tone: "success",
+        actionLabel: "Undo",
+        onAction: async () => {
+          const liveApp = getApp();
+          if (!liveApp) return;
+          try {
+            await liveApp.callServerTool({ name: "unacknowledge-alert", arguments: { alertId } });
+            setSummary((prev) => {
+              if (!prev) return prev;
+              const next = [...prev.alerts];
+              const insertAt = originalIndex >= 0 ? Math.min(originalIndex, next.length) : next.length;
+              next.splice(insertAt, 0, alert);
+              return { ...prev, total: prev.total + 1, alerts: next };
+            });
+            if (wasSelected) setSelectedAlert(alert);
+            toast.show({ message: "Alert restored", tone: "info", durationMs: 4000 });
+          } catch (err) {
+            console.error("Failed to undo acknowledge:", err);
+            toast.show({ message: "Couldn't undo — see console.", tone: "danger" });
+          }
+        },
+      });
     } catch (e) {
       console.error("Failed to acknowledge alert:", e);
+      toast.show({ message: "Couldn't acknowledge alert.", tone: "danger" });
     }
-  }, [getApp, selectedAlert]);
+  }, [getApp, selectedAlert, summary, toast]);
+
+  const createCaseFromAlert = useCallback(async (alert: SecurityAlert) => {
+    const app = getApp();
+    if (!app) return;
+    const src = alert._source;
+    const rule = String(src["kibana.alert.rule.name"] ?? "Unknown rule");
+    const reason = String(src["kibana.alert.reason"] ?? "");
+    const sev = String(src["kibana.alert.severity"] ?? "low").toLowerCase();
+    const score = Number(src["kibana.alert.risk_score"] ?? 0);
+    const host = src.host?.name ?? "—";
+    const userName = src.user?.name
+      ? (src.user.domain ? `${src.user.domain}\\${src.user.name}` : src.user.name)
+      : "—";
+    const threat = src["kibana.alert.rule.threat"]?.[0];
+    const tactic = threat?.tactic?.name ?? "—";
+    const techniqueId = threat?.technique?.[0]?.id ?? "";
+    const techniqueName = threat?.technique?.[0]?.name ?? "";
+    const technique = techniqueId
+      ? techniqueName ? `${techniqueId} ${techniqueName}` : techniqueId
+      : "—";
+    const ruleDescription = String(src["kibana.alert.rule.description"] ?? "").trim();
+
+    const description = [
+      `## Alert Summary`,
+      ``,
+      `**Rule**: ${rule}`,
+      `**Severity**: ${sev}`,
+      `**Risk score**: ${score}`,
+      `**Host**: ${host}`,
+      `**User**: ${userName}`,
+      `**MITRE tactic**: ${tactic}`,
+      `**MITRE technique**: ${technique}`,
+      ``,
+      `**Reason**`,
+      ``,
+      reason || "(no reason provided)",
+      ...(ruleDescription
+        ? [
+          ``,
+          `---`,
+          ``,
+          `### Rule description`,
+          ``,
+          ruleDescription,
+        ]
+        : []),
+    ].join("\n");
+
+    try {
+      await app.callServerTool({
+        name: "create-case",
+        arguments: {
+          title: `[Alert] ${rule}`,
+          description,
+          severity: sev,
+          tags: ["alert-triage", `mitre:${tactic}`].filter((t) => !t.endsWith(":—")).join(","),
+          alertIds: [alert._id],
+        },
+      });
+      toast.show({
+        message: `Case created for "${rule}".`,
+        tone: "success",
+        actionLabel: "Open Cases",
+        onAction: () => {
+          const liveApp = getApp();
+          liveApp?.sendMessage({
+            role: "user",
+            content: [{ type: "text", text: "Use manage-cases to open the cases dashboard." }],
+          }).catch(() => {});
+        },
+      });
+    } catch (e) {
+      console.error("Failed to create case from alert:", e);
+      toast.show({ message: "Couldn't create case — see console.", tone: "danger" });
+    }
+  }, [getApp, toast]);
 
   const sendCasePromptForAlert = useCallback(async (alert: SecurityAlert) => {
     const app = getApp();
@@ -314,7 +435,17 @@ export function App() {
     const src = alert._source;
     const rule = String(src["kibana.alert.rule.name"] ?? "Unknown rule");
     const reason = String(src["kibana.alert.reason"] ?? "");
-    const prompt = `Use manage-cases to create a new Elastic Security case for this alert or attach it to an existing case when it is the same incident. Alert document _id: ${alert._id}. Rule: ${JSON.stringify(rule)}. Reason: ${reason || "(none)"}`;
+    const prompt = [
+      `Use manage-cases to create a new Elastic Security case for this alert (or attach it to an existing case when it is clearly the same incident).`,
+      ``,
+      `Structure the case predictably:`,
+      `- **Title**: "[Alert] ${rule}"`,
+      `- **Description**: an "Alert Summary" with rule, severity, risk score, host, user, MITRE tactic/technique, and the alert reason.`,
+      `- **First comment** (only if you have meaningful additional context): your investigation notes / next steps.`,
+      `- Attach the alert via the alertIds parameter.`,
+      ``,
+      `Alert document _id: ${alert._id}. Rule: ${JSON.stringify(rule)}. Reason: ${reason || "(none)"}`,
+    ].join("\n");
     try {
       await app.sendMessage({ role: "user", content: [{ type: "text", text: prompt }] });
     } catch (e) {
@@ -528,7 +659,8 @@ export function App() {
 
   const detail = hasDetail ? (
     <DetailView key={selectedAlert._id} alert={selectedAlert} context={alertContext} contextLoading={contextLoading}
-      onAcknowledge={() => acknowledgeAlert(selectedAlert._id)}
+      onAcknowledge={() => acknowledgeAlert(selectedAlert)}
+      onCreateCase={() => { void createCaseFromAlert(selectedAlert); }}
       onOpenCaseChat={() => { void sendCasePromptForAlert(selectedAlert); }}
       onSelectAlert={selectAlert}
       onEntityFilter={entityFilter}
@@ -570,9 +702,10 @@ interface GroupBucket {
   alerts: SecurityAlert[];
 }
 
-function DetailView({ alert, context, contextLoading, onAcknowledge, onOpenCaseChat, onSelectAlert, onEntityFilter, relatedOpen, onToggleRelated }: {
+function DetailView({ alert, context, contextLoading, onAcknowledge, onCreateCase, onOpenCaseChat, onSelectAlert, onEntityFilter, relatedOpen, onToggleRelated }: {
   alert: SecurityAlert; context: AlertContext | null; contextLoading: boolean;
   onAcknowledge: () => void;
+  onCreateCase: () => void;
   onOpenCaseChat: () => void;
   onSelectAlert: (a: SecurityAlert) => void;
   onEntityFilter?: (field: string, value: string) => void;
@@ -614,6 +747,17 @@ function DetailView({ alert, context, contextLoading, onAcknowledge, onOpenCaseC
           </button>
           {takeActionOpen && (
             <div className="take-action-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                className="take-action-option"
+                onClick={() => {
+                  setTakeActionOpen(false);
+                  onCreateCase();
+                }}
+              >
+                Create case now
+              </button>
               <button
                 type="button"
                 role="menuitem"

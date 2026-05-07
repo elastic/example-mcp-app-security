@@ -13,7 +13,7 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
-import { fetchAlerts, getAlertContext, acknowledgeAlert, acknowledgeAlerts } from "../elastic/alerts.js";
+import { fetchAlerts, getAlertContext, acknowledgeAlert, acknowledgeAlerts, setAlertWorkflowStatus } from "../elastic/alerts.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-alerts/mcp-app.html";
@@ -148,6 +148,25 @@ export function registerAlertTriageTools(server: McpServer) {
       await acknowledgeAlert(alertId);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ success: true, alertId }) }],
+      };
+    }
+  );
+
+  registerAppTool(
+    server,
+    "unacknowledge-alert",
+    {
+      title: "Unacknowledge Alert",
+      description: "Move an alert back to the open queue (used by the Triage UI Undo affordance after acknowledging)",
+      inputSchema: {
+        alertId: z.string().describe("The alert document ID"),
+      },
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    async ({ alertId }) => {
+      const result = await setAlertWorkflowStatus([alertId], "open");
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ success: true, alertId, ...result }) }],
       };
     }
   );

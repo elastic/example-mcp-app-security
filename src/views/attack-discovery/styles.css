@@ -1316,7 +1316,8 @@
 .ag-scroll {
   position: relative;
   overflow: auto;
-  max-height: min(60vh, 640px);
+  /* Lifted from min(60vh, 640px) so the whole flow fits without compact mode. */
+  max-height: clamp(420px, 70vh, 900px);
   background:
     radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 18px 18px,
     #161615;
@@ -1324,12 +1325,97 @@
   border-radius: 8px;
   cursor: grab;
   overscroll-behavior: contain;
+  /* Center the canvas when it's smaller than the viewport so the user
+     never has to scroll a partially-visible diagram. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ag-scroll:active { cursor: grabbing; }
 
 .ag-canvas {
   position: relative;
+  flex-shrink: 0;
+  /* Half-viewport breathing room so the user can scroll any node to the
+     center of the scroll viewport. */
+  margin: 25vh 25%;
+}
+
+/* ─── Maximize overlay (fullscreen attack flow) ─── */
+
+.ag-ctrl-maximize {
+  margin-left: 4px;
+}
+
+.ag-maximize-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  flex-direction: column;
+  background: #0e0e0d;
+  animation: agMaxIn 0.18s ease-out both;
+}
+
+@keyframes agMaxIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ag-maximize-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #30302f;
+  background: #1c1c1b;
+}
+
+.ag-maximize-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e6e6e5;
+  letter-spacing: 0.02em;
+}
+
+.ag-maximize-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid #474745;
+  border-radius: 6px;
+  color: #adaca1;
+  font-size: 18px;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.ag-maximize-close:hover {
+  background: #2a2a2a;
+  color: #e6e6e5;
+  border-color: #5a5a58;
+}
+
+.attack-graph-maximized {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.attack-graph-maximized .ag-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 .ag-edges {
