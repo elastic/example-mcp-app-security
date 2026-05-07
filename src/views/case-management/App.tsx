@@ -29,8 +29,10 @@ import {
   SEVERITY_LABEL,
   SEVERITY_RANK,
   SeverityDonut,
+  ToastProvider,
   ToggleSwitch,
   TwoPaneLayout,
+  useToast,
 } from "../../shared/components";
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
@@ -122,6 +124,14 @@ function normalizeCase(raw: unknown): KibanaCase | null {
 }
 
 export function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
+  );
+}
+
+function AppContent() {
   const [cases, setCases] = useState<KibanaCase[]>([]);
   const [total, setTotal] = useState(0);
   const [selectedCase, setSelectedCase] = useState<KibanaCase | null>(null);
@@ -195,6 +205,7 @@ export function App() {
   });
 
   const fullscreen = useFullscreen(getApp);
+  const toast = useToast();
 
   const loadCases = useCallback((override?: Partial<CaseListParams>) => {
     const app = getApp();
@@ -248,10 +259,15 @@ export function App() {
       setViewMode("browse");
       setSelectedCase(null);
       loadCases();
+      toast.show({
+        message: `Case created: "${data.title}".`,
+        tone: "success",
+      });
     } catch (e) {
       console.error("Failed to create case:", e);
+      toast.show({ message: "Couldn't create case — see console.", tone: "danger" });
     }
-  }, [getApp, loadCases]);
+  }, [getApp, loadCases, toast]);
 
   const updateCaseStatus = useCallback(async (caseId: string, version: string, status: string) => {
     const app = getApp();

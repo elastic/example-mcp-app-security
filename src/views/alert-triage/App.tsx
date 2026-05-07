@@ -429,30 +429,6 @@ function AppContent() {
     }
   }, [getApp, toast]);
 
-  const sendCasePromptForAlert = useCallback(async (alert: SecurityAlert) => {
-    const app = getApp();
-    if (!app) return;
-    const src = alert._source;
-    const rule = String(src["kibana.alert.rule.name"] ?? "Unknown rule");
-    const reason = String(src["kibana.alert.reason"] ?? "");
-    const prompt = [
-      `Use manage-cases to create a new Elastic Security case for this alert (or attach it to an existing case when it is clearly the same incident).`,
-      ``,
-      `Structure the case predictably:`,
-      `- **Title**: "[Alert] ${rule}"`,
-      `- **Description**: an "Alert Summary" with rule, severity, risk score, host, user, MITRE tactic/technique, and the alert reason.`,
-      `- **First comment** (only if you have meaningful additional context): your investigation notes / next steps.`,
-      `- Attach the alert via the alertIds parameter.`,
-      ``,
-      `Alert document _id: ${alert._id}. Rule: ${JSON.stringify(rule)}. Reason: ${reason || "(none)"}`,
-    ].join("\n");
-    try {
-      await app.sendMessage({ role: "user", content: [{ type: "text", text: prompt }] });
-    } catch (e) {
-      console.error("sendMessage failed:", e);
-    }
-  }, [getApp]);
-
   const handleSearch = useCallback((q: string) => {
     loadAlerts({ query: q.trim() || undefined });
   }, [loadAlerts]);
@@ -661,7 +637,6 @@ function AppContent() {
     <DetailView key={selectedAlert._id} alert={selectedAlert} context={alertContext} contextLoading={contextLoading}
       onAcknowledge={() => acknowledgeAlert(selectedAlert)}
       onCreateCase={() => { void createCaseFromAlert(selectedAlert); }}
-      onOpenCaseChat={() => { void sendCasePromptForAlert(selectedAlert); }}
       onSelectAlert={selectAlert}
       onEntityFilter={entityFilter}
       relatedOpen={relatedOpen}
@@ -702,11 +677,10 @@ interface GroupBucket {
   alerts: SecurityAlert[];
 }
 
-function DetailView({ alert, context, contextLoading, onAcknowledge, onCreateCase, onOpenCaseChat, onSelectAlert, onEntityFilter, relatedOpen, onToggleRelated }: {
+function DetailView({ alert, context, contextLoading, onAcknowledge, onCreateCase, onSelectAlert, onEntityFilter, relatedOpen, onToggleRelated }: {
   alert: SecurityAlert; context: AlertContext | null; contextLoading: boolean;
   onAcknowledge: () => void;
   onCreateCase: () => void;
-  onOpenCaseChat: () => void;
   onSelectAlert: (a: SecurityAlert) => void;
   onEntityFilter?: (field: string, value: string) => void;
   relatedOpen: boolean;
@@ -757,17 +731,6 @@ function DetailView({ alert, context, contextLoading, onAcknowledge, onCreateCas
                 }}
               >
                 Create case now
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="take-action-option"
-                onClick={() => {
-                  setTakeActionOpen(false);
-                  onOpenCaseChat();
-                }}
-              >
-                Open case in chat
               </button>
               <button
                 type="button"
