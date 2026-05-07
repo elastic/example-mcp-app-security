@@ -779,6 +779,27 @@ function DetailView({ alert, context, contextLoading, onAcknowledge, onCreateCas
         <div className="alert-detail-section"><LoadingState>Loading context...</LoadingState></div>
       ) : context ? (
         <>
+          {context.relatedAlerts.length > 0 && (
+            <ExpandSection
+              title="Related"
+              count={context.relatedAlerts.length}
+              expanded={relatedOpen}
+              onToggle={onToggleRelated}
+              previewCount={RELATED_PREVIEW}
+            >
+              <div className="related-alerts-list">
+                {(relatedOpen ? context.relatedAlerts : context.relatedAlerts.slice(0, RELATED_PREVIEW)).map((a) => (
+                  <RelatedAlertCard
+                    key={a._id}
+                    alert={a}
+                    selected={a._id === alert._id}
+                    onClick={() => onSelectAlert(a)}
+                  />
+                ))}
+              </div>
+            </ExpandSection>
+          )}
+
           {context.processEvents.length > 0 && (
             <ExpandSection
               title="Process tree"
@@ -804,27 +825,6 @@ function DetailView({ alert, context, contextLoading, onAcknowledge, onCreateCas
               previewCount={NETWORK_PREVIEW}
             >
               <NetworkTable events={networkOpen ? context.networkEvents : context.networkEvents.slice(0, NETWORK_PREVIEW)} />
-            </ExpandSection>
-          )}
-
-          {context.relatedAlerts.length > 0 && (
-            <ExpandSection
-              title="Related"
-              count={context.relatedAlerts.length}
-              expanded={relatedOpen}
-              onToggle={onToggleRelated}
-              previewCount={RELATED_PREVIEW}
-            >
-              <div className="related-alerts-list">
-                {(relatedOpen ? context.relatedAlerts : context.relatedAlerts.slice(0, RELATED_PREVIEW)).map((a) => (
-                  <RelatedAlertCard
-                    key={a._id}
-                    alert={a}
-                    selected={a._id === alert._id}
-                    onClick={() => onSelectAlert(a)}
-                  />
-                ))}
-              </div>
             </ExpandSection>
           )}
         </>

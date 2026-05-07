@@ -7,15 +7,23 @@
 
 .toast-stack {
   position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 24px;
+  right: 200px;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   gap: 8px;
   z-index: 1500;
   pointer-events: none;
-  max-width: min(560px, calc(100vw - 32px));
+  max-width: min(420px, calc(100vw - 240px));
+}
+
+@media (max-width: 900px) {
+  .toast-stack {
+    top: 16px;
+    right: 16px;
+    left: 16px;
+    max-width: none;
+  }
 }
 
 .toast {
@@ -36,8 +44,8 @@
 }
 
 @keyframes toastIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translate(12px, -4px); }
+  to { opacity: 1; transform: translate(0, 0); }
 }
 
 .toast-tone-info { border-left-color: #5c7cfa; }
