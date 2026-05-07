@@ -60,6 +60,23 @@ describe("createCredentialClient", () => {
       expect(client.defaultName()).toBe("primary");
     });
 
+    it("treats an unsubstituted ${user_config.*} CLUSTERS_FILE as unset", () => {
+      // Claude Desktop's .mcpb host leaves file-typed user_config fields
+      // as the literal `${user_config.<name>}` token when the user doesn't
+      // pick a file. Without this, we'd try to open that token as a path.
+      process.env.CLUSTERS_FILE = "${user_config.clusters_file}";
+      setClustersJson([validCluster()]);
+
+      const client = createCredentialClient();
+      expect(client.defaultName()).toBe("primary");
+    });
+
+    it("treats an unsubstituted ${user_config.*} CLUSTERS_JSON as unset", () => {
+      process.env.CLUSTERS_JSON = "${user_config.clusters_json}";
+
+      expect(() => createCredentialClient()).toThrow(/No clusters configured/);
+    });
+
     it("treats the .mcpb empty-template CLUSTERS_JSON as unset and falls through to CLUSTERS_FILE", () => {
       const dir = mkdtempSync(join(tmpdir(), "creds-test-"));
       try {

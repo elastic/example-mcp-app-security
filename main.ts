@@ -16,16 +16,41 @@ const isStdio = process.argv.includes("--stdio");
 
 /**
  * Format a startup error so it's actually useful in the MCP host's log
- * pane. The host only echoes stderr — a thrown Error from inside an
- * ES-module top-level-await can be swallowed before the runtime flushes
- * its default report — so we write our own readable message first, then
- * exit non-zero.
+ * pane.
+ *
+ * Two subtleties make this trickier than it looks:
+ *
+ *  1. A thrown Error from an ES-module top-level-await can be swallowed
+ *     before the runtime flushes its default report, so we write our own
+ *     readable message instead of relying on Node's unhandled-rejection
+ *     printer.
+ *  2. When stderr is a *pipe* (which it always is under an MCP host like
+ *     Claude Desktop), `console.error` is non-blocking. Calling
+ *     `process.exit()` immediately after writing terminates the process
+ *     before libuv flushes the pipe, so the host sees only
+ *     "Server transport closed unexpectedly" with no body. We work around
+ *     this by waiting for the write callback (or a short timeout) before
+ *     exiting, which is enough to get the message into the host's log.
  */
-function fatal(prefix: string, err: unknown): never {
+function fatal(prefix: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error && err.stack ? `\n${err.stack}` : "";
-  console.error(`[elastic-security] ${prefix}: ${message}${stack}`);
-  process.exit(1);
+  const line = `[elastic-security] ${prefix}: ${message}${stack}\n`;
+
+  let exited = false;
+  const exit = (): void => {
+    if (exited) return;
+    exited = true;
+    process.exit(1);
+  };
+
+  // Belt-and-braces: exit even if the write callback never fires (e.g.
+  // pipe already closed). 1s is long enough for any reasonable flush
+  // and short enough that the host doesn't sit waiting on us.
+  const timer = setTimeout(exit, 1000);
+  timer.unref();
+
+  process.stderr.write(line, exit);
 }
 
 if (isStdio) {

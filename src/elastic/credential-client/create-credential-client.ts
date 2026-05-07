@@ -95,6 +95,20 @@ interface ParsedClusters {
 const stripTrailingSlash = (url: string): string => url.replace(/\/$/, "");
 
 /**
+ * Detect a literal, unsubstituted Claude Desktop env-template placeholder
+ * such as `${user_config.clusters_file}`.
+ *
+ * The .mcpb host *does* substitute empty strings for unset string-typed
+ * `user_config` fields, but for unset **file**-typed fields it leaves the
+ * raw `${user_config.<name>}` token untouched in the env value. Without
+ * this guard, `readSource()` happily treats the literal token as a real
+ * file path and crashes the server on first init with an opaque ENOENT.
+ */
+function isUnsubstitutedTemplate(raw: string): boolean {
+  return /^\$\{[^}]+\}$/.test(raw);
+}
+
+/**
  * Detect the "all-empty placeholder" shape produced by the Claude Desktop
  * (.mcpb) install dialog when the user picks a Clusters File and leaves the
  * inline single-cluster fields blank.
@@ -124,9 +138,16 @@ function isEmptyTemplatePlaceholder(raw: string): boolean {
 }
 
 function readSource(): RawSource {
-  const file = process.env.CLUSTERS_FILE?.trim();
+  const rawFile = process.env.CLUSTERS_FILE?.trim();
+  const file =
+    rawFile && !isUnsubstitutedTemplate(rawFile) ? rawFile : undefined;
   const rawJson = process.env.CLUSTERS_JSON?.trim();
-  const json = rawJson && !isEmptyTemplatePlaceholder(rawJson) ? rawJson : undefined;
+  const json =
+    rawJson &&
+    !isUnsubstitutedTemplate(rawJson) &&
+    !isEmptyTemplatePlaceholder(rawJson)
+      ? rawJson
+      : undefined;
 
   if (file && json) {
     console.warn(
