@@ -8,11 +8,7 @@ Download `example-mcp-app-security.mcpb` from the [latest GitHub release](https:
 
 If double-click doesn't work (e.g. Claude Desktop is not associated with `.mcpb` files on your system): open Claude Desktop → **Settings → Extensions → Advanced settings → Install Extension...** → select the `.mcpb` file.
 
-Claude Desktop installs the extension and then opens a configuration dialog. **Pick exactly one** of the configuration methods below, tick the acknowledgment checkbox at the bottom, and click **Save**.
-
-### Option A — single cluster (simplest)
-
-Fill in the three inline fields. Leave the **Clusters File** picker empty.
+Claude Desktop installs the extension and then opens a configuration dialog. Fill in all three required fields and click **Save**:
 
 - **Elasticsearch URL**
 - **Elasticsearch API Key** — see [Creating an API key](./setup-local.md#creating-an-api-key)
@@ -20,19 +16,7 @@ Fill in the three inline fields. Leave the **Clusters File** picker empty.
 
 These are assembled into a `CLUSTERS_JSON` env var for the server (the manifest takes care of this — you don't need to format JSON yourself).
 
-### Option B — multi-cluster, or keep secrets out of the dialog
-
-Use the **Clusters File** picker to point at a JSON file. When a file is set, the inline fields are ignored.
-
-See [Cluster configuration](./setup-local.md#cluster-configuration) for the file shape, including the multi-cluster example.
-
-### Acknowledgment checkbox
-
-Tick **"I have configured my cluster(s) above"** at the bottom of the dialog, then click **Save**.
-
-This checkbox exists because the MCPB manifest spec requires at least one `required` field for Claude Desktop to even open the configuration dialog after install — without it the dialog would be skipped entirely and the server would launch with no credentials. The checkbox value is **not** read by the server; it's purely there to force the dialog to appear so you can fill in Option A or pick a Clusters File for Option B.
-
-> If you tick the box and click **Save** without completing Option A or B, the server will fail at the first tool call with a "looks like an unmodified placeholder" error. Re-open **Settings → Extensions → Elastic Security → Configure** to fix it.
+> **Multi-cluster setups:** the Claude Desktop install dialog currently only exposes a single cluster. The server itself supports multi-cluster (`CLUSTERS_JSON` / `CLUSTERS_FILE`) and the dialog will gain a clusters-file picker once full multi-cluster support lands. For now, multi-cluster users should use [manual config](#option-2-manual-config-build-from-source) below or [build and run locally](./setup-local.md).
 
 After install:
 

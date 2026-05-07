@@ -48,7 +48,7 @@ describe("createCredentialClient", () => {
   describe("source resolution", () => {
     it("throws when neither CLUSTERS_FILE nor CLUSTERS_JSON is set", () => {
       expect(() => createCredentialClient()).toThrow(
-        /No clusters configured.*pick a Clusters File or/s
+        /No clusters configured.*CLUSTERS_JSON.*CLUSTERS_FILE/s
       );
     });
 

@@ -95,29 +95,35 @@ interface ParsedClusters {
 const stripTrailingSlash = (url: string): string => url.replace(/\/$/, "");
 
 /**
- * Detect a literal, unsubstituted Claude Desktop env-template placeholder
- * such as `${user_config.clusters_file}`.
+ * Detect a literal, unsubstituted env-template placeholder such as
+ * `${user_config.<name>}`.
  *
- * The .mcpb host *does* substitute empty strings for unset string-typed
- * `user_config` fields, but for unset **file**-typed fields it leaves the
- * raw `${user_config.<name>}` token untouched in the env value. Without
- * this guard, `readSource()` happily treats the literal token as a real
- * file path and crashes the server on first init with an opaque ENOENT.
+ * Some hosts (notably .mcpb / Claude Desktop for file-typed `user_config`
+ * fields) leave the raw token untouched in the env value when the field
+ * is unset, instead of substituting an empty string. Without this guard,
+ * `readSource()` would happily treat the literal token as a real file
+ * path and crash the server on first init with an opaque ENOENT.
+ *
+ * The current `manifest.json` only declares string-typed fields, so this
+ * shouldn't fire from a fresh install — but the guard is kept for
+ * forwards-compatibility (e.g. when a clusters-file picker is re-added)
+ * and for stale / manually-edited configs.
  */
 function isUnsubstitutedTemplate(raw: string): boolean {
   return /^\$\{[^}]+\}$/.test(raw);
 }
 
 /**
- * Detect the "all-empty placeholder" shape produced by the Claude Desktop
- * (.mcpb) install dialog when the user picks a Clusters File and leaves the
- * inline single-cluster fields blank.
+ * Detect the "all-empty placeholder" shape that results when the .mcpb
+ * host substitutes empty strings into a `CLUSTERS_JSON` template because
+ * none of the inline credential fields are populated.
  *
  * The manifest's env templating substitutes empty strings for unset
  * `user_config` values, yielding e.g. `[{"name":"primary",
- * "elasticsearchUrl":"","kibanaUrl":"","elasticsearchApiKey":""}]`. We treat
- * that as "the user didn't fill in inline credentials" rather than a
- * malformed config.
+ * "elasticsearchUrl":"","kibanaUrl":"","elasticsearchApiKey":""}]`. We
+ * treat that as "no inline credentials configured" rather than a malformed
+ * config so we can fall through to `CLUSTERS_FILE` (or surface the
+ * "no clusters configured" error) instead of failing schema validation.
  */
 function isEmptyTemplatePlaceholder(raw: string): boolean {
   let parsed: unknown;
@@ -168,10 +174,12 @@ function readSource(): RawSource {
     return { raw: json, source: "CLUSTERS_JSON" };
   }
   throw new Error(
-    "No clusters configured. Either point CLUSTERS_FILE at a JSON file " +
-      "describing your cluster(s), or set CLUSTERS_JSON to an inline JSON " +
-      "array. In the Claude Desktop install dialog, pick a Clusters File or " +
-      "fill in the Elasticsearch URL, Kibana URL, and API key fields."
+    "No clusters configured. Set CLUSTERS_JSON to an inline JSON array " +
+      "describing your cluster(s), or set CLUSTERS_FILE to the absolute " +
+      "path of a JSON file with the same shape. In the Claude Desktop " +
+      "install dialog, fill in the Elasticsearch URL, Kibana URL, and " +
+      "Elasticsearch API Key fields. See " +
+      "docs/setup-local.md#cluster-configuration for the schema."
   );
 }
 
