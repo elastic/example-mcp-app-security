@@ -35,6 +35,7 @@ import {
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
 import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { stripKibanaTemplateSyntax } from "./template-syntax";
 import "./styles.css";
 
 type ConfidenceKey = "high" | "moderate" | "low";
@@ -151,7 +152,8 @@ function EntityFlyout({ state, detail, onClose }: {
   onClose: () => void;
 }) {
   const cfg = ENTITY_STYLES[state.type] || ENTITY_STYLES.host;
-  const risk = detail?.entityRisk?.find((er) => er.name === state.value);
+  const showRiskPanel = state.type === "host" || state.type === "user";
+  const risk = detail?.entityRisk?.find((er) => er.type === state.type && er.name === state.value);
   const alerts = detail?.alerts?.filter((a) =>
     (state.type === "host" && a.host === state.value) ||
     (state.type === "user" && a.user === state.value)
@@ -174,24 +176,26 @@ function EntityFlyout({ state, detail, onClose }: {
         <button className="ef-close" onClick={onClose}>{"\u2715"}</button>
       </div>
 
-      {risk && risk.level.toLowerCase() !== "unknown" ? (
-        <div className="ef-risk">
-          <div className="ef-risk-bar">
-            <div
-              className="ef-risk-fill"
-              style={{
-                width: `${Math.min(risk.score, 100)}%`,
-                background: risk.level === "critical" ? "var(--severity-critical)"
-                  : risk.level === "high" ? "var(--severity-high)"
-                  : "var(--severity-medium)",
-              }}
-            />
+      {showRiskPanel && (
+        risk && risk.level.toLowerCase() !== "unknown" ? (
+          <div className="ef-risk">
+            <div className="ef-risk-bar">
+              <div
+                className="ef-risk-fill"
+                style={{
+                  width: `${Math.min(risk.score, 100)}%`,
+                  background: risk.level === "critical" ? "var(--severity-critical)"
+                    : risk.level === "high" ? "var(--severity-high)"
+                    : "var(--severity-medium)",
+                }}
+              />
+            </div>
+            <span className="ef-risk-label">{risk.score.toFixed(0)}</span>
+            <span className="ef-risk-level">{risk.level}</span>
           </div>
-          <span className="ef-risk-label">{risk.score.toFixed(0)}</span>
-          <span className="ef-risk-level">{risk.level}</span>
-        </div>
-      ) : (
-        <div className="ef-unscored">Risk engine not enabled for this entity</div>
+        ) : (
+          <div className="ef-unscored">Risk engine not enabled for this entity</div>
+        )
       )}
 
       {alerts.length > 0 && (
@@ -1015,10 +1019,10 @@ function DiscoveryCard({
           </div>
           <span className="discovery-card-time">{timeAgo(d.timestamp)}</span>
         </div>
-        <h3 className="discovery-card-title">{d.title}</h3>
+        <h3 className="discovery-card-title">{stripKibanaTemplateSyntax(d.title)}</h3>
         {!compact && d.summaryMarkdown && (
           <p className="discovery-card-reason">
-            {(d.summaryMarkdown || "").replace(/[#*_`]/g, "").slice(0, 200)}
+            {stripKibanaTemplateSyntax((d.summaryMarkdown || "").replace(/[#*_`]/g, "").slice(0, 200))}
             {(d.summaryMarkdown || "").length > 200 ? "…" : ""}
           </p>
         )}

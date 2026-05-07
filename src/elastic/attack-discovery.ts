@@ -529,7 +529,7 @@ export async function listAIConnectors(): Promise<{ id: string; name: string; ac
     "/api/actions/connectors",
     { apiVersion: "2023-10-31" }
   );
-  const aiTypes = new Set([".gen-ai", ".bedrock", ".gemini"]);
+  const aiTypes = new Set([".gen-ai", ".bedrock", ".gemini", ".inference"]);
   return all
     .filter((c) => aiTypes.has(c.connector_type_id || c.action_type_id || ""))
     .map((c) => ({

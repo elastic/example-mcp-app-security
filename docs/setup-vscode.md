@@ -69,3 +69,22 @@ Add to `.vscode/mcp.json`:
   }
 }
 ```
+
+## Updating
+
+**npx (Option 1):** If your config points to `.../releases/latest/download/elastic-security-mcp-app.tgz`, you're always running the latest version. Just restart the MCP server in VS Code (or restart VS Code) to pick up a new release. If you pinned a specific version, update the version in the tarball filename.
+
+**Build from source (Options 2 & 3):**
+
+```bash
+cd example-mcp-app-security
+git pull
+npm install
+npm run build
+```
+
+Restart the server (or restart VS Code) after updating.
+
+**Skills:** See [Updating skills](./setup-skills.md#updating-skills).
+
+**Checking your version:** Run the server with `--version`, or check `package.json` in your local clone. For npx, the version is printed in the server startup logs.
