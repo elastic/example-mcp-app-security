@@ -1,0 +1,42 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+/* "Showing N alerts   Sort by: …   Group by: …   Details [toggle]" bar */
+
+.list-subheader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ds-text-label);
+  white-space: nowrap;
+}
+
+.list-subheader strong {
+  font-weight: 400;
+  color: #ffffff;
+}
+
+[data-theme="light"] .list-subheader strong {
+  color: #000000;
+}
+
+.list-subheader-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.list-subheader-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}

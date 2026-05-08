@@ -26,6 +26,62 @@ import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-attack-discoveries/mcp-app.html";
 
+/**
+ * Split a discovery's `detailsMarkdown` into the bullets that belong on the
+ * case description ("Immediate actions") and the rest of the narrative
+ * ("Attack chain"), so cases created from Attack Discoveries follow a
+ * predictable structure regardless of what the LLM produced.
+ *
+ * If the markdown does not contain a recognizable Immediate Actions section,
+ * we fall back to a small, generic checklist so the description always has
+ * actionable content.
+ */
+function splitDiscoveryDetails(detailsMarkdown: string | undefined): {
+  immediateActions: string;
+  attackChain: string;
+} {
+  const FALLBACK = [
+    "- Validate the affected user account(s) and recent authentication events.",
+    "- Investigate the affected host(s) for further indicators of compromise.",
+    "- Acknowledge or escalate the linked alerts based on triage outcome.",
+  ].join("\n");
+
+  if (!detailsMarkdown?.trim()) {
+    return { immediateActions: FALLBACK, attackChain: "" };
+  }
+
+  // Walk the markdown line-by-line and look for a heading (`## …` / `### …`)
+  // whose text mentions "immediate". When found, capture everything until
+  // the next heading at the same-or-higher level (or end of document).
+  const lines = detailsMarkdown.split(/\r?\n/);
+  let startIdx = -1;
+  let endIdx = lines.length;
+
+  for (let i = 0; i < lines.length; i++) {
+    const headingMatch = /^(#{2,3})\s+(.+)$/.exec(lines[i]);
+    if (!headingMatch) continue;
+    if (startIdx === -1) {
+      if (/immediate/i.test(headingMatch[2])) startIdx = i;
+    } else {
+      endIdx = i;
+      break;
+    }
+  }
+
+  if (startIdx === -1) {
+    return { immediateActions: FALLBACK, attackChain: detailsMarkdown.trim() };
+  }
+
+  const sectionBody = lines.slice(startIdx + 1, endIdx).join("\n").trim();
+  const beforeBlock = lines.slice(0, startIdx).join("\n").trim();
+  const afterBlock = lines.slice(endIdx).join("\n").trim();
+  const attackChain = [beforeBlock, afterBlock].filter(Boolean).join("\n\n").trim();
+  return {
+    immediateActions: sectionBody || FALLBACK,
+    attackChain,
+  };
+}
+
 export function registerAttackDiscoveryTools(server: McpServer) {
   registerAppTool(
     server,
@@ -172,27 +228,40 @@ export function registerAttackDiscoveryTools(server: McpServer) {
       const results: { findingId: string; caseId: string; caseTitle: string; alertsAttached: number }[] = [];
 
       for (const finding of findings) {
+        const { immediateActions, attackChain } = splitDiscoveryDetails(finding.detailsMarkdown);
+
+        // Description: short, predictable structure — summary + risk metadata + Immediate actions.
+        const descriptionLines: string[] = [
+          `## Attack Discovery Finding`,
+          ``,
+          `**Risk Score**: ${finding.riskScore}`,
+          `**Confidence**: ${finding.confidence || "N/A"}`,
+          `**MITRE Tactics**: ${finding.mitreTactics.join(", ") || "None"}`,
+          `**Alert Count**: ${finding.alertIds.length}`,
+          ``,
+          finding.summaryMarkdown,
+          ``,
+          `## Immediate actions`,
+          ``,
+          immediateActions,
+        ];
+
         const caseData = await createCase({
           title: `[Attack Discovery] ${finding.title}`,
-          description: [
-            `## Attack Discovery Finding`,
-            ``,
-            `**Risk Score**: ${finding.riskScore}`,
-            `**Confidence**: ${finding.confidence || "N/A"}`,
-            `**MITRE Tactics**: ${finding.mitreTactics.join(", ") || "None"}`,
-            `**Alert Count**: ${finding.alertIds.length}`,
-            ``,
-            finding.summaryMarkdown,
-            ``,
-            ...(finding.detailsMarkdown ? [`---`, ``, finding.detailsMarkdown] : []),
-          ].join("\n"),
+          description: descriptionLines.join("\n"),
           tags: ["attack-discovery", "ease", ...finding.mitreTactics.map((t) => `mitre:${t}`)],
           severity: finding.riskScore >= 80 ? "critical" : finding.riskScore >= 60 ? "high" : finding.riskScore >= 40 ? "medium" : "low",
         });
 
-        if (finding.detailsMarkdown) {
+        // First comment: the full attack chain narrative (everything except
+        // the Immediate Actions section, which is already in the description).
+        if (attackChain) {
           try {
-            await addComment(caseData.id, finding.detailsMarkdown);
+            await addComment(caseData.id, [
+              `## Attack chain`,
+              ``,
+              attackChain,
+            ].join("\n"));
           } catch {
             // comment failed — case still created
           }

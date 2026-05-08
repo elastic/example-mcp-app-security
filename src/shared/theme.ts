@@ -7,25 +7,42 @@
 
 import type { App } from "@modelcontextprotocol/ext-apps";
 
+/**
+ * Injects the design-system CSS variables (colors, typography, radii, motion)
+ * into the page and wires up host-context theme switching.
+ *
+ * All real component styling lives in `src/shared/components/*.css` and the
+ * per-view `styles.css` files. This function ONLY provides the variables they
+ * reference, plus a `data-theme="light"` attribute toggle when the host says
+ * the user prefers light mode.
+ */
 export function applyTheme(app: App) {
   const style = document.createElement("style");
   style.textContent = `
     :root {
-      --bg-primary: #0f1117;
-      --bg-secondary: #161822;
-      --bg-tertiary: #1c1f2e;
-      --bg-elevated: #222639;
-      --bg-hover: #262a3d;
-      --bg-active: #2d3250;
-      --text-primary: #e8eaf0;
-      --text-secondary: #a0a4b8;
-      --text-muted: #636882;
-      --text-dim: #464b63;
-      --border: #282d42;
-      --border-subtle: #1f2336;
-      --border-focus: #4c6ef5;
+      /* ── Surfaces (dark, Figma-derived) ─────────────────────────────── */
+      --bg-primary: #1f1f1e;        /* page + widget panel background */
+      --bg-secondary: #1f1f1e;      /* secondary surface — same as primary in DS */
+      --bg-tertiary: #171716;       /* deepest surface: tracks, inset inputs */
+      --bg-elevated: #262626;       /* cards, search input, elevated surfaces */
+      --bg-hover: #2a2a2a;          /* hover state on elevated */
+      --bg-active: #333333;         /* active/pressed */
+
+      /* ── Text ───────────────────────────────────────────────────────── */
+      --text-primary: #e6e6e5;      /* headings, primary content */
+      --text-secondary: #adaca1;    /* body copy, reason */
+      --text-muted: #817f78;        /* labels, dim metadata, placeholder */
+      --text-dim: #7b7972;          /* even dimmer */
+      --ds-text-label: #b9b9ae;     /* Fira Mono data labels (facts, legends) */
+
+      /* ── Borders ────────────────────────────────────────────────────── */
+      --border: #474745;            /* primary border for cards/panels/inputs */
+      --border-subtle: #2a2a2a;     /* subtle divider when #474745 is too hot */
+      --border-focus: #5c7cfa;
+
+      /* ── Accent + severity (Figma palette) ──────────────────────────── */
       --accent: #5c7cfa;
-      --accent-hover: #748ffc;
+      --accent-hover: #7c97fb;
       --accent-dim: rgba(92, 124, 250, 0.12);
       --severity-low: #40c790;
       --severity-medium: #f0b840;
@@ -42,11 +59,20 @@ export function applyTheme(app: App) {
       --success: #40c790;
       --warning: #f0b840;
       --error: #f04040;
-      --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-      --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+      /* ── Typography (Fira Sans / Fira Mono per Figma) ───────────────── */
+      --font-sans: 'Fira Sans', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'Fira Mono', 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+      /* ── Radii ──────────────────────────────────────────────────────── */
       --radius-sm: 4px;
       --radius-md: 8px;
       --radius-lg: 12px;
+      --radius-tag: 6px;            /* MITRE-style pill/tag */
+      --radius-input: 7px;          /* search input */
+      --radius-track: 10px;         /* progress bar track/fill */
+
+      /* ── Elevation + motion ─────────────────────────────────────────── */
       --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
       --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
       --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
@@ -55,18 +81,19 @@ export function applyTheme(app: App) {
     }
 
     [data-theme="light"] {
-      --bg-primary: #f5f6fa;
-      --bg-secondary: #ffffff;
-      --bg-tertiary: #eef0f6;
+      --bg-primary: #f7f7f6;
+      --bg-secondary: #f7f7f6;
+      --bg-tertiary: #ececea;
       --bg-elevated: #ffffff;
-      --bg-hover: #e8eaf2;
-      --bg-active: #dde0ec;
-      --text-primary: #1a1d2e;
-      --text-secondary: #4a4f6a;
-      --text-muted: #7a7f98;
-      --text-dim: #a0a4b8;
-      --border: #d8dbe8;
-      --border-subtle: #e8eaf2;
+      --bg-hover: #ececea;
+      --bg-active: #dddcd8;
+      --text-primary: #1a1a19;
+      --text-secondary: #4a4a46;
+      --text-muted: #817f78;
+      --text-dim: #a3a3a0;
+      --ds-text-label: #4a4a46;
+      --border: #d8d8d4;
+      --border-subtle: #ececea;
       --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
       --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
       --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);

@@ -1,0 +1,67 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+/* Compact severity pill (Figma "critical-red" pill on group cards). */
+
+.sev-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  background: transparent;
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
+.sev-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.sev-chip-low {
+  color: var(--severity-low);
+  border-color: color-mix(in srgb, var(--severity-low) 40%, transparent);
+}
+
+.sev-chip-medium {
+  color: var(--severity-medium);
+  border-color: color-mix(in srgb, var(--severity-medium) 40%, transparent);
+}
+
+.sev-chip-high {
+  color: var(--severity-high);
+  border-color: color-mix(in srgb, var(--severity-high) 40%, transparent);
+}
+
+.sev-chip-critical {
+  color: var(--severity-critical);
+  border-color: color-mix(in srgb, var(--severity-critical) 45%, transparent);
+}
+
+.sev-chip-no-dot .sev-chip-dot {
+  display: none;
+}
+
+/* Severity stripe — apply alongside `position: relative` on a card. */
+.sev-stripe {
+  position: relative;
+}
+
+.sev-stripe-low { box-shadow: inset 3px 0 0 0 var(--severity-low); }
+.sev-stripe-medium { box-shadow: inset 3px 0 0 0 var(--severity-medium); }
+.sev-stripe-high { box-shadow: inset 3px 0 0 0 var(--severity-high); }
+.sev-stripe-critical { box-shadow: inset 3px 0 0 0 var(--severity-critical); }
