@@ -23,7 +23,7 @@ export function QueryPill({ label, onClear, tone = "amber", ariaLabel = "Clear f
   const toneClass = tone === "amber" ? "" : `tone-${tone}`;
   return (
     <span className={`query-pill ${toneClass}`.trim()}>
-      {label}
+      <span className="query-pill-label">{label}</span>
       {onClear && (
         <button type="button" onClick={onClear} aria-label={ariaLabel}>
           <CloseIcon />

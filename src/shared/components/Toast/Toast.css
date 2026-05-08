@@ -5,94 +5,95 @@
  * 2.0.
  */
 
+/*
+ * Toasts render into a portal anchored to <body>, so positioning lives here
+ * (not on a scoped wrapper). The stack is pinned to the bottom-right corner
+ * with a z-index high enough to float above the host's chat composer.
+ */
+
 .toast-stack {
   position: fixed;
-  top: 24px;
-  right: 200px;
+  bottom: 24px;
+  right: 24px;
+  left: auto;
+  top: auto;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
-  z-index: 1500;
+  z-index: 2147483000;
   pointer-events: none;
-  max-width: min(420px, calc(100vw - 240px));
-}
-
-@media (max-width: 900px) {
-  .toast-stack {
-    top: 16px;
-    right: 16px;
-    left: 16px;
-    max-width: none;
-  }
+  max-width: min(420px, calc(100vw - 48px));
 }
 
 .toast {
   pointer-events: auto;
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
   min-width: 280px;
-  padding: 10px 12px 10px 14px;
-  background: #262626;
-  border: 1px solid #474745;
-  border-left-width: 3px;
-  border-radius: 8px;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
-  font-size: 12.5px;
-  color: #e6e6e5;
-  animation: toastIn 0.2s ease-out both;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  line-height: 1.45;
+  animation: slideInRight 0.2s var(--transition-normal) both;
 }
 
-@keyframes toastIn {
-  from { opacity: 0; transform: translate(12px, -4px); }
-  to { opacity: 1; transform: translate(0, 0); }
-}
-
-.toast-tone-info { border-left-color: #5c7cfa; }
-.toast-tone-success { border-left-color: #40c790; }
-.toast-tone-danger { border-left-color: #f04040; }
+.toast-tone-info { border-left-color: var(--accent); }
+.toast-tone-success { border-left-color: var(--success); }
+.toast-tone-danger { border-left-color: var(--error); }
 
 .toast-icon {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 18px;
   height: 18px;
+  margin-top: 1px;
   border-radius: 50%;
-  flex-shrink: 0;
+  font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1;
+  color: #ffffff;
 }
 
-.toast-tone-info .toast-icon { color: #5c7cfa; background: rgba(92, 124, 250, 0.12); }
-.toast-tone-success .toast-icon { color: #40c790; background: rgba(64, 199, 144, 0.12); }
-.toast-tone-danger .toast-icon { color: #f04040; background: rgba(240, 64, 64, 0.12); }
+.toast-tone-info .toast-icon { background: var(--accent); }
+.toast-tone-success .toast-icon { background: var(--success); }
+.toast-tone-danger .toast-icon { background: var(--error); }
 
 .toast-message {
   flex: 1;
   min-width: 0;
-  line-height: 1.4;
-  color: #e6e6e5;
-  word-wrap: break-word;
+  color: var(--text-primary);
+  word-break: break-word;
 }
 
 .toast-action {
   flex-shrink: 0;
+  padding: 2px 8px;
   background: transparent;
-  border: 1px solid #5c7cfa;
-  border-radius: 5px;
-  padding: 4px 10px;
-  color: #adc0ff;
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .toast-action:hover {
-  background: rgba(92, 124, 250, 0.14);
-  color: #e6e6e5;
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent-hover);
 }
 
 .toast-close {
@@ -100,17 +101,24 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   background: transparent;
-  border: 0;
-  border-radius: 4px;
-  color: #817f78;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .toast-close:hover {
-  color: #e6e6e5;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.toast-close svg {
+  display: block;
+  width: 12px;
+  height: 12px;
 }
