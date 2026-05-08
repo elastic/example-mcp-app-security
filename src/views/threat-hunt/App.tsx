@@ -5,11 +5,11 @@
  * 2.0.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { App as McpApp } from "@modelcontextprotocol/ext-apps";
-import { applyTheme } from "../../shared/theme";
+import React, { useCallback, useRef, useState } from "react";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
 import type { EsqlResult } from "../../shared/types";
+import { useFullscreen } from "../../shared/hooks/useFullscreen";
+import { useMcpApp } from "../../shared/hooks/useMcpApp";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
 // TODO: re-enable the force-directed Network view once it's stable.
@@ -67,14 +67,11 @@ const DEFAULT_RESULTS: EsqlResult = {
 };
 
 export function App() {
-  const appRef = useRef<McpApp | null>(null);
-  const [connected, setConnected] = useState(false);
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [results, setResults] = useState<EsqlResult | null>(DEFAULT_RESULTS);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const [hasExecuted, setHasExecuted] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [graphNodes, setGraphNodes] = useState<GNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GEdge[]>([]);
@@ -86,14 +83,58 @@ export function App() {
   const [nodeDetail, setNodeDetail] = useState<Record<string, unknown> | null>(null);
   const [nodeDetailLoading, setNodeDetailLoading] = useState(false);
 
+  // Pending query/entity references survive across renders so the
+  // ontoolresult callback can stash work that came in before connect()
+  // resolved, and the onConnect callback can flush it.
+  const pendingRef = useRef<{ query: string | null; entity: { type: string; value: string } | null }>({
+    query: null,
+    entity: null,
+  });
+
+  // Forward declaration of the running flush function — populated below once
+  // `executeQuery` and `addEntityToGraph` have been defined. Using a ref
+  // sidesteps the temporal dead zone between `useMcpApp`'s callbacks (which
+  // need to call flush) and the closures themselves (which need `getApp`).
+  const flushPendingRef = useRef<() => void>(() => {});
+
+  const { connected, getApp } = useMcpApp({
+    name: "threat-hunt",
+    version: "1.0.0",
+    onToolResult: (result) => {
+      try {
+        const text = extractToolText(result);
+        if (text) {
+          const data = JSON.parse(text);
+          if (data.params?.query) {
+            const q = String(data.params.query).trim();
+            setQuery(q);
+            pendingRef.current.query = q;
+          }
+          if (data.params?.entity) {
+            pendingRef.current.entity = data.params.entity;
+          }
+        }
+      } catch { /* ignore */ }
+      flushPendingRef.current();
+    },
+    onConnect: () => {
+      // Final flush after the grace window — picks up anything that arrived
+      // before connect() resolved.
+      flushPendingRef.current();
+    },
+  });
+
+  const fullscreen = useFullscreen(getApp);
+
   const executeQuery = useCallback(async (q: string) => {
-    if (!appRef.current || !q.trim()) return;
+    const app = getApp();
+    if (!app || !q.trim()) return;
     setExecuting(true);
     setQueryError(null);
     setResults(null);
     setHasExecuted(true);
     try {
-      const result = await appRef.current.callServerTool({ name: "execute-esql", arguments: { query: q } });
+      const result = await app.callServerTool({ name: "execute-esql", arguments: { query: q } });
       const text = extractCallResult(result);
       if (text) {
         const data = JSON.parse(text) as { error?: string } & EsqlResult;
@@ -111,6 +152,7 @@ export function App() {
       }
     } catch (e) { setQueryError(e instanceof Error ? e.message : String(e)); }
     finally { setExecuting(false); }
+  // `getApp` is a stable accessor returned by `useMcpApp` — safe to omit from deps.
   }, []);
 
   const addEntityToGraph = useCallback((type: string, value: string) => {
@@ -123,13 +165,14 @@ export function App() {
   }, []);
 
   const expandEntity = useCallback(async (type: string, value: string) => {
-    if (!appRef.current) return;
+    const app = getApp();
+    if (!app) return;
 
     const rootId = `${type}:${value}`;
     setGraphNodes((prev) => prev.map((n) => n.id === rootId ? { ...n, loading: true } : n));
 
     try {
-      const result = await appRef.current.callServerTool({
+      const result = await app.callServerTool({
         name: "investigate-entity",
         arguments: { entityType: type, entityValue: value },
       });
@@ -163,9 +206,10 @@ export function App() {
     setSelectedNode(node);
     setNodeDetail(null);
     setNodeDetailLoading(true);
-    if (!appRef.current) { setNodeDetailLoading(false); return; }
+    const app = getApp();
+    if (!app) { setNodeDetailLoading(false); return; }
     try {
-      const result = await appRef.current.callServerTool({
+      const result = await app.callServerTool({
         name: "get-entity-detail",
         arguments: { entityType: node.type, entityValue: node.value },
       });
@@ -214,55 +258,21 @@ export function App() {
   // collapseEntity was used by the hidden InvestigationGraph (force-directed)
   // view; restore alongside that component when re-enabling the Network view.
 
-  useEffect(() => {
-    const app = new McpApp({ name: "threat-hunt", version: "1.0.0" });
-    appRef.current = app;
-    applyTheme(app);
-
-    let pendingQuery: string | null = null;
-    let pendingEntity: { type: string; value: string } | null = null;
-    let isConnected = false;
-
-    const runPending = () => {
-      if (!isConnected) return;
-      if (pendingEntity) {
-        const e = pendingEntity;
-        pendingEntity = null;
-        addEntityToGraph(e.type, e.value);
-      }
-      if (pendingQuery) {
-        const q = pendingQuery;
-        pendingQuery = null;
-        executeQuery(q);
-      }
-    };
-
-    app.ontoolresult = (result) => {
-      try {
-        const text = extractToolText(result);
-        if (text) {
-          const data = JSON.parse(text);
-          if (data.params?.query) {
-            const q = String(data.params.query).trim();
-            setQuery(q);
-            pendingQuery = q;
-          }
-          if (data.params?.entity) {
-            pendingEntity = data.params.entity;
-          }
-        }
-      } catch { /* ignore */ }
-      runPending();
-    };
-
-    app.connect().then(() => {
-      setConnected(true);
-      isConnected = true;
-      setTimeout(runPending, 300);
-    });
-
-    return () => { app.close(); };
-  }, [executeQuery, addEntityToGraph]);
+  // Bind the live flush function so the `useMcpApp` callbacks declared above
+  // can call it via `flushPendingRef.current()` without TDZ issues.
+  flushPendingRef.current = () => {
+    const pending = pendingRef.current;
+    if (pending.entity) {
+      const e = pending.entity;
+      pending.entity = null;
+      addEntityToGraph(e.type, e.value);
+    }
+    if (pending.query) {
+      const q = pending.query;
+      pending.query = null;
+      executeQuery(q);
+    }
+  };
 
   if (!connected) {
     return (
@@ -327,15 +337,11 @@ export function App() {
           <button
             type="button"
             className="hunt-header-icon-btn"
-            onClick={() => {
-              const next = !isFullscreen;
-              try { appRef.current?.requestDisplayMode({ mode: next ? "fullscreen" : "inline" }); } catch {}
-              setIsFullscreen(next);
-            }}
-            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            onClick={fullscreen.toggle}
+            title={fullscreen.isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            aria-label={fullscreen.isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
-            {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+            {fullscreen.isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
           </button>
         </div>
       </header>

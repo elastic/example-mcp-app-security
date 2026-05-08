@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import classNames from "classnames";
 import "./ToggleSwitch.css";
 
 export interface ToggleSwitchProps {
@@ -24,7 +25,7 @@ export function ToggleSwitch({ label, checked, onChange, ariaLabel }: ToggleSwit
         role="switch"
         aria-checked={checked}
         aria-label={ariaLabel ?? label}
-        className={`toggle-switch${checked ? " on" : ""}`}
+        className={classNames("toggle-switch", { on: checked })}
         onClick={() => onChange(!checked)}
       >
         <span className="toggle-switch-thumb" />

@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState } from "react";
+import classNames from "classnames";
 import { ChevronDownIcon } from "../icons/icons";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import "./Dropdown.css";
@@ -61,14 +62,17 @@ export function Dropdown<V extends string>({
         <ChevronDownIcon open={open} />
       </button>
       {open && (
-        <div className={`dropdown-menu${align === "right" ? " align-right" : ""}`} role="listbox">
+        <div
+          className={classNames("dropdown-menu", { "align-right": align === "right" })}
+          role="listbox"
+        >
           {options.map((opt) => (
             <button
               key={opt.value}
               type="button"
               role="option"
               aria-selected={opt.value === value}
-              className={`dropdown-option${opt.value === value ? " active" : ""}`}
+              className={classNames("dropdown-option", { active: opt.value === value })}
               onClick={() => {
                 onChange(opt.value);
                 setOpen(false);

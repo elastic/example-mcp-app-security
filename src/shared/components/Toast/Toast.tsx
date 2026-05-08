@@ -101,21 +101,32 @@ function ToastStack({ toasts, onDismiss }: { toasts: ActiveToast[]; onDismiss: (
   return createPortal(
     <div className="toast-stack" role="region" aria-live="polite" aria-label="Notifications">
       {toasts.map((t) => (
-        <ToastItem key={t.id} toast={t} onDismiss={() => onDismiss(t.id)} />
+        <ToastItem key={t.id} toast={t} onDismiss={onDismiss} />
       ))}
     </div>,
     document.body,
   );
 }
 
-function ToastItem({ toast, onDismiss }: { toast: ActiveToast; onDismiss: () => void }) {
-  const { message, tone = "info", durationMs = 8000, actionLabel, onAction } = toast;
+function ToastItem({ toast, onDismiss }: { toast: ActiveToast; onDismiss: (id: number) => void }) {
+  const { id, message, tone = "info", durationMs = 8000, actionLabel, onAction } = toast;
+
+  // Bind the per-toast dismiss to a ref so the auto-dismiss `useEffect` can
+  // depend on `id` only. Otherwise every re-render of `ToastStack` (e.g. when
+  // *another* toast is added/removed) would create a new arrow function,
+  // change the dep array, clear the existing timer, and start a fresh
+  // 8-second countdown — toasts would never auto-dismiss in a busy UI.
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  const dismissThis = useCallback(() => {
+    onDismissRef.current(id);
+  }, [id]);
 
   useEffect(() => {
     if (!durationMs) return;
-    const timer = setTimeout(onDismiss, durationMs);
+    const timer = setTimeout(dismissThis, durationMs);
     return () => clearTimeout(timer);
-  }, [durationMs, onDismiss]);
+  }, [durationMs, dismissThis]);
 
   return (
     <div className={`toast toast-tone-${tone}`} role="status">
@@ -127,7 +138,7 @@ function ToastItem({ toast, onDismiss }: { toast: ActiveToast; onDismiss: () => 
           className="toast-action"
           onClick={() => {
             onAction();
-            onDismiss();
+            dismissThis();
           }}
         >
           {actionLabel}
@@ -136,7 +147,7 @@ function ToastItem({ toast, onDismiss }: { toast: ActiveToast; onDismiss: () => 
       <button
         type="button"
         className="toast-close"
-        onClick={onDismiss}
+        onClick={dismissThis}
         aria-label="Dismiss notification"
       >
         <CloseIcon />

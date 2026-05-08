@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import classNames from "classnames";
 import "./TwoPaneLayout.css";
 
 export interface TwoPaneLayoutProps {
@@ -27,8 +28,8 @@ export interface TwoPaneLayoutProps {
 export function TwoPaneLayout({ list, detail, className }: TwoPaneLayoutProps) {
   const hasDetail = !!detail;
   return (
-    <div className={className ? `app-body ${className}` : "app-body"}>
-      <div className={`list-pane${hasDetail ? " narrow" : ""}`}>{list}</div>
+    <div className={classNames("app-body", className)}>
+      <div className={classNames("list-pane", { narrow: hasDetail })}>{list}</div>
       {hasDetail && <div className="detail-pane">{detail}</div>}
     </div>
   );

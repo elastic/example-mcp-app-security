@@ -12,6 +12,7 @@ import { extractToolText, extractCallResult } from "../../shared/extract-tool-te
 import { SeverityBadge } from "../../shared/severity";
 import type { AttackDiscoveryFinding, DiscoveryDetail } from "../../shared/types";
 import { AttackFlowDiagram } from "./AttackFlowDiagram";
+import { FactCol } from "./components/FactCol";
 import {
   AppHeader,
   AppShell,
@@ -40,15 +41,10 @@ import { useMcpApp } from "../../shared/hooks/useMcpApp";
 import { stripKibanaTemplateSyntax } from "./template-syntax";
 import "./styles.css";
 
-type ConfidenceKey = "high" | "moderate" | "low";
+import { ConfidenceChip, CONFIDENCE_LABEL, type ConfidenceKey } from "./components/ConfidenceChip";
+
 type SeverityKey = Severity;
 type ConfidenceFilter = "all" | ConfidenceKey;
-
-const CONFIDENCE_LABEL: Record<ConfidenceKey, string> = {
-  high: "High",
-  moderate: "Moderate",
-  low: "Low",
-};
 
 const CONFIDENCE_FILTERS: { key: ConfidenceFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -83,15 +79,6 @@ const GROUP_LABEL: Record<GroupKey, string> = Object.fromEntries(
 const CONFIDENCE_DROPDOWN_OPTIONS: { value: ConfidenceFilter; label: string }[] = CONFIDENCE_FILTERS.map(
   (f) => ({ value: f.key, label: f.label }),
 );
-
-function ConfidenceChip({ level }: { level: ConfidenceKey }) {
-  return (
-    <span className={`conf-chip conf-chip-${level}`} aria-label={`Confidence: ${CONFIDENCE_LABEL[level]}`}>
-      <span className="conf-chip-dot" />
-      <span className="conf-chip-label">{CONFIDENCE_LABEL[level]}</span>
-    </span>
-  );
-}
 
 const ENTITY_STYLES: Record<string, { icon: string; color: string; label: string }> = {
   host: { icon: "\uD83D\uDDA5\uFE0F", color: "#40c790", label: "HOST" },
@@ -1494,42 +1481,3 @@ function DetailView({
   );
 }
 
-function FactCol({ label, value, truncate, entities, onEntityClick }: {
-  label: string;
-  value?: string;
-  truncate?: boolean;
-  entities?: { type: string; value: string }[];
-  onEntityClick?: (type: string, value: string, x: number, y: number) => void;
-}) {
-  const hasEntities = entities && entities.length > 0 && onEntityClick;
-  return (
-    <div className="discovery-detail-fact">
-      <div className="discovery-detail-fact-label">{label}</div>
-      {hasEntities ? (
-        <div className={`discovery-detail-fact-value${truncate ? " truncate" : ""}`} title={value || undefined}>
-          {entities.map((e, i) => (
-            <React.Fragment key={`${e.type}:${e.value}`}>
-              {i > 0 && <span className="discovery-detail-fact-sep">, </span>}
-              <button
-                type="button"
-                className="discovery-detail-fact-entity"
-                onClick={(ev) => {
-                  ev.stopPropagation();
-                  const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-                  onEntityClick(e.type, e.value, r.left, r.bottom + 6);
-                }}
-                title={`${e.type}: ${e.value}`}
-              >
-                {e.value}
-              </button>
-            </React.Fragment>
-          ))}
-        </div>
-      ) : (
-        <div className={`discovery-detail-fact-value${truncate ? " truncate" : ""}`} title={value || undefined}>
-          {value || "—"}
-        </div>
-      )}
-    </div>
-  );
-}

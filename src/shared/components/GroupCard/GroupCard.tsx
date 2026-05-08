@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import classNames from "classnames";
 import { ChevronRightIcon } from "../icons/icons";
 import { SEVERITY_LABEL, SeverityChip, toSeverity } from "../SeverityChip/SeverityChip";
 import type { Severity } from "../SeverityChip/SeverityChip";
@@ -42,7 +43,7 @@ export function GroupCard({
   return (
     <button
       type="button"
-      className={`group-card sev-${sev}${expanded ? " expanded" : ""}`}
+      className={classNames("group-card", `sev-${sev}`, { expanded })}
       onClick={onToggle}
       aria-expanded={expanded}
     >
@@ -57,7 +58,7 @@ export function GroupCard({
         <span className="group-card-count">
           {countLabel}: <span className="group-card-count-value">{count}</span>
         </span>
-        <span className={`group-card-chevron${expanded ? " open" : ""}`} aria-hidden="true">
+        <span className={classNames("group-card-chevron", { open: expanded })} aria-hidden="true">
           <ChevronRightIcon open={expanded} />
         </span>
       </div>

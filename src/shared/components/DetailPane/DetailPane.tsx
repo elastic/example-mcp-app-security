@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import classNames from "classnames";
 import { CloseIcon } from "../icons/icons";
 import "./DetailPane.css";
 
@@ -23,11 +24,8 @@ export interface DetailPaneProps {
  * `<TwoPaneLayout detail={…}>` slot.
  */
 export function DetailPane({ children, onClose, elevated, className }: DetailPaneProps) {
-  const cls = ["detail-pane-content", elevated ? "elevated" : "", className ?? ""]
-    .filter(Boolean)
-    .join(" ");
   return (
-    <div className={cls}>
+    <div className={classNames("detail-pane-content", className, { elevated })}>
       {onClose && (
         <button
           type="button"

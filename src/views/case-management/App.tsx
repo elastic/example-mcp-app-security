@@ -11,6 +11,8 @@ import { timeAgo } from "../../shared/theme";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
 import type { KibanaCase } from "../../shared/types";
 import { CaseForm } from "./components/CaseForm";
+import { AttachedAlertRow } from "./components/AttachedAlertRow";
+import { CommentRow } from "./components/CommentRow";
 import {
   AppHeader,
   AppShell,
@@ -997,69 +999,3 @@ function ExpandSection({ title, count, expanded, onToggle, previewCount, childre
   );
 }
 
-function AttachedAlertRow({ alert }: { alert: unknown }) {
-  const a = (alert || {}) as Record<string, unknown>;
-  const src = ((a._source as Record<string, unknown>) || a) as Record<string, unknown>;
-  const rule = String(src["kibana.alert.rule.name"] || a.ruleName || a.rule || "Unknown rule");
-  const severity = String(src["kibana.alert.severity"] || a.severity || "low").toLowerCase() as SeverityKey;
-  const ts = String(src["@timestamp"] || a.timestamp || "");
-  return (
-    <div className={`case-detail-alert-row sev-${severity}`}>
-      <div className="case-detail-alert-row-main">
-        <div className="case-detail-alert-row-title">{rule}</div>
-        <div className="case-detail-alert-row-meta">{SEVERITY_LABEL[severity] || severity}</div>
-      </div>
-      {ts && <div className="case-detail-alert-row-time">{timeAgo(ts)}</div>}
-    </div>
-  );
-}
-
-function CommentRow({ comment }: { comment: unknown }) {
-  const c = (comment || {}) as Record<string, unknown>;
-  const by = (c.created_by || {}) as Record<string, unknown>;
-  const author = String(by.full_name || by.username || "Unknown");
-  const email = typeof by.email === "string" ? by.email : "";
-  const body = String(c.comment || c.text || c.body || "");
-  const ts = String(c.created_at || c.timestamp || "");
-  const initials = author
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() || "")
-    .join("") || "?";
-  // Deterministic pastel hue from author string
-  const hue = (() => {
-    let h = 0;
-    for (let i = 0; i < author.length; i++) h = (h * 31 + author.charCodeAt(i)) % 360;
-    return h;
-  })();
-  return (
-    <div className="case-detail-comment-row">
-      <div
-        className="case-detail-comment-avatar"
-        style={{
-          background: `hsl(${hue} 30% 22%)`,
-          color: `hsl(${hue} 55% 78%)`,
-          borderColor: `hsl(${hue} 30% 32%)`,
-        }}
-        aria-hidden="true"
-      >
-        {initials}
-      </div>
-      <div className="case-detail-comment-main">
-        <div className="case-detail-comment-row-head">
-          <span className="case-detail-comment-author" title={email || undefined}>{author}</span>
-          <span className="case-detail-comment-sep" aria-hidden="true">·</span>
-          <span className="case-detail-comment-action">commented</span>
-          {ts && (
-            <>
-              <span className="case-detail-comment-sep" aria-hidden="true">·</span>
-              <span className="case-detail-comment-time" title={ts}>{timeAgo(ts)}</span>
-            </>
-          )}
-        </div>
-        <div className="case-detail-comment-body">{body}</div>
-      </div>
-    </div>
-  );
-}

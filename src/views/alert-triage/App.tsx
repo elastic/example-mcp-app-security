@@ -5,16 +5,16 @@
  * 2.0.
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
-import type { SecurityAlert, AlertSummary, AlertContext, ProcessEvent, NetworkEvent } from "../../shared/types";
-import { AlertCard, AlertScoreRing, EntityIcon } from "./components/AlertCard";
+import type { SecurityAlert, AlertSummary, AlertContext } from "../../shared/types";
+import { AlertCard } from "./components/AlertCard";
+import { DetailView } from "./components/DetailView";
 import {
   AppHeader,
   AppShell,
   BackButton,
-  ChevronDownIcon,
   Dropdown,
   EmptyState,
   GroupCard,
@@ -26,16 +26,13 @@ import {
   ToastProvider,
   ToggleSwitch,
   TwoPaneLayout,
-  SEVERITY_RANK as SEV_RANK,
   useToast,
 } from "../../shared/components";
-import type { Severity } from "../../shared/components";
-import { useClickOutside } from "../../shared/hooks/useClickOutside";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
 import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useAlertSort } from "./hooks/useAlertSort";
+import type { GroupKey, SortKey } from "./hooks/useAlertSort";
 import "./styles.css";
-
-type SeverityKey = Severity;
 
 interface FilterParams {
   days: number;
@@ -44,7 +41,6 @@ interface FilterParams {
   query?: string;
 }
 
-type SortKey = "severity" | "risk" | "newest" | "oldest" | "rule" | "host";
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "severity", label: "Severity" },
   { value: "risk", label: "Risk score" },
@@ -54,7 +50,6 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "host", label: "Host name" },
 ];
 
-type GroupKey = "none" | "host" | "user" | "process";
 const GROUP_OPTIONS: { value: GroupKey; label: string }[] = [
   { value: "none", label: "None" },
   { value: "host", label: "Host" },
@@ -162,84 +157,10 @@ function AppContent() {
     return () => clearInterval(interval);
   }, [connected, loadAlerts]);
 
-  const sortedAlerts = useMemo(() => {
-    if (!summary) return [];
-    const arr = [...summary.alerts];
-    switch (sortBy) {
-      case "severity":
-        arr.sort((a, b) =>
-          (SEV_RANK[b._source["kibana.alert.severity"]?.toLowerCase() || ""] || 0) -
-          (SEV_RANK[a._source["kibana.alert.severity"]?.toLowerCase() || ""] || 0));
-        break;
-      case "risk":
-        arr.sort((a, b) => (b._source["kibana.alert.risk_score"] || 0) - (a._source["kibana.alert.risk_score"] || 0));
-        break;
-      case "newest":
-        arr.sort((a, b) => new Date(b._source["@timestamp"]).getTime() - new Date(a._source["@timestamp"]).getTime());
-        break;
-      case "oldest":
-        arr.sort((a, b) => new Date(a._source["@timestamp"]).getTime() - new Date(b._source["@timestamp"]).getTime());
-        break;
-      case "rule":
-        arr.sort((a, b) => (a._source["kibana.alert.rule.name"] || "").localeCompare(b._source["kibana.alert.rule.name"] || ""));
-        break;
-      case "host":
-        arr.sort((a, b) => (a._source.host?.name || "").localeCompare(b._source.host?.name || ""));
-        break;
-    }
-    return arr;
-  }, [summary, sortBy]);
-
-  // Group the sorted alert list by a chosen entity. Each group entry carries a display name,
-  // a subtitle (OS / domain / executable), the highest-severity alert in the group, and the
-  // alerts themselves — all derived so the group header can show reasonable summary data.
-  const groupedAlerts = useMemo(() => {
-    if (groupBy === "none") return null;
-    const buckets = new Map<string, {
-      key: string;
-      name: string;
-      subtitle?: string;
-      topSeverity: SeverityKey;
-      alerts: SecurityAlert[];
-    }>();
-    for (const a of sortedAlerts) {
-      const src = a._source;
-      let key: string | undefined;
-      let name: string | undefined;
-      let subtitle: string | undefined;
-      if (groupBy === "host") {
-        name = src.host?.name;
-        key = name;
-        const os = src.host?.os?.name || src.host?.os?.platform;
-        subtitle = os ? `${os} host` : (src.host?.ip?.[0] ? `IP ${src.host.ip[0]}` : undefined);
-      } else if (groupBy === "user") {
-        name = src.user?.name;
-        key = src.user?.domain ? `${src.user.domain}\\${name}` : name;
-        subtitle = src.user?.domain ? `Domain ${src.user.domain}` : (src.host?.name ? `Seen on ${src.host.name}` : undefined);
-      } else if (groupBy === "process") {
-        name = src.process?.name;
-        key = name;
-        subtitle = src.process?.executable || (src.process?.parent?.name ? `Parent ${src.process.parent.name}` : undefined);
-      }
-      if (!key || !name) continue;
-      let bucket = buckets.get(key);
-      if (!bucket) {
-        bucket = { key, name, subtitle, topSeverity: "low", alerts: [] };
-        buckets.set(key, bucket);
-      }
-      bucket.alerts.push(a);
-      const sev = (src["kibana.alert.severity"]?.toLowerCase() || "low") as SeverityKey;
-      if ((SEV_RANK[sev] || 0) > (SEV_RANK[bucket.topSeverity] || 0)) bucket.topSeverity = sev;
-    }
-    // Sort groups: highest severity first, then by alert count desc, then alphabetically.
-    return [...buckets.values()].sort((a, b) => {
-      const d = (SEV_RANK[b.topSeverity] || 0) - (SEV_RANK[a.topSeverity] || 0);
-      if (d !== 0) return d;
-      const c = b.alerts.length - a.alerts.length;
-      if (c !== 0) return c;
-      return a.name.localeCompare(b.name);
-    });
-  }, [sortedAlerts, groupBy]);
+  // Sort + group the current alert summary. The pure helpers and `useMemo`
+  // wrappers live in `./hooks/useAlertSort` so they can be unit-tested
+  // independently of this component.
+  const { sortedAlerts, groupedAlerts } = useAlertSort(summary, sortBy, groupBy);
 
   const toggleGroup = useCallback((key: string) => {
     setOpenGroups((prev) => {
@@ -662,316 +583,5 @@ function AppContent() {
       />
       <TwoPaneLayout list={list} detail={detail} className="triage-body" />
     </AppShell>
-  );
-}
-
-const PROCESS_PREVIEW = 3;
-const NETWORK_PREVIEW = 4;
-const RELATED_PREVIEW = 3;
-
-interface GroupBucket {
-  key: string;
-  name: string;
-  subtitle?: string;
-  topSeverity: SeverityKey;
-  alerts: SecurityAlert[];
-}
-
-function DetailView({ alert, context, contextLoading, onAcknowledge, onCreateCase, onSelectAlert, onEntityFilter, relatedOpen, onToggleRelated }: {
-  alert: SecurityAlert; context: AlertContext | null; contextLoading: boolean;
-  onAcknowledge: () => void;
-  onCreateCase: () => void;
-  onSelectAlert: (a: SecurityAlert) => void;
-  onEntityFilter?: (field: string, value: string) => void;
-  relatedOpen: boolean;
-  onToggleRelated: () => void;
-}) {
-  const src = alert._source;
-  const sev = ((src["kibana.alert.severity"]?.toLowerCase() || "low") as "low" | "medium" | "high" | "critical");
-  const score = src["kibana.alert.risk_score"] ?? 0;
-
-  const threat = src["kibana.alert.rule.threat"]?.[0];
-  const tacticName = threat?.tactic?.name;
-  const techniqueId = threat?.technique?.[0]?.id;
-
-  const userDisplay = src.user?.name
-    ? (src.user.domain ? `${src.user.domain}\\${src.user.name}` : src.user.name)
-    : undefined;
-
-  const [processOpen, setProcessOpen] = useState(false);
-  const [networkOpen, setNetworkOpen] = useState(false);
-  const [takeActionOpen, setTakeActionOpen] = useState(false);
-  const takeActionRef = useRef<HTMLDivElement | null>(null);
-  useClickOutside(takeActionRef, takeActionOpen, () => setTakeActionOpen(false));
-
-  return (
-    <div className="alert-detail">
-      <div className="alert-detail-top">
-        <AlertScoreRing score={score} severity={sev} />
-        <div className="take-action-dropdown" ref={takeActionRef}>
-          <button
-            type="button"
-            className="alert-detail-action take-action-trigger"
-            aria-haspopup="menu"
-            aria-expanded={takeActionOpen}
-            onClick={() => setTakeActionOpen((v) => !v)}
-          >
-            Take Action
-            <ChevronDownIcon open={takeActionOpen} />
-          </button>
-          {takeActionOpen && (
-            <div className="take-action-menu" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                className="take-action-option"
-                onClick={() => {
-                  setTakeActionOpen(false);
-                  onCreateCase();
-                }}
-              >
-                Create case now
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="take-action-option"
-                onClick={() => {
-                  setTakeActionOpen(false);
-                  onAcknowledge();
-                }}
-              >
-                Acknowledge alert
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="alert-detail-head">
-        {(tacticName || techniqueId) && (
-          <div className="alert-card-mitre">
-            {tacticName && <span className="mitre-tag mitre-tag-tactic">{tacticName}</span>}
-            {techniqueId && <span className="mitre-tag mitre-tag-technique">{techniqueId}</span>}
-          </div>
-        )}
-        <h2 className="alert-detail-title">{src["kibana.alert.rule.name"]}</h2>
-        {src["kibana.alert.reason"] && (
-          <div className="alert-detail-reason">{src["kibana.alert.reason"]}</div>
-        )}
-      </div>
-
-      <div className="alert-detail-facts">
-        <FactCol label="HOST" icon={EntityIcon.host} value={src.host?.name} field="host.name" onFilter={onEntityFilter} />
-        <FactCol label="USER" icon={EntityIcon.user} value={userDisplay} filterValue={src.user?.name} field="user.name" onFilter={onEntityFilter} />
-        <FactCol label="PROCESS" icon={EntityIcon.process} value={src.process?.name} field="process.name" onFilter={onEntityFilter} />
-        <FactCol label="EXECUTABLE" icon={EntityIcon.executable} value={src.process?.executable} field="process.executable" onFilter={onEntityFilter} truncate />
-      </div>
-
-      {src["kibana.alert.rule.description"] && (
-        <div className="alert-detail-description">
-          <div className="alert-detail-description-label">Rule description</div>
-          <div className="alert-detail-description-body">{src["kibana.alert.rule.description"]}</div>
-        </div>
-      )}
-
-      {contextLoading ? (
-        <div className="alert-detail-section"><LoadingState>Loading context...</LoadingState></div>
-      ) : context ? (
-        <>
-          {context.relatedAlerts.length > 0 && (
-            <ExpandSection
-              title="Related"
-              count={context.relatedAlerts.length}
-              expanded={relatedOpen}
-              onToggle={onToggleRelated}
-              previewCount={RELATED_PREVIEW}
-            >
-              <div className="related-alerts-list">
-                {(relatedOpen ? context.relatedAlerts : context.relatedAlerts.slice(0, RELATED_PREVIEW)).map((a) => (
-                  <RelatedAlertCard
-                    key={a._id}
-                    alert={a}
-                    selected={a._id === alert._id}
-                    onClick={() => onSelectAlert(a)}
-                  />
-                ))}
-              </div>
-            </ExpandSection>
-          )}
-
-          {context.processEvents.length > 0 && (
-            <ExpandSection
-              title="Process tree"
-              count={context.processEvents.length}
-              expanded={processOpen}
-              onToggle={() => setProcessOpen((v) => !v)}
-              previewCount={PROCESS_PREVIEW}
-            >
-              <div className="process-tree-box">
-                {(processOpen ? context.processEvents : context.processEvents.slice(0, PROCESS_PREVIEW)).map((e, i) => (
-                  <ProcessTreeRow key={i} event={e} />
-                ))}
-              </div>
-            </ExpandSection>
-          )}
-
-          {context.networkEvents.length > 0 && (
-            <ExpandSection
-              title="Network"
-              count={context.networkEvents.length}
-              expanded={networkOpen}
-              onToggle={() => setNetworkOpen((v) => !v)}
-              previewCount={NETWORK_PREVIEW}
-            >
-              <NetworkTable events={networkOpen ? context.networkEvents : context.networkEvents.slice(0, NETWORK_PREVIEW)} />
-            </ExpandSection>
-          )}
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-function FactCol({ label, value, filterValue, field, onFilter, truncate, icon }: {
-  label: string;
-  value?: string;
-  /** Overrides `value` when building the filter query (e.g. bare user.name without the `DOMAIN\` prefix). */
-  filterValue?: string;
-  field?: string;
-  onFilter?: (field: string, value: string) => void;
-  truncate?: boolean;
-  icon?: React.ReactNode;
-}) {
-  const displayed = value || "—";
-  const canFilter = !!(onFilter && field && (filterValue ?? value));
-  const classes = `alert-detail-fact-value${truncate ? " truncate" : ""}${canFilter ? " clickable" : ""}`;
-
-  return (
-    <div className="alert-detail-fact">
-      <div className="alert-detail-fact-label">
-        {icon && <span className="alert-detail-fact-icon" aria-hidden="true">{icon}</span>}
-        <span>{label}</span>
-      </div>
-      {canFilter ? (
-        <button
-          type="button"
-          className={classes}
-          title={`Filter by ${field}: ${filterValue ?? value}`}
-          onClick={() => onFilter!(field!, filterValue ?? value!)}
-        >
-          {displayed}
-        </button>
-      ) : (
-        <div className={classes} title={value || undefined}>{displayed}</div>
-      )}
-    </div>
-  );
-}
-
-function ExpandSection({ title, count, expanded, onToggle, previewCount, children }: {
-  title: string; count: number; expanded: boolean; onToggle: () => void; previewCount: number; children: React.ReactNode;
-}) {
-  const canExpand = count > previewCount;
-  return (
-    <section className="alert-detail-section">
-      <div className="alert-detail-section-head">
-        <span className="alert-detail-section-title">{title}</span>
-        <span className="alert-detail-section-count">{count}</span>
-      </div>
-      {children}
-      {canExpand && (
-        <button type="button" className="alert-detail-expand" onClick={onToggle}>
-          <span>{expanded ? "Collapse" : "Expand"}</span>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-            <path d="M4.5 3l3 3-3 3" />
-          </svg>
-        </button>
-      )}
-    </section>
-  );
-}
-
-function ProcessTreeRow({ event }: { event: ProcessEvent }) {
-  const name = event.process?.name || "unknown";
-  const pid = event.process?.pid;
-  const action = event.event?.action || "";
-  const exe = event.process?.executable || "";
-  const args = event.process?.args?.join(" ") || "";
-  const cmd = exe || args;
-  const ts = event["@timestamp"] ? new Date(event["@timestamp"]).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }) : "";
-  return (
-    <div className="process-tree-row">
-      <div className="process-tree-row-main">
-        <div className="process-tree-row-title">
-          <span className="process-tree-row-name">{name}</span>
-          {pid !== undefined && <span> PID {pid}</span>}
-          {action && <span> {action}</span>}
-        </div>
-        {cmd && <div className="process-tree-row-cmd">{cmd}</div>}
-      </div>
-      {ts && <div className="process-tree-row-time">{ts}</div>}
-    </div>
-  );
-}
-
-function NetworkTable({ events }: { events: NetworkEvent[] }) {
-  if (events.length === 0) {
-    return <div className="network-table-box"><div className="alert-detail-empty">No network events.</div></div>;
-  }
-  return (
-    <div className="network-table-box">
-      <table className="network-table">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Source</th>
-            <th>Destination</th>
-            <th>Protocol</th>
-            <th>Process</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((e, i) => {
-            const ts = e["@timestamp"] ? new Date(e["@timestamp"]).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }) : "—";
-            const src = e.source?.ip ? `${e.source.ip}${e.source.port ? `:${e.source.port}` : ""}` : "—";
-            const dst = e.destination?.ip ? `${e.destination.ip}${e.destination.port ? `:${e.destination.port}` : ""}` : (e.destination?.port ? `—:${e.destination.port}` : "—");
-            const proto = e.network?.protocol || "—";
-            const proc = e.process?.name || "—";
-            const action = e.event?.action || "—";
-            return (
-              <tr key={i}>
-                <td>{ts}</td>
-                <td>{src}</td>
-                <td>{dst}</td>
-                <td>{proto}</td>
-                <td>{proc}</td>
-                <td>{action}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function RelatedAlertCard({ alert, selected, onClick }: { alert: SecurityAlert; selected?: boolean; onClick: () => void }) {
-  const src = alert._source;
-  const sev = ((src["kibana.alert.severity"]?.toLowerCase() || "low") as "low" | "medium" | "high" | "critical");
-  const score = src["kibana.alert.risk_score"] ?? 0;
-  return (
-    <div className={`related-alert-card sev-${sev}${selected ? " selected" : ""}`} onClick={onClick}>
-      <div className="related-alert-card-score">
-        <AlertScoreRing score={score} severity={sev} />
-      </div>
-      <div className="related-alert-card-body">
-        <div className="related-alert-card-title">{src["kibana.alert.rule.name"]}</div>
-        {src["kibana.alert.reason"] && (
-          <div className="related-alert-card-reason">{src["kibana.alert.reason"]}</div>
-        )}
-      </div>
-    </div>
   );
 }

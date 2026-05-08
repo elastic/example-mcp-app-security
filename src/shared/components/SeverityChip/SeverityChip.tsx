@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import classNames from "classnames";
 import "./SeverityChip.css";
 
 export type Severity = "low" | "medium" | "high" | "critical";
@@ -50,14 +51,8 @@ export interface SeverityChipProps {
 
 export function SeverityChip({ severity, label, hideDot, className }: SeverityChipProps) {
   const key = toSeverity(typeof severity === "string" ? severity : severity);
-  const cls = [
-    "sev-chip",
-    `sev-chip-${key}`,
-    hideDot ? "sev-chip-no-dot" : "",
-    className ?? "",
-  ].filter(Boolean).join(" ");
   return (
-    <span className={cls}>
+    <span className={classNames("sev-chip", `sev-chip-${key}`, className, { "sev-chip-no-dot": hideDot })}>
       <span className="sev-chip-dot" />
       <span className="sev-chip-label">{label ?? SEVERITY_LABEL[key]}</span>
     </span>

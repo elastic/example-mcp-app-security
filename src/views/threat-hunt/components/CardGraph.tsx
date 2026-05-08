@@ -202,15 +202,8 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
     draggingRef.current = { id, startX: e.clientX, startY: e.clientY, origDx: existing?.dx || 0, origDy: existing?.dy || 0 };
   };
 
-  if (nodes.length === 0) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: TEXT_MUTED, fontSize: 13, background: "transparent" }}>
-        Click an entity in results to start investigating
-      </div>
-    );
-  }
-
-  // Compute focused connections
+  // Compute focused connections. Must be declared *before* any early return so
+  // the hook order stays stable when nodes.length transitions between 0 and >0.
   const focusedNeighbors = useMemo(() => {
     if (!focusedId) return null;
     const neighbors = new Set<string>([focusedId]);
@@ -222,6 +215,14 @@ export function CardGraph({ nodes, edges, onExpand, onSelect, alertLinkedIds }: 
     }
     return neighbors;
   }, [focusedId, edges]);
+
+  if (nodes.length === 0) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: TEXT_MUTED, fontSize: 13, background: "transparent" }}>
+        Click an entity in results to start investigating
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}

@@ -10,6 +10,8 @@ import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
 import type { DetectionRule } from "../../shared/types";
 import { RuleTestPanel } from "./components/RuleTestPanel";
+import { FactCol } from "./components/FactCol";
+import { NoisyRulesView, type NoisyRuleRow as NoisyRuleRowImported } from "./components/NoisyRulesView";
 import {
   AppHeader,
   AppShell,
@@ -42,7 +44,7 @@ type SortKey = "severity" | "name" | "risk" | "updated" | "enabled";
 type GroupKey = "none" | "severity" | "type" | "language" | "tag";
 type View = "list" | "detail" | "noisy";
 
-type NoisyRuleRow = { ruleName: string; ruleId: string; alertCount: number };
+type NoisyRuleRow = NoisyRuleRowImported;
 
 const SEV_RANK = SEVERITY_RANK;
 
@@ -716,48 +718,6 @@ function RuleDetailView({ rule, onToggle, onValidate }: {
   );
 }
 
-function FactCol({ label, value }: { label: string; value?: string }) {
-  return (
-    <div className="rule-detail-fact">
-      <div className="rule-detail-fact-label">{label}</div>
-      <div className="rule-detail-fact-value" title={value || undefined}>{value || "—"}</div>
-    </div>
-  );
-}
-
-// ─── Noisy Rules ────────────────────────────────────────────────────────────
-
-function NoisyRulesView({ loading, rows }: { loading: boolean; rows: NoisyRuleRow[] }) {
-  const max = rows[0]?.alertCount || 1;
-  return (
-    <div className="rule-detail">
-      <div className="rule-detail-head">
-        <h2 className="rule-detail-title">Noisy rules</h2>
-        <div className="rule-detail-subtitle">Ranked by alert volume over the last 7 days. Use this to tune or disable high-chatter rules.</div>
-      </div>
-      {loading ? (
-        <div className="loading-state"><div className="loading-spinner" />Loading volume data…</div>
-      ) : rows.length === 0 ? (
-        <div className="empty-state">No noisy-rule data available for this window.</div>
-      ) : (
-        <div className="noisy-list">
-          {rows.map((r, i) => (
-            <div key={r.ruleId} className="noisy-row animate-in" style={{ "--i": Math.min(i, 12) } as React.CSSProperties}>
-              <div className="noisy-row-rank">{i + 1}</div>
-              <div className="noisy-row-main">
-                <div className="noisy-row-title" title={r.ruleName}>{r.ruleName}</div>
-                <div className="summary-bar-track">
-                  <div className="summary-bar-fill summary-bar-sev-medium" style={{ width: `${(r.alertCount / max) * 100}%` }} />
-                </div>
-              </div>
-              <div className="noisy-row-count">{r.alertCount.toLocaleString()}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function formatDateShort(iso: string): string {
   try {

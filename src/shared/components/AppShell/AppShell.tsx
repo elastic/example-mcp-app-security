@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import classNames from "classnames";
 import "./AppShell.css";
 
 export interface AppShellProps {
@@ -18,5 +19,5 @@ export interface AppShellProps {
  * outer stroke. Replaces every `.{view}-app` class.
  */
 export function AppShell({ children, className }: AppShellProps) {
-  return <div className={className ? `app-shell ${className}` : "app-shell"}>{children}</div>;
+  return <div className={classNames("app-shell", className)}>{children}</div>;
 }

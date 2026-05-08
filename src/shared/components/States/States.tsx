@@ -6,7 +6,9 @@
  */
 
 import React from "react";
-import "./States.css";
+// `.loading-state`, `.loading-spinner`, and `.empty-state` rules live in
+// shared/components/base.css, which every view already imports — so this
+// component does not need its own stylesheet.
 
 export interface LoadingStateProps {
   /** Replaces the default "Loading..." message. */

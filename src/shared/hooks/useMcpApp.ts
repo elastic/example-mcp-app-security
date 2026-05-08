@@ -61,6 +61,9 @@ export function useMcpApp({ name, version, onToolResult, onConnect }: UseMcpAppO
     applyTheme(app);
 
     let gotResult = false;
+    let cancelled = false;
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
+
     app.ontoolresult = (params) => {
       gotResult = true;
       try {
@@ -70,16 +73,34 @@ export function useMcpApp({ name, version, onToolResult, onConnect }: UseMcpAppO
       }
     };
 
-    app.connect().then(() => {
-      setConnected(true);
-      // Give the host a 1.5s grace period to push a tool result before
-      // falling back to whatever the view's own loader wants to do.
-      setTimeout(() => {
-        onConnectRef.current?.(app, gotResult);
-      }, 1500);
-    });
+    app.connect()
+      .then(() => {
+        if (cancelled) return;
+        setConnected(true);
+        // Give the host a 1.5s grace period to push a tool result before
+        // falling back to whatever the view's own loader wants to do.
+        graceTimer = setTimeout(() => {
+          graceTimer = null;
+          if (cancelled) return;
+          onConnectRef.current?.(app, gotResult);
+        }, 1500);
+      })
+      .catch((err) => {
+        // If the host never connects we surface the error and leave
+        // `connected` false so views can keep their own fallback UI in place
+        // instead of being stuck on the "Connecting…" placeholder.
+        if (cancelled) return;
+        console.error("MCP app connect() failed:", err);
+      });
 
-    return () => { app.close(); };
+    return () => {
+      cancelled = true;
+      if (graceTimer !== null) {
+        clearTimeout(graceTimer);
+        graceTimer = null;
+      }
+      app.close();
+    };
   }, [name, version]);
 
   return {

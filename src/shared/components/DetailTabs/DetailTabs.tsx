@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import classNames from "classnames";
 import "./DetailTabs.css";
 
 export interface DetailTab<V extends string> {
@@ -31,7 +32,7 @@ export function DetailTabs<V extends string>({ tabs, value, onChange, ariaLabel 
           type="button"
           role="tab"
           aria-selected={tab.value === value}
-          className={`detail-tab${tab.value === value ? " active" : ""}`}
+          className={classNames("detail-tab", { active: tab.value === value })}
           onClick={() => onChange(tab.value)}
         >
           {tab.label}

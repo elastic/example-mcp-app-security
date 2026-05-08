@@ -5,10 +5,11 @@
  * 2.0.
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
-import { applyTheme } from "../../shared/theme";
 import { extractCallResult } from "../../shared/extract-tool-text";
+import { SeverityChip } from "../../shared/components";
+import { useMcpApp } from "../../shared/hooks/useMcpApp";
 import "./styles.css";
 
 interface AlertInfo {
@@ -481,10 +482,6 @@ interface GenerateResult {
 type Phase = "select" | "generating" | "done" | "error";
 type SeverityFilter = "all" | "critical" | "high" | "medium";
 
-const SEVERITY_LABEL: Record<"critical" | "high" | "medium" | "low", string> = {
-  critical: "Critical", high: "High", medium: "Medium", low: "Low",
-};
-
 const SEVERITY_FILTERS: { key: SeverityFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "critical", label: "Critical" },
@@ -498,18 +495,7 @@ const AppGlyph = () => (
   </svg>
 );
 
-function SeverityChip({ severity }: { severity: "critical" | "high" | "medium" | "low" }) {
-  return (
-    <span className={`sev-chip sev-chip-${severity}`}>
-      <span className="sev-chip-dot" />
-      <span className="sev-chip-label">{SEVERITY_LABEL[severity]}</span>
-    </span>
-  );
-}
-
 export function App() {
-  const appRef = useRef<McpApp | null>(null);
-  const [connected, setConnected] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [count, setCount] = useState(50);
@@ -533,12 +519,10 @@ export function App() {
     } catch { /* cluster might not be reachable */ }
   }, []);
 
-  useEffect(() => {
-    const app = new McpApp({ name: "sample-data", version: "1.0.0" });
-    appRef.current = app;
-    applyTheme(app);
-
-    app.ontoolresult = (toolResult) => {
+  const { connected, getApp } = useMcpApp({
+    name: "sample-data",
+    version: "1.0.0",
+    onToolResult: (toolResult) => {
       try {
         const text = extractCallResult(toolResult);
         if (text) {
@@ -548,14 +532,11 @@ export function App() {
           }
         }
       } catch { /* ignore */ }
-    };
-
-    app.connect().then(() => {
-      setConnected(true);
+    },
+    onConnect: (app) => {
       loadExistingData(app);
-    });
-    return () => { app.close(); };
-  }, [loadExistingData]);
+    },
+  });
 
   const toggleScenario = useCallback((id: string) => {
     setSelected((prev) => {
@@ -584,7 +565,8 @@ export function App() {
   }, [selected.size, filteredScenarios]);
 
   const generate = async () => {
-    if (!appRef.current || selected.size === 0) return;
+    const app = getApp();
+    if (!app || selected.size === 0) return;
     setPhase("generating");
     setResults([]);
     setErrorMsg(null);
@@ -599,7 +581,7 @@ export function App() {
         for (const scenario of scenarios) {
           setStatusMessage(`Creating rules for ${SCENARIOS.find((s) => s.id === scenario)?.name || scenario}...`);
           try {
-            const toolResult = await appRef.current.callServerTool({
+            const toolResult = await app.callServerTool({
               name: "create-rules-for-scenario",
               arguments: { scenario },
             });
@@ -616,7 +598,7 @@ export function App() {
       for (const scenario of scenarios) {
         setCurrentScenario(scenario);
         setStatusMessage(null);
-        const toolResult = await appRef.current.callServerTool({
+        const toolResult = await app.callServerTool({
           name: "generate-scenario",
           arguments: { scenario, count },
         });
@@ -626,7 +608,7 @@ export function App() {
         }
       }
       setPhase("done");
-      if (appRef.current) loadExistingData(appRef.current);
+      loadExistingData(app);
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : String(e));
       setPhase("error");
@@ -636,12 +618,13 @@ export function App() {
   };
 
   const cleanup = async () => {
-    if (!appRef.current) return;
+    const app = getApp();
+    if (!app) return;
     setPhase("generating");
     setCurrentScenario("cleanup");
     setCleanupCount(null);
     try {
-      const toolResult = await appRef.current.callServerTool({
+      const toolResult = await app.callServerTool({
         name: "cleanup-sample-data",
         arguments: {},
       });
@@ -651,7 +634,7 @@ export function App() {
         setCleanupCount(data.deleted ?? 0);
       }
       setPhase("done");
-      if (appRef.current) loadExistingData(appRef.current);
+      loadExistingData(app);
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : String(e));
       setPhase("error");
@@ -660,8 +643,9 @@ export function App() {
   };
 
   const runAttackDiscovery = async () => {
-    if (!appRef.current) return;
-    await appRef.current.sendMessage({
+    const app = getApp();
+    if (!app) return;
+    await app.sendMessage({
       role: "user",
       content: [{ type: "text", text: "Run attack discovery on the alerts that were just generated. Use the triage-attack-discoveries tool." }],
     });
@@ -957,8 +941,9 @@ export function App() {
                                 key={j}
                                 className="hunt-btn"
                                 onClick={async () => {
-                                  if (!appRef.current) return;
-                                  await appRef.current.sendMessage({
+                                  const app = getApp();
+                                  if (!app) return;
+                                  await app.sendMessage({
                                     role: "user",
                                     content: [{ type: "text", text: `Run this threat hunt query using the threat-hunt tool:\n\n${h.query}` }],
                                   });
@@ -981,8 +966,9 @@ export function App() {
                       Run Attack Discovery
                     </button>
                     <button className="btn btn-sm btn-ghost" onClick={async () => {
-                      if (!appRef.current) return;
-                      await appRef.current.sendMessage({
+                      const app = getApp();
+                      if (!app) return;
+                      await app.sendMessage({
                         role: "user",
                         content: [{ type: "text", text: "Show me the security alerts that were just generated. Use the triage-alerts tool." }],
                       });
