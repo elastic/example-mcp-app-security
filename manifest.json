@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "elastic-security-mcp-app",
   "display_name": "Elastic Security",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Interactive blue-team security operations for Elastic Security — alert triage, attack discovery, case management, detection rules, threat hunting, and sample data generation.",
   "long_description": "An MCP App server that brings interactive blue-team security operations directly into Claude Desktop. Provides six rich React-based UIs that render inline in the conversation: alert triage with AI verdicts, AI-powered attack discovery with confidence scoring and MITRE mapping, case management with the Kibana Cases API, detection rule browsing and tuning, an ES|QL threat-hunting workbench with a D3 investigation graph, and an ECS sample-data generator for demos.",
   "author": {
@@ -20,7 +20,10 @@
     "entry_point": "dist/main.bundle.mjs",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/dist/main.bundle.mjs", "--stdio"],
+      "args": [
+        "${__dirname}/dist/main.bundle.mjs",
+        "--stdio"
+      ],
       "env": {
         "ELASTICSEARCH_URL": "${user_config.elasticsearch_url}",
         "ELASTICSEARCH_API_KEY": "${user_config.elasticsearch_api_key}",
@@ -95,9 +98,15 @@
     "mcp-app"
   ],
   "license": "Elastic-2.0",
-  "privacy_policies": ["https://www.elastic.co/legal/privacy-statement"],
+  "privacy_policies": [
+    "https://www.elastic.co/legal/privacy-statement"
+  ],
   "compatibility": {
-    "platforms": ["darwin", "win32", "linux"],
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
     "runtimes": {
       "node": ">=22.0.0"
     }
