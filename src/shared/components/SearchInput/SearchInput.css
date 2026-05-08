@@ -12,6 +12,8 @@
   gap: 9px;
   width: 366px;
   max-width: 100%;
+  min-width: 180px;
+  flex-shrink: 1;
   padding: 10px 24px 10px 8px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
