@@ -110,6 +110,11 @@ The built-ins eliminate the need to specify per-feature privileges like `feature
 - Check which features are missing: the 403 response body usually names the required privilege.
 - Common cause: forgetting to grant privileges in the correct Kibana space.
 
+### 403 on rules-read despite granting `feature_securitySolutionRulesV4.read`
+
+- If you've followed the documented privileges and still see 403 on rules-read endpoints (e.g. `GET /api/detection_engine/rules/_find`), add `feature_siemV4.read` to your role's read privileges (and `feature_siemV4.all` for the full-featured role) as a transitional workaround.
+- The Quickstart path may already include this via the built-in `editor` / `viewer` roles.
+
 ### 403 on Threat Hunt → "list indices"
 
 - The companion role is missing index-level `monitor` on the target index pattern.
