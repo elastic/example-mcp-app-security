@@ -182,22 +182,35 @@ export async function getAlertContext(
 }
 
 export async function acknowledgeAlert(alertId: string): Promise<void> {
-  await esRequest(`/${ALERTS_INDEX}/_update/${alertId}`, {
-    body: {
-      doc: { "kibana.alert.workflow_status": "acknowledged" },
-    },
-  });
+  // The single-document `_update` API does not accept wildcard index patterns
+  // (`.alerts-security.alerts-*`), so we delegate to the bulk `_update_by_query`
+  // path which does. See https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
+  await acknowledgeAlerts([alertId]);
 }
 
 export async function acknowledgeAlerts(alertIds: string[]): Promise<{ updated: number }> {
+  return setAlertWorkflowStatus(alertIds, "acknowledged");
+}
+
+/**
+ * Set the workflow status (`open` | `acknowledged` | `closed`) on a set of
+ * security alerts in bulk. Used by the acknowledge / unacknowledge tools so
+ * the Alert Triage UI can offer an Undo affordance after acknowledging.
+ */
+export async function setAlertWorkflowStatus(
+  alertIds: string[],
+  status: "open" | "acknowledged" | "closed",
+): Promise<{ updated: number }> {
+  if (alertIds.length === 0) return { updated: 0 };
   const result = await esRequest<{ updated: number }>(
     `/${ALERTS_INDEX}/_update_by_query`,
     {
       body: {
         query: { ids: { values: alertIds } },
         script: {
-          source: 'ctx._source["kibana.alert.workflow_status"] = "acknowledged"',
+          source: 'ctx._source["kibana.alert.workflow_status"] = params.status',
           lang: "painless",
+          params: { status },
         },
       },
     }

@@ -1,0 +1,125 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+/* Expandable "group by" card used at the top of a list section. */
+
+.group-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 18px 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+  margin-bottom: 8px;
+}
+
+.group-card:hover {
+  background: var(--bg-hover);
+  border-color: color-mix(in srgb, var(--border) 60%, var(--text-muted));
+}
+
+.group-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.group-card.expanded {
+  margin-bottom: 0;
+}
+
+/* Severity left-stripe, same idiom used on alert cards */
+.group-card.sev-low { box-shadow: inset 3px 0 0 0 var(--severity-low); }
+.group-card.sev-medium { box-shadow: inset 3px 0 0 0 var(--severity-medium); }
+.group-card.sev-high { box-shadow: inset 3px 0 0 0 var(--severity-high); }
+.group-card.sev-critical { box-shadow: inset 3px 0 0 0 var(--severity-critical); }
+
+.group-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.group-card-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.group-card-name {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-card-subtitle {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.group-card-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+}
+
+.group-card-count-value {
+  color: var(--accent);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.group-card-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ds-text-label);
+  transition: transform 0.15s ease;
+}
+
+.group-card-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Children of an expanded group — flat container that visually anchors
+ * its alert cards under the group header. The host view's card style
+ * controls the per-row borders. */
+.group-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-top: 0;
+}

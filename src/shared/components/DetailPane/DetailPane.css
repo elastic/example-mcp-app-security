@@ -1,0 +1,46 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+/*
+ * `DetailPane` is the conventional content wrapper for the right-hand pane
+ * inside `<TwoPaneLayout detail={…}>`. It paints the elevated surface and
+ * places the close button in the top-right.
+ */
+
+.detail-pane-content {
+  position: relative;
+  min-height: 100%;
+}
+
+.detail-pane-content.elevated {
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border);
+}
+
+.detail-pane-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.detail-pane-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
