@@ -5,8 +5,9 @@
  * 2.0.
  */
 
-import React from "react";
+import React, { useMemo } from "react";
 import { timeAgo } from "../../../shared/theme";
+import { renderMarkdown } from "../../../shared/markdown";
 
 export interface CommentRowProps {
   /** Raw comment object as returned by the Kibana Cases API. */
@@ -20,6 +21,7 @@ export function CommentRow({ comment }: CommentRowProps) {
   const author = String(by.full_name || by.username || "Unknown");
   const email = typeof by.email === "string" ? by.email : "";
   const body = String(c.comment || c.text || c.body || "");
+  const bodyHtml = useMemo(() => renderMarkdown(body), [body]);
   const ts = String(c.created_at || c.timestamp || "");
   const initials = author
     .split(/\s+/)
@@ -58,7 +60,10 @@ export function CommentRow({ comment }: CommentRowProps) {
             </>
           )}
         </div>
-        <div className="case-detail-comment-body">{body}</div>
+        <div
+          className="case-detail-comment-body markdown-body"
+          dangerouslySetInnerHTML={{ __html: bodyHtml }}
+        />
       </div>
     </div>
   );

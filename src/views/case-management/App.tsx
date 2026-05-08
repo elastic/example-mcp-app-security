@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { timeAgo } from "../../shared/theme";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
+import { renderMarkdown } from "../../shared/markdown";
 import type { KibanaCase } from "../../shared/types";
 import { CaseForm } from "./components/CaseForm";
 import { AttachedAlertRow } from "./components/AttachedAlertRow";
@@ -755,6 +756,10 @@ function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onF
   const sev = caseData.severity;
   const statusLabel = STATUS_LABEL[caseData.status];
   const creator = caseData.created_by.full_name || caseData.created_by.username;
+  const descriptionHtml = useMemo(
+    () => renderMarkdown(caseData.description || ""),
+    [caseData.description],
+  );
 
   const STATUS_OPTIONS: { value: StatusKey; label: string }[] = [
     { value: "open", label: STATUS_LABEL.open },
@@ -808,7 +813,10 @@ function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onF
       {caseData.description && (
         <div className="case-detail-description">
           <div className="case-detail-description-label">Description</div>
-          <div className="case-detail-description-body">{caseData.description}</div>
+          <div
+            className="case-detail-description-body markdown-body"
+            dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+          />
         </div>
       )}
 
