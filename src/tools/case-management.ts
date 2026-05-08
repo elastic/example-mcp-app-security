@@ -119,7 +119,7 @@ export function registerCaseManagementTools(
         severity: z.string().optional(),
         alertIds: z.array(z.string()).optional().describe("Alert document IDs to attach to the case"),
       },
-      _meta: { ui: { resourceUri: RESOURCE_URI } },
+      _meta: { ui: {} },
     },
     async ({ title, description, tags, severity, alertIds }) => {
       const result = await casesService.createCase({

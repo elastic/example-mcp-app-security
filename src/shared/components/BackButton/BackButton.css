@@ -1,0 +1,27 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  margin-bottom: 12px;
+  background: transparent;
+  border: none;
+  color: var(--ds-text-label);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: color var(--transition-fast);
+}
+
+.back-button:hover {
+  color: var(--text-primary);
+}

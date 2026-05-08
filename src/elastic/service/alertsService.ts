@@ -151,11 +151,13 @@ export class AlertsService {
     return { processEvents, networkEvents, relatedAlerts };
   }
 
-  /** Mark a single alert as `acknowledged` via partial-doc update. */
+  /**
+   * Mark a single alert as `acknowledged`. Delegates to the bulk path because
+   * the single-document `_update` API does not accept wildcard index patterns
+   * (`.alerts-security.alerts-*`), but `_update_by_query` does.
+   */
   async acknowledgeAlert(alertId: string): Promise<void> {
-    await this.options.alertsClient.updateAlert(alertId, {
-      "kibana.alert.workflow_status": "acknowledged",
-    });
+    await this.acknowledgeAlerts([alertId]);
   }
 
   /**
@@ -166,12 +168,25 @@ export class AlertsService {
   async acknowledgeAlerts(
     alertIds: readonly string[]
   ): Promise<{ updated: number }> {
+    return this.setAlertWorkflowStatus(alertIds, "acknowledged");
+  }
+
+  /**
+   * Set the workflow status (`open` | `acknowledged` | `closed`) on a set of
+   * security alerts in bulk. Used by the acknowledge / unacknowledge tools so
+   * the Alert Triage UI can offer an Undo affordance after acknowledging.
+   */
+  async setAlertWorkflowStatus(
+    alertIds: readonly string[],
+    status: "open" | "acknowledged" | "closed"
+  ): Promise<{ updated: number }> {
+    if (alertIds.length === 0) return { updated: 0 };
     const result = await this.options.alertsClient.updateAlertsByQuery({
       query: { ids: { values: alertIds } },
       script: {
-        source:
-          'ctx._source["kibana.alert.workflow_status"] = "acknowledged"',
+        source: 'ctx._source["kibana.alert.workflow_status"] = params.status',
         lang: "painless",
+        params: { status },
       },
     });
     return { updated: result.updated };

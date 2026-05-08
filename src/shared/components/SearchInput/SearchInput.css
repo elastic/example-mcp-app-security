@@ -1,0 +1,56 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+.search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 366px;
+  max-width: 100%;
+  min-width: 180px;
+  flex-shrink: 1;
+  padding: 10px 24px 10px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  transition: border-color var(--transition-fast);
+}
+
+.search-input:focus-within {
+  border-color: var(--accent);
+}
+
+.search-input svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.search-input input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-primary);
+}
+
+.search-input input::placeholder {
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .search-input { width: 240px; }
+}
+
+@media (max-width: 640px) {
+  .search-input { width: 180px; padding-right: 12px; }
+}

@@ -93,6 +93,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "poll-alerts",
           "get-alert-context",
           "acknowledge-alert",
+          "unacknowledge-alert",
           "acknowledge-alerts-bulk",
           // case-management
           "manage-cases",

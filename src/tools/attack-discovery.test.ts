@@ -321,11 +321,15 @@ describe("registerAttackDiscoveryTools", () => {
         "mitre:TA0001",
       ]);
       expect(createCall.description).toContain("**Risk Score**: 85");
-      expect(createCall.description).toContain("long details");
+      expect(createCall.description).toContain("## Immediate actions");
 
       expect(casesService.addComment).toHaveBeenCalledWith(
         "case-[Attack Discovery] Hot finding",
-        "long details"
+        expect.stringContaining("## Attack chain")
+      );
+      expect(casesService.addComment).toHaveBeenCalledWith(
+        "case-[Attack Discovery] Hot finding",
+        expect.stringContaining("long details")
       );
       expect(casesService.attachAlertsByIds).toHaveBeenCalledWith(
         "case-[Attack Discovery] Hot finding",

@@ -285,17 +285,23 @@ describe("AlertsService", () => {
     });
   });
 
-  describe("acknowledgeAlert / acknowledgeAlerts", () => {
-    it("acknowledgeAlert merges a partial doc with workflow_status=acknowledged", async () => {
+  describe("acknowledgeAlert / acknowledgeAlerts / setAlertWorkflowStatus", () => {
+    it("acknowledgeAlert delegates to the bulk path because _update does not accept wildcard indices", async () => {
       const alertsClient = createMockAlertsClient();
-      vi.mocked(alertsClient.updateAlert).mockResolvedValueOnce(undefined);
+      vi.mocked(alertsClient.updateAlertsByQuery).mockResolvedValueOnce({
+        updated: 1,
+      });
 
       const service = new AlertsService({ alertsClient });
       await service.acknowledgeAlert("a1");
 
-      expect(alertsClient.updateAlert).toHaveBeenCalledWith("a1", {
-        "kibana.alert.workflow_status": "acknowledged",
-      });
+      expect(alertsClient.updateAlert).not.toHaveBeenCalled();
+      const body = vi.mocked(alertsClient.updateAlertsByQuery).mock.calls[0][0] as {
+        query: { ids: { values: string[] } };
+        script: { params: { status: string } };
+      };
+      expect(body.query).toEqual({ ids: { values: ["a1"] } });
+      expect(body.script.params).toEqual({ status: "acknowledged" });
     });
 
     it("acknowledgeAlerts uses _update_by_query with an ids filter and returns the count", async () => {
@@ -310,11 +316,38 @@ describe("AlertsService", () => {
       expect(out).toEqual({ updated: 3 });
       const body = vi.mocked(alertsClient.updateAlertsByQuery).mock.calls[0][0] as {
         query: { ids: { values: string[] } };
-        script: { source: string; lang: string };
+        script: { source: string; lang: string; params: { status: string } };
       };
       expect(body.query).toEqual({ ids: { values: ["a", "b", "c"] } });
       expect(body.script.lang).toBe("painless");
-      expect(body.script.source).toContain('"acknowledged"');
+      expect(body.script.source).toContain("params.status");
+      expect(body.script.params).toEqual({ status: "acknowledged" });
+    });
+
+    it("setAlertWorkflowStatus passes the chosen status as a script param", async () => {
+      const alertsClient = createMockAlertsClient();
+      vi.mocked(alertsClient.updateAlertsByQuery).mockResolvedValueOnce({
+        updated: 2,
+      });
+
+      const service = new AlertsService({ alertsClient });
+      const out = await service.setAlertWorkflowStatus(["a", "b"], "open");
+
+      expect(out).toEqual({ updated: 2 });
+      const body = vi.mocked(alertsClient.updateAlertsByQuery).mock.calls[0][0] as {
+        script: { params: { status: string } };
+      };
+      expect(body.script.params).toEqual({ status: "open" });
+    });
+
+    it("setAlertWorkflowStatus short-circuits on an empty id list", async () => {
+      const alertsClient = createMockAlertsClient();
+      const service = new AlertsService({ alertsClient });
+
+      const out = await service.setAlertWorkflowStatus([], "closed");
+
+      expect(out).toEqual({ updated: 0 });
+      expect(alertsClient.updateAlertsByQuery).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,0 +1,89 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+.dropdown {
+  position: relative;
+}
+
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--ds-text-label);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.dropdown-trigger:hover {
+  color: var(--text-primary);
+}
+
+.dropdown-trigger-value {
+  color: #ffffff;
+  font-weight: 400;
+}
+
+[data-theme="light"] .dropdown-trigger-value {
+  color: #000000;
+}
+
+.dropdown-trigger svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 180px;
+  padding: 4px 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.dropdown-menu.align-right {
+  left: auto;
+  right: 0;
+}
+
+.dropdown-option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ds-text-label);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.dropdown-option:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.dropdown-option.active {
+  color: #ffffff;
+}
+
+[data-theme="light"] .dropdown-option.active {
+  color: #000000;
+}

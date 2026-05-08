@@ -1,0 +1,154 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+/*
+ * Top-of-list KPI strip: an optional severity summary on the left and a row
+ * of value tiles. Column count comes from the `--kpi-tiles` custom property
+ * the view sets on the wrapper.
+ */
+
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(var(--kpi-tiles, 3), 1fr);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  animation: fadeIn 0.3s ease-out;
+  flex-shrink: 0;
+}
+
+/* Narrow default: severity section spans the full row above the tiles. */
+.kpi-strip > .summary-section {
+  grid-column: 1 / -1;
+  border-right: none;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Wide: severity sits on the same row as the KPI tiles. */
+@media (min-width: 1000px) {
+  .kpi-strip {
+    grid-template-columns: minmax(260px, 1.4fr) repeat(var(--kpi-tiles, 3), 1fr);
+  }
+  .kpi-strip > .summary-section {
+    grid-column: auto;
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+  }
+}
+
+.kpi-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 16px 18px;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+  min-height: 92px;
+  /* Per-tile inline-size container so label/value typography reacts to the
+   * tile's actual rendered width rather than the viewport. */
+  container-type: inline-size;
+  container-name: kpitile;
+}
+
+.kpi-tile:last-child {
+  border-right: none;
+}
+
+.kpi-tile-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@container kpitile (max-width: 180px) {
+  .kpi-tile-label { font-size: 10px; letter-spacing: 0.3px; }
+  .kpi-tile-value { font-size: 22px; line-height: 26px; }
+  .kpi-tile-meta-inline { font-size: 10px; }
+}
+
+@container kpitile (max-width: 140px) {
+  .kpi-tile { padding: 12px 10px; min-height: 78px; gap: 4px; }
+  .kpi-tile-label { font-size: 9px; letter-spacing: 0.2px; }
+  .kpi-tile-value { font-size: 18px; line-height: 22px; }
+  .kpi-tile-meta-inline { display: none; }
+}
+
+.kpi-tile-value {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 30px;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="light"] .kpi-tile-value {
+  color: #000000;
+}
+
+.kpi-tile-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.kpi-tile-meta-inline {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--ds-text-label);
+  white-space: nowrap;
+}
+
+.kpi-tile-accent-critical { box-shadow: inset 3px 0 0 0 var(--severity-critical); }
+.kpi-tile-accent-high { box-shadow: inset 3px 0 0 0 var(--severity-high); }
+.kpi-tile-accent-medium { box-shadow: inset 3px 0 0 0 var(--severity-medium); }
+.kpi-tile-accent-low { box-shadow: inset 3px 0 0 0 var(--severity-low); }
+.kpi-tile-accent-accent { box-shadow: inset 3px 0 0 0 var(--accent); }
+
+@media (max-width: 560px) {
+  .kpi-tile-accent-critical,
+  .kpi-tile-accent-high,
+  .kpi-tile-accent-medium,
+  .kpi-tile-accent-low,
+  .kpi-tile-accent-accent {
+    box-shadow: inset 2px 0 0 0 currentColor;
+  }
+}
+
+/* Severity-summary panel that sits at the left of the strip. */
+
+.summary-section {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: var(--bg-primary);
+}
+
+.summary-section-title {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--text-muted);
+  letter-spacing: 0;
+  text-transform: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}

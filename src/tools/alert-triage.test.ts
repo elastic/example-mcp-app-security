@@ -68,6 +68,7 @@ describe("registerAlertTriageTools", () => {
         "poll-alerts",
         "get-alert-context",
         "acknowledge-alert",
+        "unacknowledge-alert",
         "acknowledge-alerts-bulk",
       ].sort()
     );

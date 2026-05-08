@@ -164,6 +164,25 @@ export function registerAlertTriageTools(
 
   registerAppTool(
     server,
+    "unacknowledge-alert",
+    {
+      title: "Unacknowledge Alert",
+      description: "Move an alert back to the open queue (used by the Triage UI Undo affordance after acknowledging)",
+      inputSchema: {
+        alertId: z.string().describe("The alert document ID"),
+      },
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    async ({ alertId }) => {
+      const result = await alertsService.setAlertWorkflowStatus([alertId], "open");
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ success: true, alertId, ...result }) }],
+      };
+    }
+  );
+
+  registerAppTool(
+    server,
     "acknowledge-alerts-bulk",
     {
       title: "Bulk Acknowledge Alerts",
