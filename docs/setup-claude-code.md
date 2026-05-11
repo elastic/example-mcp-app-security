@@ -6,27 +6,15 @@ Three options depending on your setup. All use the `claude mcp add` CLI command.
 
 Requires Node.js 22+. The server is downloaded and run automatically by Claude Code.
 
-**Pick one** of `CLUSTERS_JSON` or `CLUSTERS_FILE` — pass exactly one to `-e`, not both.
-
-Single cluster (inline JSON):
-
 ```bash
 claude mcp add elastic-security \
   -e 'CLUSTERS_JSON=[{"name":"primary","elasticsearchUrl":"https://your-cluster.es.cloud.example.com","kibanaUrl":"https://your-cluster.kb.cloud.example.com","elasticsearchApiKey":"your-api-key"}]' \
   -- npx -y https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz --stdio
 ```
 
-Multiple clusters or to keep secrets out of your shell history (clusters file):
-
-```bash
-claude mcp add elastic-security \
-  -e CLUSTERS_FILE=/absolute/path/to/clusters.json \
-  -- npx -y https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz --stdio
-```
-
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 >
-> See [Creating an API key](./setup-local.md#creating-an-api-key) and [Cluster configuration](./setup-local.md#cluster-configuration) for the file format and credential generation.
+> **Keeping secrets out of shell history:** swap `CLUSTERS_JSON` for `CLUSTERS_FILE=/absolute/path/to/clusters.json` pointing at a JSON file with the same array. See [Creating an API key](./setup-local.md#creating-an-api-key) and [Cluster configuration](./setup-local.md#cluster-configuration).
 
 ## Option 2: Local server (stdio)
 
@@ -35,14 +23,6 @@ Requires the project to be [built locally](./setup-local.md). Claude Code launch
 ```bash
 claude mcp add elastic-security \
   -e 'CLUSTERS_JSON=[{"name":"primary","elasticsearchUrl":"https://your-cluster.es.cloud.example.com","kibanaUrl":"https://your-cluster.kb.cloud.example.com","elasticsearchApiKey":"your-api-key"}]' \
-  -- node /path/to/example-mcp-app-security/dist/main.js --stdio
-```
-
-Or, with a clusters file:
-
-```bash
-claude mcp add elastic-security \
-  -e CLUSTERS_FILE=/absolute/path/to/clusters.json \
   -- node /path/to/example-mcp-app-security/dist/main.js --stdio
 ```
 

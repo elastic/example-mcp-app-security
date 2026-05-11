@@ -14,10 +14,6 @@ Claude Desktop installs the extension and then opens a configuration dialog. Fil
 - **Elasticsearch API Key** — see [Creating an API key](./setup-local.md#creating-an-api-key)
 - **Kibana URL**
 
-These are assembled into a `CLUSTERS_JSON` env var for the server (the manifest takes care of this — you don't need to format JSON yourself).
-
-> **Multi-cluster setups:** the Claude Desktop install dialog currently only exposes a single cluster. The server itself supports multi-cluster (`CLUSTERS_JSON` / `CLUSTERS_FILE`) and the dialog will gain a clusters-file picker once full multi-cluster support lands. For now, multi-cluster users should use [manual config](#option-2-manual-config-build-from-source) below or [build and run locally](./setup-local.md).
-
 After install:
 
 - Claude Desktop may show the connector as disabled at first. Toggle it on to enable the server.

@@ -7,9 +7,9 @@ Build from source and run the MCP server on your machine.
 - **Node.js 22+**
 - **Elasticsearch 8.x or 9.x** with Security enabled
 - **Kibana 8.x or 9.x** (for cases, rules, and attack discovery)
-- One of `CLUSTERS_JSON` or `CLUSTERS_FILE` (see [Cluster configuration](#cluster-configuration) below)
+- `CLUSTERS_JSON` (or `CLUSTERS_FILE`) — see [Cluster configuration](#cluster-configuration) below
 
-You need both service URLs plus a single Elasticsearch API key per cluster for full functionality.
+You need both service URLs plus a single Elasticsearch API key for full functionality.
 
 ## Creating an API key
 
@@ -20,18 +20,11 @@ You need an Elasticsearch API key with sufficient privileges for the operations 
 
 For a quick start, a key with the `superuser` role works for all tools. For production, scope the key to the minimum required privileges.
 
-Kibana API keys and Elasticsearch API keys are the same underlying credential type. This project uses each cluster's `elasticsearchApiKey` for both Elasticsearch and Kibana requests, so you only need to configure one API key value per cluster.
+Kibana API keys and Elasticsearch API keys are the same underlying credential type. This project uses the same `elasticsearchApiKey` value for both Elasticsearch and Kibana requests, so you only need to configure one API key.
 
 ## Cluster configuration
 
-The server reads its cluster list from one of:
-
-- `CLUSTERS_JSON` — a JSON-encoded array passed inline.
-- `CLUSTERS_FILE` — the absolute path to a JSON file with the same shape. Wins if both are set.
-
-Each cluster needs a unique `name`. The first entry is used as the default until per-tool cluster selection lands.
-
-### Single cluster
+Set `CLUSTERS_JSON` to a JSON-encoded array with a single cluster:
 
 ```json
 [
@@ -44,28 +37,15 @@ Each cluster needs a unique `name`. The first entry is used as the default until
 ]
 ```
 
-### Multiple clusters
+The config is validated at startup — bad JSON, missing fields, or unmodified placeholder URLs/keys fail fast.
 
-Same shape, more entries. The first entry (`prod-eu` below) is the default.
+### Keeping secrets out of config files
 
-```json
-[
-  {
-    "name": "prod-eu",
-    "elasticsearchUrl": "https://prod-eu.es.cloud.example.com",
-    "kibanaUrl": "https://prod-eu.kb.cloud.example.com",
-    "elasticsearchApiKey": "your-prod-eu-api-key"
-  },
-  {
-    "name": "prod-us",
-    "elasticsearchUrl": "https://prod-us.es.cloud.example.com",
-    "kibanaUrl": "https://prod-us.kb.cloud.example.com",
-    "elasticsearchApiKey": "your-prod-us-api-key"
-  }
-]
+If you'd rather not put the API key in `.env` / `mcp.json` directly, set `CLUSTERS_FILE` to the absolute path of a JSON file containing the same array, and leave `CLUSTERS_JSON` unset:
+
+```bash
+CLUSTERS_FILE=/absolute/path/to/clusters.json
 ```
-
-The config is validated at startup — bad JSON, missing fields, duplicate cluster names, or unmodified placeholder URLs/keys fail fast.
 
 ## Steps
 
@@ -77,7 +57,7 @@ npm install
 
 # Configure
 cp .env.example .env
-# Edit .env and set CLUSTERS_JSON (or CLUSTERS_FILE) for your cluster(s)
+# Edit .env and set CLUSTERS_JSON (or CLUSTERS_FILE) with your cluster details
 
 # Build
 npm run build
