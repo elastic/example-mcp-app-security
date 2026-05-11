@@ -10,6 +10,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import {
+  createCredentialClient,
+  type CredentialClient,
+} from "./src/elastic/credential-client/index.js";
 import { createServer } from "./src/server.js";
 
 const isStdio = process.argv.includes("--stdio");
@@ -53,9 +57,22 @@ function fatal(prefix: string, err: unknown): void {
   process.stderr.write(line, exit);
 }
 
+// Built once at startup so HTTP mode doesn't re-read CLUSTERS_FILE and
+// re-run Zod on every POST /mcp, and so config errors fail before the
+// listener binds.
+let credentialClient: CredentialClient;
+try {
+  credentialClient = createCredentialClient();
+} catch (err) {
+  fatal("startup failed", err);
+  // `fatal()` schedules `process.exit(1)`; rethrow so TS sees this branch
+  // as terminating and treats `credentialClient` as definitely assigned.
+  throw err;
+}
+
 if (isStdio) {
   try {
-    const server = createServer();
+    const server = createServer({ credentialClient });
     const transport = new StdioServerTransport();
     await server.connect(transport);
   } catch (err) {
@@ -66,9 +83,12 @@ if (isStdio) {
   app.use(cors());
   app.use(express.json());
 
+  // Fresh McpServer + transport per request, per the MCP TS SDK's
+  // stateless HTTP guidance. Heavy startup work is hoisted to
+  // `credentialClient` above so this stays cheap.
   app.post("/mcp", async (req, res) => {
     try {
-      const server = createServer();
+      const server = createServer({ credentialClient });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       res.on("close", () => transport.close());
       await server.connect(transport);

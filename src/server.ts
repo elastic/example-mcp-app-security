@@ -17,7 +17,10 @@ import {
   RulesClient,
   SampleDataClient,
 } from "./elastic/client/index.js";
-import { createCredentialClient } from "./elastic/credential-client/index.js";
+import {
+  createCredentialClient,
+  type CredentialClient,
+} from "./elastic/credential-client/index.js";
 import { createEsClient } from "./elastic/es-client/index.js";
 import { createKibanaClient } from "./elastic/kibana-client/index.js";
 import {
@@ -38,21 +41,27 @@ import { registerDetectionRuleTools } from "./tools/detection-rules.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
 
+export interface CreateServerDeps {
+  /**
+   * Pre-built credential client. In HTTP mode, callers should construct
+   * this once at startup and reuse it across requests so we don't re-read
+   * `CLUSTERS_FILE` and re-run Zod validation on every `POST /mcp`.
+   * Defaults to a freshly-built one for tests and stdio callers that only
+   * call `createServer()` once.
+   */
+  readonly credentialClient?: CredentialClient;
+}
+
 /**
  * Build a fresh `McpServer` wired up against the **default** configured
  * cluster.
- *
- * Tools are migrated incrementally to consume the injected services; until
- * then they continue to call the legacy `src/elastic/*.ts` modules. Wiring
- * services here now lets each tool migrate independently without further
- * plumbing changes.
  *
  * Cluster selection is intentionally pinned to the default cluster for the
  * moment. Once tools accept a cluster parameter, this will be replaced with
  * a per-request factory call.
  */
-export function createServer(): McpServer {
-  const credentialClient = createCredentialClient();
+export function createServer(deps: CreateServerDeps = {}): McpServer {
+  const credentialClient = deps.credentialClient ?? createCredentialClient();
   const credentials = credentialClient.get();
 
   const esClient = createEsClient(credentials);
