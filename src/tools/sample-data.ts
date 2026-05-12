@@ -13,15 +13,28 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
-import { generateSampleData, cleanupSampleData, createRulesForScenario, checkExistingData, SCENARIO_NAMES, SCENARIO_RULES } from "../elastic/sample-data.js";
-import type { ScenarioName } from "../elastic/sample-data.js";
+import {
+  SCENARIO_NAMES,
+  SCENARIO_RULES,
+  type SampleDataService,
+  type ScenarioName,
+} from "../elastic/service/index.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://generate-sample-data/mcp-app.html";
 
-let _pendingRuleIdMap: Record<string, string> = {};
+const _pendingRuleIdMap: Record<string, string> = {};
 
-export function registerSampleDataTools(server: McpServer) {
+/** Services the sample-data tools depend on (default cluster only, for now). */
+export interface SampleDataToolDeps {
+  readonly sampleDataService: SampleDataService;
+}
+
+export function registerSampleDataTools(
+  server: McpServer,
+  deps: SampleDataToolDeps
+) {
+  const { sampleDataService } = deps;
   registerAppTool(
     server,
     "generate-sample-data",
@@ -51,11 +64,14 @@ export function registerSampleDataTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ scenario, count }) => {
-      const args: Parameters<typeof generateSampleData>[0] = { scenario: scenario as ScenarioName, count };
-      if (_pendingRuleIdMap && Object.keys(_pendingRuleIdMap).length > 0) {
+      const args: Parameters<SampleDataService["generateSampleData"]>[0] = {
+        scenario: scenario as ScenarioName,
+        count,
+      };
+      if (Object.keys(_pendingRuleIdMap).length > 0) {
         args.ruleIdMap = _pendingRuleIdMap;
       }
-      const result = await generateSampleData(args);
+      const result = await sampleDataService.generateSampleData(args);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -70,7 +86,7 @@ export function registerSampleDataTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async () => {
-      const result = await cleanupSampleData();
+      const result = await sampleDataService.cleanupSampleData();
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -87,11 +103,11 @@ export function registerSampleDataTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ scenario }) => {
-      const defs = SCENARIO_RULES[scenario] || [];
+      const defs = SCENARIO_RULES[scenario as ScenarioName] || [];
       if (defs.length === 0) {
         return { content: [{ type: "text" as const, text: JSON.stringify({ created: 0, ruleIds: [], message: "No rule definitions for this scenario" }) }] };
       }
-      const result = await createRulesForScenario(scenario as ScenarioName);
+      const result = await sampleDataService.createRulesForScenario(scenario as ScenarioName);
       Object.assign(_pendingRuleIdMap, result.ruleIdMap);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
@@ -108,7 +124,7 @@ export function registerSampleDataTools(server: McpServer) {
     },
     async () => {
       try {
-        const result = await checkExistingData();
+        const result = await sampleDataService.checkExistingData();
         return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
       } catch {
         return { content: [{ type: "text" as const, text: JSON.stringify({ totalDocs: 0, totalAlerts: 0, byScenario: {} }) }] };

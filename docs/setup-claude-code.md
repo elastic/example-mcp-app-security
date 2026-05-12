@@ -8,15 +8,13 @@ Requires Node.js 22+. The server is downloaded and run automatically by Claude C
 
 ```bash
 claude mcp add elastic-security \
-  -e ELASTICSEARCH_URL=https://your-cluster.es.cloud.example.com \
-  -e ELASTICSEARCH_API_KEY=your-api-key \
-  -e KIBANA_URL=https://your-cluster.kb.cloud.example.com \
+  -e 'CLUSTERS_JSON=[{"name":"primary","elasticsearchUrl":"https://your-cluster.es.cloud.example.com","kibanaUrl":"https://your-cluster.kb.cloud.example.com","elasticsearchApiKey":"your-api-key"}]' \
   -- npx -y https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz --stdio
 ```
 
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 >
-> **Required credentials:** Set `ELASTICSEARCH_URL`, `ELASTICSEARCH_API_KEY`, and `KIBANA_URL`. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
+> **Keeping secrets out of shell history:** swap `CLUSTERS_JSON` for `CLUSTERS_FILE=/absolute/path/to/clusters.json` pointing at a JSON file with the same array. See [Creating an API key](./setup-local.md#creating-an-api-key) and [Cluster configuration](./setup-local.md#cluster-configuration).
 
 ## Option 2: Local server (stdio)
 
@@ -24,9 +22,7 @@ Requires the project to be [built locally](./setup-local.md). Claude Code launch
 
 ```bash
 claude mcp add elastic-security \
-  -e ELASTICSEARCH_URL=https://your-cluster.es.cloud.example.com \
-  -e ELASTICSEARCH_API_KEY=your-api-key \
-  -e KIBANA_URL=https://your-cluster.kb.cloud.example.com \
+  -e 'CLUSTERS_JSON=[{"name":"primary","elasticsearchUrl":"https://your-cluster.es.cloud.example.com","kibanaUrl":"https://your-cluster.kb.cloud.example.com","elasticsearchApiKey":"your-api-key"}]' \
   -- node /path/to/example-mcp-app-security/dist/main.js --stdio
 ```
 

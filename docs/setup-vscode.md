@@ -19,18 +19,18 @@ Add to `.vscode/mcp.json`:
         "--stdio"
       ],
       "env": {
-        "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
-        "ELASTICSEARCH_API_KEY": "your-api-key",
-        "KIBANA_URL": "https://your-cluster.kb.cloud.example.com"
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\"}]"
       }
     }
   }
 }
 ```
 
+> Replace the placeholder URLs and API key in `CLUSTERS_JSON` with your real values. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
+>
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 >
-> **Required credentials:** Set `ELASTICSEARCH_URL`, `ELASTICSEARCH_API_KEY`, and `KIBANA_URL`. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
+> **Keeping secrets out of `mcp.json`:** replace `CLUSTERS_JSON` with `CLUSTERS_FILE` pointing at the absolute path of a JSON file containing the same array. See [Cluster configuration](./setup-local.md#cluster-configuration).
 
 ## Option 2: Local server (stdio)
 
@@ -45,9 +45,7 @@ Add to `.vscode/mcp.json`:
       "command": "node",
       "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
       "env": {
-        "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
-        "ELASTICSEARCH_API_KEY": "your-api-key",
-        "KIBANA_URL": "https://your-cluster.kb.cloud.example.com"
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\"}]"
       }
     }
   }

@@ -9,10 +9,10 @@ Requires Node.js 22+. The server is downloaded and run automatically by Cursor.
 Click to install:
 
 <!-- cursor-mcp-config:START -->
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=elastic-security&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImh0dHBzOi8vZ2l0aHViLmNvbS9lbGFzdGljL2V4YW1wbGUtbWNwLWFwcC1zZWN1cml0eS9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZWxhc3RpYy1zZWN1cml0eS1tY3AtYXBwLnRneiIsIi0tc3RkaW8iXSwiZW52Ijp7IkVMQVNUSUNTRUFSQ0hfVVJMIjoiaHR0cHM6Ly95b3VyLWNsdXN0ZXIuZXMuY2xvdWQuZXhhbXBsZS5jb20iLCJFTEFTVElDU0VBUkNIX0FQSV9LRVkiOiJ5b3VyLWFwaS1rZXkiLCJLSUJBTkFfVVJMIjoiaHR0cHM6Ly95b3VyLWNsdXN0ZXIua2IuY2xvdWQuZXhhbXBsZS5jb20ifX0=)
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=elastic-security&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImh0dHBzOi8vZ2l0aHViLmNvbS9lbGFzdGljL2V4YW1wbGUtbWNwLWFwcC1zZWN1cml0eS9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZWxhc3RpYy1zZWN1cml0eS1tY3AtYXBwLnRneiIsIi0tc3RkaW8iXSwiZW52Ijp7IkNMVVNURVJTX0pTT04iOiJbe1wibmFtZVwiOlwicHJpbWFyeVwiLFwiZWxhc3RpY3NlYXJjaFVybFwiOlwiaHR0cHM6Ly95b3VyLWNsdXN0ZXIuZXMuY2xvdWQuZXhhbXBsZS5jb21cIixcImtpYmFuYVVybFwiOlwiaHR0cHM6Ly95b3VyLWNsdXN0ZXIua2IuY2xvdWQuZXhhbXBsZS5jb21cIixcImVsYXN0aWNzZWFyY2hBcGlLZXlcIjpcInlvdXItYXBpLWtleVwifV0ifX0=)
 <!-- cursor-mcp-config:END -->
 
-> After clicking, replace the placeholder values in Cursor's MCP settings with your actual Elasticsearch URL, Kibana URL, and Elasticsearch API key. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
+> After clicking, Cursor opens its MCP settings with `CLUSTERS_JSON` pre-filled. Replace the placeholder URLs and API key with your real values. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
 
 Or add manually to `.cursor/mcp.json`:
 
@@ -27,9 +27,7 @@ Or add manually to `.cursor/mcp.json`:
         "--stdio"
       ],
       "env": {
-        "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
-        "ELASTICSEARCH_API_KEY": "your-api-key",
-        "KIBANA_URL": "https://your-cluster.kb.cloud.example.com"
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\"}]"
       }
     }
   }
@@ -38,7 +36,7 @@ Or add manually to `.cursor/mcp.json`:
 
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 >
-> **Required credentials:** Set `ELASTICSEARCH_URL`, `ELASTICSEARCH_API_KEY`, and `KIBANA_URL`. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
+> **Keeping secrets out of `mcp.json`:** replace `CLUSTERS_JSON` with `CLUSTERS_FILE` pointing at the absolute path of a JSON file containing the same array. See [Cluster configuration](./setup-local.md#cluster-configuration).
 
 ## Option 2: Local server (stdio)
 
@@ -53,9 +51,7 @@ Add to `.cursor/mcp.json`:
       "command": "node",
       "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
       "env": {
-        "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
-        "ELASTICSEARCH_API_KEY": "your-api-key",
-        "KIBANA_URL": "https://your-cluster.kb.cloud.example.com"
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\"}]"
       }
     }
   }

@@ -7,8 +7,7 @@ Build from source and run the MCP server on your machine.
 - **Node.js 22+**
 - **Elasticsearch 8.x or 9.x** with Security enabled
 - **Kibana 8.x or 9.x** (for cases, rules, and attack discovery)
-- **`ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY`**
-- **`KIBANA_URL`**
+- `CLUSTERS_JSON` (or `CLUSTERS_FILE`) — see [Cluster configuration](#cluster-configuration) below
 
 You need both service URLs plus a single Elasticsearch API key for full functionality.
 
@@ -21,7 +20,32 @@ You need an Elasticsearch API key with sufficient privileges for the operations 
 
 For a quick start, a key with the `superuser` role works for all tools. For production, scope the key to the minimum required privileges.
 
-Kibana API keys and Elasticsearch API keys are the same underlying credential type. This project uses `ELASTICSEARCH_API_KEY` for both Elasticsearch and Kibana requests, so you only need to configure one API key value.
+Kibana API keys and Elasticsearch API keys are the same underlying credential type. This project uses the same `elasticsearchApiKey` value for both Elasticsearch and Kibana requests, so you only need to configure one API key.
+
+## Cluster configuration
+
+Set `CLUSTERS_JSON` to a JSON-encoded array with a single cluster:
+
+```json
+[
+  {
+    "name": "primary",
+    "elasticsearchUrl": "https://your-cluster.es.cloud.example.com",
+    "kibanaUrl": "https://your-cluster.kb.cloud.example.com",
+    "elasticsearchApiKey": "your-elasticsearch-api-key"
+  }
+]
+```
+
+The config is validated at startup — bad JSON, missing fields, or unmodified placeholder URLs/keys fail fast.
+
+### Keeping secrets out of config files
+
+If you'd rather not put the API key in `.env` / `mcp.json` directly, set `CLUSTERS_FILE` to the absolute path of a JSON file containing the same array, and leave `CLUSTERS_JSON` unset:
+
+```bash
+CLUSTERS_FILE=/absolute/path/to/clusters.json
+```
 
 ## Steps
 
@@ -33,7 +57,7 @@ npm install
 
 # Configure
 cp .env.example .env
-# Edit .env with your Elasticsearch URL, Kibana URL, and Elasticsearch API key
+# Edit .env and set CLUSTERS_JSON (or CLUSTERS_FILE) with your cluster details
 
 # Build
 npm run build
