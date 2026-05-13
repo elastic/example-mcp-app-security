@@ -5,45 +5,9 @@
  * 2.0.
  */
 
-import {
-  fetchAlerts,
-  acknowledgeAlert,
-  getAlertContext,
-} from "../../src/elastic/alerts.js";
-import {
-  listCases,
-  getCase,
-  createCase,
-  updateCase,
-  addComment,
-  attachAlert,
-} from "../../src/elastic/cases.js";
-import {
-  findRules,
-  getRule,
-  createRule,
-  patchRule,
-  bulkAction,
-  deleteRule,
-  noisyRules,
-  listExceptions,
-  addException,
-} from "../../src/elastic/rules.js";
-import {
-  assessConfidence,
-  fetchDiscoveries,
-  getDiscoveryDetail,
-  listAIConnectors,
-  type AttackDiscovery,
-} from "../../src/elastic/attack-discovery.js";
-import { esRequest, kibanaRequest } from "../../src/elastic/client.js";
+import type { AttackDiscovery } from "../../src/elastic/client/index.js";
 import { hasPrivileges } from "./elastic-admin.js";
-import { executeEsql } from "../../src/elastic/esql.js";
-import { listIndices, getMapping } from "../../src/elastic/indices.js";
-import {
-  checkExistingData,
-  generateSampleData,
-} from "../../src/elastic/sample-data.js";
+import type { Services } from "./services.js";
 
 // The app currently targets the "default" Kibana space, so role definitions
 // hard-code the resolved index/resource names rather than the <space-id>
@@ -259,16 +223,24 @@ export interface SeedFixtures {
   suffix: string;
 }
 
+/** Arguments passed to each operation `run` implementation. */
+export interface OperationRunDeps {
+  readonly services: Services;
+  readonly fixtures: SeedFixtures;
+  readonly role: AnyRoleName;
+}
+
 export interface OperationCheck {
   /** Human-readable name for the report. */
   name: string;
   /** Which `src/elastic/*` module/function group this belongs to. */
   group: OperationGroup;
   /**
-   * Function that performs the operation. Receives the seed fixtures and
-   * the role being tested (asserted or built-in). Throws on API failure.
+   * Function that performs the operation. Receives the seed fixtures,
+   * the active services bundle (rebuilt on each role swap), and the
+   * role being tested. Throws on API failure.
    */
-  run: (fixtures: SeedFixtures, role: AnyRoleName) => Promise<unknown>;
+  run: (deps: OperationRunDeps) => Promise<unknown>;
   /**
    * Per-role expectation, keyed by assertion profile (`full` or
    * `readonly`). "ok" = call must succeed. "403" = call must throw
@@ -333,13 +305,15 @@ export const operationChecks: OperationCheck[] = [
   {
     name: "fetchAlerts",
     group: "alerts",
-    run: async () => fetchAlerts({ days: 30, limit: 1 }),
+    run: async ({ services }) =>
+      services.alertsService.getAlerts({ days: 30, limit: 1 }),
     expect: { full: "ok", readonly: "ok" },
   },
   {
     name: "acknowledgeAlert",
     group: "alerts",
-    run: async (f) => acknowledgeAlert(f.alertId),
+    run: async ({ services, fixtures }) =>
+      services.alertsService.acknowledgeAlert(fixtures.alertId),
     expect: { full: "ok", readonly: "403" },
   },
   {
@@ -357,12 +331,16 @@ export const operationChecks: OperationCheck[] = [
     // read on those indices.
     name: "getAlertContext",
     group: "alerts",
-    run: async (f) => {
-      const alerts = await fetchAlerts({ days: 365, limit: 50, status: "open" });
+    run: async ({ services, fixtures }) => {
+      const alerts = await services.alertsService.getAlerts({
+        days: 365,
+        limit: 50,
+        status: "open",
+      });
       const alert =
         alerts.alerts.find((a) => Boolean(a._source.host?.name)) ??
         alerts.alerts[0];
-      return getAlertContext(f.alertId, alert);
+      return services.alertsService.getAlertContext(fixtures.alertId, alert);
     },
     expect: { full: "ok", readonly: "ok" },
   },
@@ -385,8 +363,8 @@ export const operationChecks: OperationCheck[] = [
     // shape to defend its index privileges.
     name: "endpointEventsReadable",
     group: "alerts",
-    run: async () => {
-      const result = await hasPrivileges({
+    run: async ({ services }) => {
+      const result = await hasPrivileges(services.esClient, {
         index: [
           {
             names: [
@@ -411,21 +389,23 @@ export const operationChecks: OperationCheck[] = [
   {
     name: "listCases",
     group: "cases",
-    run: async () => listCases({ perPage: 1 }),
+    run: async ({ services }) =>
+      services.casesService.listCases({ perPage: 1 }),
     expect: { full: "ok", readonly: "ok" },
   },
   {
     name: "getCase",
     group: "cases",
-    run: async (f) => getCase(f.caseId),
+    run: async ({ services, fixtures }) =>
+      services.casesService.getCase(fixtures.caseId),
     expect: { full: "ok", readonly: "ok" },
   },
   {
     name: "createCase",
     group: "cases",
-    run: async (f, role) =>
-      createCase({
-        title: `mcp-app-test ${role} ${f.suffix} ${Date.now()}`,
+    run: async ({ services, fixtures, role }) =>
+      services.casesService.createCase({
+        title: `mcp-app-test ${role} ${fixtures.suffix} ${Date.now()}`,
         description: "Permissions test case (safe to delete)",
         tags: ["mcp-app-test"],
       }),
@@ -438,24 +418,35 @@ export const operationChecks: OperationCheck[] = [
     // starting value, so re-runs don't drift.
     name: "updateCase",
     group: "cases",
-    run: async (f) => {
-      const current = await getCase(f.caseId);
+    run: async ({ services, fixtures }) => {
+      const current = await services.casesService.getCase(fixtures.caseId);
       const next = current.severity === "low" ? "medium" : "low";
-      return updateCase(f.caseId, current.version, { severity: next });
+      return services.casesService.updateCase(
+        fixtures.caseId,
+        current.version,
+        { severity: next }
+      );
     },
     expect: { full: "ok", readonly: "403" },
   },
   {
     name: "addComment",
     group: "cases",
-    run: async (f) => addComment(f.caseId, "mcp-app-test comment"),
+    run: async ({ services, fixtures }) =>
+      services.casesService.addComment(fixtures.caseId, "mcp-app-test comment"),
     expect: { full: "ok", readonly: "403" },
   },
   {
     name: "attachAlert",
     group: "cases",
-    run: async (f) =>
-      attachAlert(f.caseId, f.alertId, f.alertIndex, f.alertRuleId, f.alertRuleName),
+    run: async ({ services, fixtures }) =>
+      services.casesService.attachAlert(
+        fixtures.caseId,
+        fixtures.alertId,
+        fixtures.alertIndex,
+        fixtures.alertRuleId,
+        fixtures.alertRuleName
+      ),
     expect: { full: "ok", readonly: "403" },
   },
 
@@ -463,20 +454,24 @@ export const operationChecks: OperationCheck[] = [
   {
     name: "findRules",
     group: "rules",
-    run: async () => findRules({ perPage: 1 }),
+    run: async ({ services }) =>
+      services.rulesService.findRules({ perPage: 1 }),
     expect: { full: "ok", readonly: "ok" },
   },
   {
     name: "noisyRules",
     group: "rules",
-    run: async () => noisyRules({ days: 30, limit: 5 }),
+    run: async ({ services }) =>
+      services.rulesService.noisyRules({ days: 30, limit: 5 }),
     expect: { full: "ok", readonly: "ok" },
   },
   {
     name: "createRule",
     group: "rules",
-    run: async (f, role) =>
-      createRule(ruleBody(`mcp-app-test ${role} ${f.suffix} ${Date.now()}`)),
+    run: async ({ services, fixtures, role }) =>
+      services.rulesService.createRule(
+        ruleBody(`mcp-app-test ${role} ${fixtures.suffix} ${Date.now()}`)
+      ),
     expect: { full: "ok", readonly: "403" },
   },
   {
@@ -488,9 +483,11 @@ export const operationChecks: OperationCheck[] = [
     name: "patchRule",
     group: "rules",
     skipUnless: (f) => f.ruleId,
-    run: async (f) => {
-      const rule = await getRule(f.ruleId!);
-      return patchRule(f.ruleId!, { enabled: rule.enabled });
+    run: async ({ services, fixtures }) => {
+      const rule = await services.rulesService.getRule(fixtures.ruleId!);
+      return services.rulesService.patchRule(fixtures.ruleId!, {
+        enabled: rule.enabled,
+      });
     },
     expect: { full: "ok", readonly: "403" },
   },
@@ -506,14 +503,16 @@ export const operationChecks: OperationCheck[] = [
     name: "bulkAction",
     group: "rules",
     skipUnless: (f) => f.ruleId,
-    run: async (f) => {
-      const result = (await bulkAction("duplicate", [f.ruleId!])) as {
+    run: async ({ services, fixtures }) => {
+      const result = (await services.rulesService.bulkAction("duplicate", [
+        fixtures.ruleId!,
+      ])) as {
         attributes?: { results?: { created?: Array<{ id: string }> } };
       };
       const created = result.attributes?.results?.created ?? [];
       for (const rule of created) {
         try {
-          await deleteRule(rule.id);
+          await services.rulesService.deleteRule(rule.id);
         } catch {
           /* best-effort cleanup; surface in leftover count if it sticks */
         }
@@ -526,7 +525,8 @@ export const operationChecks: OperationCheck[] = [
     name: "listExceptions",
     group: "rules",
     skipUnless: (f) => f.exceptionListId,
-    run: async (f) => listExceptions(f.exceptionListId!),
+    run: async ({ services, fixtures }) =>
+      services.rulesService.listExceptions(fixtures.exceptionListId!),
     expect: { full: "ok", readonly: "ok" },
   },
   {
@@ -538,23 +538,33 @@ export const operationChecks: OperationCheck[] = [
     name: "addException",
     group: "rules",
     skipUnless: (f) => f.ruleId && f.exceptionListId,
-    run: async (f) => {
-      const result = (await addException(f.ruleId!, f.exceptionListId!, {
-        name: `mcp-app-test ${f.suffix}`,
-        description: "Permissions test exception (safe to delete)",
-        entries: [
-          { field: "host.name", operator: "included", type: "match", value: "test-host" },
-        ],
-      })) as Array<{ id: string }>;
+    run: async ({ services, fixtures }) => {
+      const result = (await services.rulesService.addException(
+        fixtures.ruleId!,
+        fixtures.exceptionListId!,
+        {
+          name: `mcp-app-test ${fixtures.suffix}`,
+          description: "Permissions test exception (safe to delete)",
+          entries: [
+            {
+              field: "host.name",
+              operator: "included",
+              type: "match",
+              value: "test-host",
+            },
+          ],
+        }
+      )) as Array<{ id: string }>;
       // Inline cleanup of any created items. Best-effort: a 403 here
       // shouldn't happen on `full` but if it does, the leftover persists
       // until the seeded list is torn down at end of run.
       for (const item of Array.isArray(result) ? result : []) {
         try {
-          await kibanaRequest(`/api/exception_lists/items`, {
+          await services.kibanaClient.request({
+            url: `/api/exception_lists/items`,
             method: "DELETE",
             params: { id: item.id, namespace_type: "single" },
-            apiVersion: "2023-10-31",
+            headers: { "elastic-api-version": "2023-10-31" },
           });
         } catch {
           /* best-effort cleanup */
@@ -569,13 +579,15 @@ export const operationChecks: OperationCheck[] = [
   {
     name: "fetchDiscoveries",
     group: "attack-discovery",
-    run: async () => fetchDiscoveries({ days: 30, limit: 5 }),
+    run: async ({ services }) =>
+      services.attackDiscoveryService.getDiscoveries({ days: 30, limit: 5 }),
     expect: { full: "ok", readonly: "ok" },
   },
   {
     name: "listAIConnectors",
     group: "attack-discovery",
-    run: async () => listAIConnectors(),
+    run: async ({ services }) =>
+      services.attackDiscoveryService.listAIConnectors(),
     expect: { full: "ok", readonly: "ok" },
   },
   {
@@ -586,14 +598,20 @@ export const operationChecks: OperationCheck[] = [
     name: "assessConfidence",
     group: "attack-discovery",
     skipUnless: (f) => f.discoveryId,
-    run: async (f) => assessConfidence([synthDiscovery(f)]),
+    run: async ({ services, fixtures }) =>
+      services.attackDiscoveryService.assessConfidence([
+        synthDiscovery(fixtures),
+      ]),
     expect: { full: "ok", readonly: "ok" },
   },
   {
     name: "getDiscoveryDetail",
     group: "attack-discovery",
     skipUnless: (f) => f.discoveryId,
-    run: async (f) => getDiscoveryDetail(synthDiscovery(f)),
+    run: async ({ services, fixtures }) =>
+      services.attackDiscoveryService.getDiscoveryDetail(
+        synthDiscovery(fixtures)
+      ),
     expect: { full: "ok", readonly: "ok" },
   },
   {
@@ -605,20 +623,19 @@ export const operationChecks: OperationCheck[] = [
     name: "acknowledgeDiscoveries",
     group: "attack-discovery",
     skipUnless: (f) => f.discoveryId,
-    run: async (f) =>
-      esRequest(
-        `/.alerts-security.attack.discovery.alerts-${SPACE}/_update_by_query`,
-        {
-          method: "POST",
-          body: {
-            query: { ids: { values: [f.discoveryId!] } },
-            script: {
-              source: 'ctx._source["kibana.alert.workflow_status"] = "acknowledged"',
-              lang: "painless",
-            },
+    run: async ({ services, fixtures }) =>
+      services.esClient.request({
+        url: `/.alerts-security.attack.discovery.alerts-${SPACE}/_update_by_query`,
+        method: "POST",
+        data: {
+          query: { ids: { values: [fixtures.discoveryId!] } },
+          script: {
+            source:
+              'ctx._source["kibana.alert.workflow_status"] = "acknowledged"',
+            lang: "painless",
           },
-        }
-      ),
+        },
+      }),
     expect: { full: "ok", readonly: "403" },
   },
 
@@ -626,13 +643,14 @@ export const operationChecks: OperationCheck[] = [
   {
     name: "executeEsql",
     group: "threat-hunt",
-    run: async () => executeEsql("FROM logs-* | LIMIT 1"),
+    run: async ({ services }) =>
+      services.esqlService.executeEsql("FROM logs-* | LIMIT 1"),
     expect: { full: "ok", readonly: "ok" },
   },
   {
     name: "listIndices",
     group: "threat-hunt",
-    run: async () => listIndices("logs-*"),
+    run: async ({ services }) => services.indicesService.listIndices("logs-*"),
     expect: { full: "ok", readonly: "ok" },
   },
   {
@@ -644,7 +662,8 @@ export const operationChecks: OperationCheck[] = [
     // sample data being present on the cluster.
     name: "getMapping",
     group: "threat-hunt",
-    run: async (f) => getMapping(f.alertIndex),
+    run: async ({ services, fixtures }) =>
+      services.indicesService.getMapping(fixtures.alertIndex),
     expect: { full: "ok", readonly: "ok" },
   },
 
@@ -652,13 +671,14 @@ export const operationChecks: OperationCheck[] = [
   {
     name: "checkExistingData",
     group: "sample-data",
-    run: async () => checkExistingData(),
+    run: async ({ services }) => services.sampleDataService.checkExistingData(),
     expect: { full: "ok", readonly: "ok" },
   },
   {
     name: "generateSampleData",
     group: "sample-data",
-    run: async () => generateSampleData({ count: 1 }),
+    run: async ({ services }) =>
+      services.sampleDataService.generateSampleData({ count: 1 }),
     expect: { full: "ok", readonly: "403" },
   },
   {
@@ -670,14 +690,12 @@ export const operationChecks: OperationCheck[] = [
     // the same backing-index pattern PR #18 fixed for alerts.
     name: "cleanupSampleDataLogs",
     group: "sample-data",
-    run: async () =>
-      esRequest(
-        `/logs-endpoint.events.process-${SPACE}/_delete_by_query`,
-        {
-          method: "POST",
-          body: { query: { term: { tags: "mcp-app-test" } } },
-        }
-      ),
+    run: async ({ services }) =>
+      services.esClient.request({
+        url: `/logs-endpoint.events.process-${SPACE}/_delete_by_query`,
+        method: "POST",
+        data: { query: { term: { tags: "mcp-app-test" } } },
+      }),
     expect: { full: "ok", readonly: "403" },
   },
   {
@@ -686,14 +704,12 @@ export const operationChecks: OperationCheck[] = [
     // the same backing-index privilege PR #18 added.
     name: "cleanupSampleDataAlerts",
     group: "sample-data",
-    run: async () =>
-      esRequest(
-        `/.alerts-security.alerts-${SPACE}/_delete_by_query`,
-        {
-          method: "POST",
-          body: { query: { term: { tags: "mcp-app-test" } } },
-        }
-      ),
+    run: async ({ services }) =>
+      services.esClient.request({
+        url: `/.alerts-security.alerts-${SPACE}/_delete_by_query`,
+        method: "POST",
+        data: { query: { term: { tags: "mcp-app-test" } } },
+      }),
     expect: { full: "ok", readonly: "403" },
   },
 ];

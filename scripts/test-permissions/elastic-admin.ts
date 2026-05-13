@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { esRequest } from "../../src/elastic/client.js";
+import type { EsClient } from "../../src/elastic/es-client/index.js";
 import type { RoleDescriptor } from "./roles.js";
 
 export interface CreatedApiKey {
@@ -19,6 +19,35 @@ export interface BasicAuth {
   elasticsearchUrl: string;
   username: string;
   password: string;
+}
+
+/**
+ * Thin helper that issues a request through the supplied {@link EsClient}.
+ *
+ * Mirrors the legacy `esRequest(path, { method, body, params })` signature
+ * so the rest of this file reads identically; under the hood it dispatches
+ * to the per-call axios `request` API.
+ *
+ * Errors are already rewritten by the response interceptor on the client
+ * — they surface as `Error: Elasticsearch [<cluster>] <status>: <body>`,
+ * which the runner's permission-classifier already handles.
+ */
+async function esRequest<T>(
+  esClient: EsClient,
+  path: string,
+  options: {
+    method?: "GET" | "POST" | "PUT" | "DELETE";
+    body?: unknown;
+    params?: Record<string, string>;
+  } = {}
+): Promise<T> {
+  const response = await esClient.request<T>({
+    url: path,
+    method: options.method ?? "GET",
+    data: options.body,
+    params: options.params,
+  });
+  return response.data;
 }
 
 /**
@@ -123,10 +152,12 @@ export interface HasPrivilegesResult {
 }
 
 export async function createRole(
+  esClient: EsClient,
   name: string,
   descriptor: RoleDescriptor
 ): Promise<{ created: boolean }> {
   const result = await esRequest<{ role: { created: boolean } }>(
+    esClient,
     `/_security/role/${encodeURIComponent(name)}`,
     {
       method: "PUT",
@@ -142,28 +173,36 @@ export async function createRole(
  * isn't loaded (Security Solution reserved roles are gated on Kibana
  * feature flags / licensing — they're absent on plain stacks).
  */
-export async function roleExists(name: string): Promise<boolean> {
+export async function roleExists(
+  esClient: EsClient,
+  name: string
+): Promise<boolean> {
   try {
     await esRequest<Record<string, unknown>>(
+      esClient,
       `/_security/role/${encodeURIComponent(name)}`
     );
     return true;
   } catch (err) {
-    if (err instanceof Error && err.message.includes("Elasticsearch 404")) {
+    if (err instanceof Error && /\b404\b/.test(err.message)) {
       return false;
     }
     throw err;
   }
 }
 
-export async function deleteRole(name: string): Promise<{ found: boolean }> {
+export async function deleteRole(
+  esClient: EsClient,
+  name: string
+): Promise<{ found: boolean }> {
   try {
     return await esRequest<{ found: boolean }>(
+      esClient,
       `/_security/role/${encodeURIComponent(name)}`,
       { method: "DELETE" }
     );
   } catch (err) {
-    if (err instanceof Error && err.message.includes("Elasticsearch 404")) {
+    if (err instanceof Error && /\b404\b/.test(err.message)) {
       return { found: false };
     }
     throw err;
@@ -186,9 +225,11 @@ export async function createApiKey(
 }
 
 export async function deleteApiKey(
+  esClient: EsClient,
   id: string
 ): Promise<{ invalidated_api_keys: string[] }> {
   return esRequest<{ invalidated_api_keys: string[] }>(
+    esClient,
     "/_security/api_key",
     {
       method: "DELETE",
@@ -198,12 +239,23 @@ export async function deleteApiKey(
 }
 
 export async function hasPrivileges(
+  esClient: EsClient,
   probe: HasPrivilegesProbe
 ): Promise<HasPrivilegesResult> {
-  return esRequest<HasPrivilegesResult>("/_security/user/_has_privileges", {
-    method: "POST",
-    body: probe,
-  });
+  return esRequest<HasPrivilegesResult>(
+    esClient,
+    "/_security/user/_has_privileges",
+    {
+      method: "POST",
+      body: probe,
+    }
+  );
+}
+
+interface ApiKeyListEntry {
+  id: string;
+  name: string;
+  invalidated: boolean;
 }
 
 /**
@@ -211,28 +263,31 @@ export async function hasPrivileges(
  * Only returns active (non-invalidated) keys.
  */
 export async function listApiKeysByPrefix(
+  esClient: EsClient,
   prefix: string
 ): Promise<{ id: string; name: string }[]> {
   const result = await esRequest<{
-    api_keys: Array<{
-      id: string;
-      name: string;
-      invalidated: boolean;
-    }>;
-  }>("/_security/api_key", {
+    api_keys: ApiKeyListEntry[];
+  }>(esClient, "/_security/api_key", {
     method: "GET",
     params: { name: `${prefix}*` },
   });
   return (result.api_keys || [])
-    .filter((k) => !k.invalidated)
-    .map((k) => ({ id: k.id, name: k.name }));
+    .filter((k: ApiKeyListEntry) => !k.invalidated)
+    .map((k: ApiKeyListEntry) => ({ id: k.id, name: k.name }));
 }
 
 /**
  * List role names matching a prefix. Used by --cleanup-stale.
  */
-export async function listRolesByPrefix(prefix: string): Promise<string[]> {
-  const result = await esRequest<Record<string, unknown>>("/_security/role");
+export async function listRolesByPrefix(
+  esClient: EsClient,
+  prefix: string
+): Promise<string[]> {
+  const result = await esRequest<Record<string, unknown>>(
+    esClient,
+    "/_security/role"
+  );
   return Object.keys(result).filter((name) => name.startsWith(prefix));
 }
 
@@ -243,11 +298,13 @@ export async function listRolesByPrefix(prefix: string): Promise<string[]> {
  * exactly the built-in role's privileges.
  */
 export async function createUser(
+  esClient: EsClient,
   username: string,
   password: string,
   roles: string[]
 ): Promise<{ created: boolean }> {
   const result = await esRequest<{ created: boolean }>(
+    esClient,
     `/_security/user/${encodeURIComponent(username)}`,
     {
       method: "PUT",
@@ -258,15 +315,17 @@ export async function createUser(
 }
 
 export async function deleteUser(
+  esClient: EsClient,
   username: string
 ): Promise<{ found: boolean }> {
   try {
     return await esRequest<{ found: boolean }>(
+      esClient,
       `/_security/user/${encodeURIComponent(username)}`,
       { method: "DELETE" }
     );
   } catch (err) {
-    if (err instanceof Error && err.message.includes("Elasticsearch 404")) {
+    if (err instanceof Error && /\b404\b/.test(err.message)) {
       return { found: false };
     }
     throw err;
@@ -276,7 +335,13 @@ export async function deleteUser(
 /**
  * List native-realm usernames matching a prefix. Used by --cleanup-stale.
  */
-export async function listUsersByPrefix(prefix: string): Promise<string[]> {
-  const result = await esRequest<Record<string, unknown>>("/_security/user");
+export async function listUsersByPrefix(
+  esClient: EsClient,
+  prefix: string
+): Promise<string[]> {
+  const result = await esRequest<Record<string, unknown>>(
+    esClient,
+    "/_security/user"
+  );
   return Object.keys(result).filter((name) => name.startsWith(prefix));
 }

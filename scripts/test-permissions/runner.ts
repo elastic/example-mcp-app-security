@@ -8,19 +8,7 @@
 import "dotenv/config";
 import crypto from "node:crypto";
 
-import { esRequest, kibanaRequest, setConfig } from "../../src/elastic/client.js";
-import {
-  checkExistingData,
-  generateSampleData,
-} from "../../src/elastic/sample-data.js";
-import { fetchAlerts } from "../../src/elastic/alerts.js";
-import {
-  listCases,
-  createCase,
-} from "../../src/elastic/cases.js";
-import { findRules } from "../../src/elastic/rules.js";
-
-const TEST_TAG = "mcp-app-test";
+import type { ClusterCredentials } from "../../src/elastic/credential-client/index.js";
 import {
   ASSERTED_EXPECTATION_PROFILE,
   QUICKSTART_BUILTINS,
@@ -52,8 +40,12 @@ import {
   listUsersByPrefix,
   type CreatedApiKey,
 } from "./elastic-admin.js";
+import { buildServices, type Services } from "./services.js";
 
+const TEST_TAG = "mcp-app-test";
 const TEST_RESOURCE_PREFIX = "mcp-app-test-";
+const ADMIN_CLUSTER_NAME = "test-permissions-admin";
+const SCOPED_CLUSTER_NAME = "test-permissions-scoped";
 
 interface CliOptions {
   roles: RoleName[];
@@ -66,8 +58,9 @@ interface AdminConfig {
   elasticsearchUrl: string;
   /**
    * Bootstrapped admin API key (encoded). Created on startup via Basic
-   * auth so we can authenticate esRequest/kibanaRequest calls — those
-   * always send `Authorization: ApiKey ...`.
+   * auth so we can authenticate ES + Kibana requests through the standard
+   * `createEsClient` / `createKibanaClient` factories (both expect an
+   * `ApiKey` header).
    */
   elasticsearchApiKey: string;
   /** Kept around for createApiKey calls (which require Basic auth). */
@@ -205,26 +198,32 @@ function loadAdminBasics(): AdminBasics {
   };
 }
 
-function useAdminConfig(admin: AdminConfig) {
-  setConfig({
+function adminServices(admin: AdminConfig): Services {
+  const creds: ClusterCredentials = {
+    name: ADMIN_CLUSTER_NAME,
     elasticsearchUrl: admin.elasticsearchUrl,
-    elasticsearchApiKey: admin.elasticsearchApiKey,
     kibanaUrl: admin.kibanaUrl,
-  });
+    elasticsearchApiKey: admin.elasticsearchApiKey,
+  };
+  return buildServices(creds);
 }
 
-function useScopedConfig(admin: AdminConfig, scopedKey: string) {
-  setConfig({
+function scopedServices(admin: AdminConfig, scopedKey: string): Services {
+  const creds: ClusterCredentials = {
+    name: SCOPED_CLUSTER_NAME,
     elasticsearchUrl: admin.elasticsearchUrl,
-    elasticsearchApiKey: scopedKey,
     kibanaUrl: admin.kibanaUrl,
-  });
+    elasticsearchApiKey: scopedKey,
+  };
+  return buildServices(creds);
 }
 
 function isPermissionDenied(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  // Direct ES/Kibana 403/401 throws.
-  if (/Elasticsearch 403:|Kibana 403:|Kibana 401:/i.test(msg)) return true;
+  // Direct ES/Kibana 403/401 throws. The client interceptor formats these
+  // as e.g. `Elasticsearch [<cluster>] 403: ...` / `Kibana [<cluster>] 403: ...`.
+  if (/Elasticsearch\s+(?:\[[^\]]+\]\s+)?403:|Kibana\s+(?:\[[^\]]+\]\s+)?(?:403|401):/i.test(msg))
+    return true;
   // Bulk-API path: HTTP 200 with per-doc errors. The first error JSON
   // contains `"status":403` or `security_exception`.
   if (/security_exception/i.test(msg)) return true;
@@ -240,7 +239,7 @@ function isPermissionDenied(err: unknown): boolean {
 
 function isNotFound(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return /Elasticsearch 404:|Kibana 404:|not_found/i.test(msg);
+  return /(?:Elasticsearch|Kibana)\s+(?:\[[^\]]+\]\s+)?404:|not_found/i.test(msg);
 }
 
 interface ObservedRun {
@@ -250,12 +249,13 @@ interface ObservedRun {
 }
 
 /**
- * Runs every operation check against the currently active scoped key and
+ * Runs every operation check against the supplied services bundle and
  * returns the *observed* outcome for each — without comparing to any
  * expectation. Used both for built-in discovery (where there's no
  * expectation) and as the raw layer underneath asserted runs.
  */
 async function runOpsObserve(
+  services: Services,
   role: AnyRoleName,
   fixtures: SeedFixtures
 ): Promise<ObservedRun[]> {
@@ -270,7 +270,7 @@ async function runOpsObserve(
       continue;
     }
     try {
-      const value = await check.run(fixtures, role);
+      const value = await check.run({ services, fixtures, role });
       out.push({ check, outcome: "pass", detail: summarize(value) });
     } catch (err) {
       const msg = formatError(err);
@@ -294,15 +294,19 @@ const DISCOVERY_INDEX = ".alerts-security.attack.discovery.alerts-default";
  * minimal one via `_bulk` (silent on failure — the check skips when no
  * discoveryId is captured).
  */
-async function ensureDiscoveryFixture(opts: CliOptions): Promise<string | undefined> {
+async function ensureDiscoveryFixture(
+  services: Services,
+  opts: CliOptions
+): Promise<string | undefined> {
   try {
-    const existing = await esRequest<{
+    const existing = await services.esClient.request<{
       hits: { hits: Array<{ _id: string }> };
-    }>(`/${DISCOVERY_INDEX}/_search`, {
+    }>({
+      url: `/${DISCOVERY_INDEX}/_search`,
       method: "POST",
-      body: { size: 1, _source: false, query: { match_all: {} } },
+      data: { size: 1, _source: false, query: { match_all: {} } },
     });
-    const hit = existing.hits?.hits?.[0];
+    const hit = existing.data.hits?.hits?.[0];
     if (hit) {
       if (opts.verbose) console.log(`→ Reusing existing discovery ${hit._id}`);
       return hit._id;
@@ -331,14 +335,17 @@ async function ensureDiscoveryFixture(opts: CliOptions): Promise<string | undefi
     JSON.stringify({ create: { _index: DISCOVERY_INDEX } }) + "\n" +
     JSON.stringify(doc) + "\n";
   try {
-    const result = await esRequest<{
+    const response = await services.esClient.request<{
       items: Array<{ create: { _id: string; status: number; error?: unknown } }>;
       errors: boolean;
-    }>("/_bulk", {
+    }>({
+      url: "/_bulk",
       method: "POST",
-      body,
+      data: body,
       params: { refresh: "true" },
+      headers: { "Content-Type": "application/x-ndjson" },
     });
+    const result = response.data;
     if (result.errors) {
       const err = result.items[0]?.create?.error;
       console.warn(
@@ -368,15 +375,17 @@ async function ensureDiscoveryFixture(opts: CliOptions): Promise<string | undefi
  * deterministic across environments. Mirrors `ensureDiscoveryFixture`.
  */
 async function ensureExceptionListFixture(
+  services: Services,
   opts: CliOptions
 ): Promise<string | undefined> {
   const listId = `mcp-app-test-list-${crypto.randomBytes(4).toString("hex")}`;
   if (opts.verbose) console.log(`→ Seeding exception list ${listId}…`);
   try {
-    await kibanaRequest("/api/exception_lists", {
+    await services.kibanaClient.request({
+      url: "/api/exception_lists",
       method: "POST",
-      apiVersion: "2023-10-31",
-      body: {
+      headers: { "elastic-api-version": "2023-10-31" },
+      data: {
         list_id: listId,
         name: listId,
         description: "Permissions test exception list (safe to delete)",
@@ -393,11 +402,15 @@ async function ensureExceptionListFixture(
   }
 }
 
-async function deleteExceptionListFixture(listId: string): Promise<void> {
+async function deleteExceptionListFixture(
+  services: Services,
+  listId: string
+): Promise<void> {
   try {
-    await kibanaRequest("/api/exception_lists", {
+    await services.kibanaClient.request({
+      url: "/api/exception_lists",
       method: "DELETE",
-      apiVersion: "2023-10-31",
+      headers: { "elastic-api-version": "2023-10-31" },
       params: { list_id: listId, namespace_type: "single" },
     });
   } catch (err) {
@@ -407,17 +420,18 @@ async function deleteExceptionListFixture(listId: string): Promise<void> {
   }
 }
 
-async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixtures> {
-  useAdminConfig(admin);
-
+async function preflight(
+  services: Services,
+  opts: CliOptions
+): Promise<SeedFixtures> {
   if (opts.verbose) console.log("→ Verifying admin connectivity…");
   // A trivial call confirms ES + key are reachable.
-  let existing = await checkExistingData();
+  let existing = await services.sampleDataService.checkExistingData();
 
   if (existing.totalAlerts === 0) {
     console.log("→ No security alerts found, seeding sample data (count=50)…");
-    await generateSampleData({ count: 50 });
-    existing = await checkExistingData();
+    await services.sampleDataService.generateSampleData({ count: 50 });
+    existing = await services.sampleDataService.checkExistingData();
     if (existing.totalAlerts === 0) {
       die(
         "Seeding completed but no security alerts were created. Aborting — Layer B checks need at least one alert."
@@ -430,11 +444,19 @@ async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixt
   }
 
   // Capture one alert.
-  const alerts = await fetchAlerts({ days: 365, limit: 1, status: "open" });
+  const alerts = await services.alertsService.getAlerts({
+    days: 365,
+    limit: 1,
+    status: "open",
+  });
   let alertHit = alerts.alerts[0];
   if (!alertHit) {
     // Fall back to acknowledged alerts if all alerts have been triaged.
-    const triaged = await fetchAlerts({ days: 365, limit: 1, status: "acknowledged" });
+    const triaged = await services.alertsService.getAlerts({
+      days: 365,
+      limit: 1,
+      status: "acknowledged",
+    });
     alertHit = triaged.alerts[0];
   }
   if (!alertHit) {
@@ -451,13 +473,13 @@ async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixt
 
   // Capture or create one case. Operations that need a version refetch it
   // themselves at call time, so the version isn't stored in fixtures.
-  const caseList = await listCases({ perPage: 1 });
+  const caseList = await services.casesService.listCases({ perPage: 1 });
   let caseId: string;
   if (caseList.cases[0]) {
     caseId = caseList.cases[0].id;
   } else {
     if (opts.verbose) console.log("→ No cases found, creating a seed case…");
-    const newCase = await createCase({
+    const newCase = await services.casesService.createCase({
       title: `mcp-app-test seed case ${new Date().toISOString()}`,
       description: "Seed case created by test-permissions runner",
       tags: ["mcp-app-test"],
@@ -468,14 +490,14 @@ async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixt
   // Capture an existing rule (best-effort; missing rule just causes patchRule to skip).
   let ruleId: string | undefined;
   try {
-    const rules = await findRules({ perPage: 1 });
+    const rules = await services.rulesService.findRules({ perPage: 1 });
     ruleId = rules.data[0]?.id;
   } catch {
     /* rules feature might not be available */
   }
 
-  const discoveryId = await ensureDiscoveryFixture(opts);
-  const exceptionListId = await ensureExceptionListFixture(opts);
+  const discoveryId = await ensureDiscoveryFixture(services, opts);
+  const exceptionListId = await ensureExceptionListFixture(services, opts);
 
   return {
     alertId: alertHit._id,
@@ -490,30 +512,33 @@ async function preflight(admin: AdminConfig, opts: CliOptions): Promise<SeedFixt
   };
 }
 
-async function cleanupStaleResources(opts: CliOptions): Promise<void> {
-  const keys = await listApiKeysByPrefix(TEST_RESOURCE_PREFIX);
+async function cleanupStaleResources(
+  services: Services,
+  opts: CliOptions
+): Promise<void> {
+  const keys = await listApiKeysByPrefix(services.esClient, TEST_RESOURCE_PREFIX);
   for (const k of keys) {
     if (opts.verbose) console.log(`→ Invalidating stale API key: ${k.name} (${k.id})`);
     try {
-      await deleteApiKey(k.id);
+      await deleteApiKey(services.esClient, k.id);
     } catch (err) {
       console.warn(`  warning: failed to invalidate ${k.id}: ${formatError(err)}`);
     }
   }
-  const roles = await listRolesByPrefix(TEST_RESOURCE_PREFIX);
+  const roles = await listRolesByPrefix(services.esClient, TEST_RESOURCE_PREFIX);
   for (const r of roles) {
     if (opts.verbose) console.log(`→ Deleting stale role: ${r}`);
     try {
-      await deleteRole(r);
+      await deleteRole(services.esClient, r);
     } catch (err) {
       console.warn(`  warning: failed to delete role ${r}: ${formatError(err)}`);
     }
   }
-  const users = await listUsersByPrefix(TEST_RESOURCE_PREFIX);
+  const users = await listUsersByPrefix(services.esClient, TEST_RESOURCE_PREFIX);
   for (const u of users) {
     if (opts.verbose) console.log(`→ Deleting stale user: ${u}`);
     try {
-      await deleteUser(u);
+      await deleteUser(services.esClient, u);
     } catch (err) {
       console.warn(`  warning: failed to delete user ${u}: ${formatError(err)}`);
     }
@@ -521,22 +546,23 @@ async function cleanupStaleResources(opts: CliOptions): Promise<void> {
 }
 
 async function provisionQuickstart(
+  services: Services,
   admin: AdminConfig,
   role: QuickstartRoleName,
   suffix: string
 ): Promise<QuickstartArtifacts | UnavailableQuickstart> {
   const builtin = QUICKSTART_BUILTINS[role];
-  if (!(await roleExists(builtin))) {
+  if (!(await roleExists(services.esClient, builtin))) {
     return { role, reason: `built-in '${builtin}' not present in cluster` };
   }
   const descriptor = QUICKSTART_COMPANION_DESCRIPTORS[role];
   const companionRoleName = `${TEST_RESOURCE_PREFIX}${role}-companion-${suffix}`;
   const username = `${TEST_RESOURCE_PREFIX}${role}-${suffix}`;
   const password = crypto.randomBytes(18).toString("base64");
-  await createRole(companionRoleName, descriptor);
+  await createRole(services.esClient, companionRoleName, descriptor);
   let apiKey: CreatedApiKey;
   try {
-    await createUser(username, password, [builtin, companionRoleName]);
+    await createUser(services.esClient, username, password, [builtin, companionRoleName]);
     apiKey = await grantApiKeyForUser(
       {
         elasticsearchUrl: admin.elasticsearchUrl,
@@ -550,12 +576,12 @@ async function provisionQuickstart(
   } catch (err) {
     // Best-effort cleanup so a failed provisioning leaves no orphans.
     try {
-      await deleteUser(username);
+      await deleteUser(services.esClient, username);
     } catch {
       /* swallow */
     }
     try {
-      await deleteRole(companionRoleName);
+      await deleteRole(services.esClient, companionRoleName);
     } catch {
       /* swallow */
     }
@@ -565,13 +591,14 @@ async function provisionQuickstart(
 }
 
 async function provisionRole(
+  services: Services,
   admin: AdminConfig,
   role: "full" | "readonly",
   suffix: string
 ): Promise<RoleArtifacts> {
   const descriptor = ROLE_DESCRIPTORS[role];
   const roleName = `${TEST_RESOURCE_PREFIX}${role}-${suffix}`;
-  await createRole(roleName, descriptor);
+  await createRole(services.esClient, roleName, descriptor);
   const apiKey = await createApiKey(
     {
       elasticsearchUrl: admin.elasticsearchUrl,
@@ -593,11 +620,9 @@ interface LayerAResult {
 
 async function runLayerA(
   role: "full" | "readonly",
-  admin: AdminConfig,
-  apiKey: CreatedApiKey
+  services: Services
 ): Promise<LayerAResult> {
   const descriptor = ROLE_DESCRIPTORS[role];
-  useScopedConfig(admin, apiKey.encoded);
 
   const probe = {
     cluster: descriptor.cluster,
@@ -605,15 +630,17 @@ async function runLayerA(
       names: i.names,
       privileges: i.privileges,
     })),
-    application: descriptor.applications.map((a) => ({
-      application: a.application,
-      privileges: a.privileges,
-      resources: a.resources,
-    })),
+    application: descriptor.applications.map(
+      (a: RoleDescriptorApplication) => ({
+        application: a.application,
+        privileges: a.privileges,
+        resources: a.resources,
+      })
+    ),
   };
 
   try {
-    const result = await hasPrivileges(probe);
+    const result = await hasPrivileges(services.esClient, probe);
     if (result.has_all_requested) {
       return {
         role,
@@ -634,6 +661,12 @@ async function runLayerA(
       detail: `_has_privileges call failed: ${formatError(err)}`,
     };
   }
+}
+
+interface RoleDescriptorApplication {
+  application: string;
+  privileges: string[];
+  resources: string[];
 }
 
 function collectMissing(result: {
@@ -662,12 +695,10 @@ function collectMissing(result: {
 
 async function runLayerB(
   role: AssertedRoleName,
-  admin: AdminConfig,
-  apiKey: CreatedApiKey,
+  services: Services,
   fixtures: SeedFixtures
 ): Promise<{ checkResults: CheckResult[]; observed: ObservedRun[] }> {
-  useScopedConfig(admin, apiKey.encoded);
-  const observed = await runOpsObserve(role, fixtures);
+  const observed = await runOpsObserve(services, role, fixtures);
   const checkResults: CheckResult[] = observed.map((o) =>
     deriveCheckResult(role, o)
   );
@@ -734,17 +765,22 @@ interface LeftoverCounts {
  * under the admin key. Used at end of run to surface what tag-scoped
  * cleanup the user may want to do via Kibana.
  */
-async function countLeftoverTaggedResources(): Promise<LeftoverCounts> {
+async function countLeftoverTaggedResources(
+  services: Services
+): Promise<LeftoverCounts> {
   let cases = 0;
   let rules = 0;
   try {
-    const result = await listCases({ tags: [TEST_TAG], perPage: 1 });
+    const result = await services.casesService.listCases({
+      tags: [TEST_TAG],
+      perPage: 1,
+    });
     cases = result.total;
   } catch {
     /* cases API unavailable — leave at 0 */
   }
   try {
-    const result = await findRules({
+    const result = await services.rulesService.findRules({
       filter: `alert.attributes.tags:"${TEST_TAG}"`,
       perPage: 1,
     });
@@ -812,7 +848,7 @@ function printRoleReport(
 }
 
 async function cleanupRoleArtifacts(
-  admin: AdminConfig,
+  adminSvc: Services,
   artifacts: RoleArtifacts[],
   quickstartArtifacts: QuickstartArtifacts[],
   exceptionListId: string | undefined,
@@ -836,20 +872,19 @@ async function cleanupRoleArtifacts(
     }
     return;
   }
-  useAdminConfig(admin);
   if (exceptionListId) {
-    await deleteExceptionListFixture(exceptionListId);
+    await deleteExceptionListFixture(adminSvc, exceptionListId);
   }
   for (const a of artifacts) {
     try {
-      await deleteApiKey(a.apiKey.id);
+      await deleteApiKey(adminSvc.esClient, a.apiKey.id);
     } catch (err) {
       console.warn(
         `  warning: failed to invalidate API key ${a.apiKey.id}: ${formatError(err)}`
       );
     }
     try {
-      await deleteRole(a.roleName);
+      await deleteRole(adminSvc.esClient, a.roleName);
     } catch (err) {
       console.warn(
         `  warning: failed to delete role ${a.roleName}: ${formatError(err)}`
@@ -858,21 +893,21 @@ async function cleanupRoleArtifacts(
   }
   for (const q of quickstartArtifacts) {
     try {
-      await deleteApiKey(q.apiKey.id);
+      await deleteApiKey(adminSvc.esClient, q.apiKey.id);
     } catch (err) {
       console.warn(
         `  warning: failed to invalidate API key ${q.apiKey.id}: ${formatError(err)}`
       );
     }
     try {
-      await deleteUser(q.username);
+      await deleteUser(adminSvc.esClient, q.username);
     } catch (err) {
       console.warn(
         `  warning: failed to delete user ${q.username}: ${formatError(err)}`
       );
     }
     try {
-      await deleteRole(q.companionRoleName);
+      await deleteRole(adminSvc.esClient, q.companionRoleName);
     } catch (err) {
       console.warn(
         `  warning: failed to delete role ${q.companionRoleName}: ${formatError(err)}`
@@ -886,9 +921,9 @@ async function main() {
   const basics = loadAdminBasics();
 
   // Bootstrap an admin API key via Basic auth. Two reasons:
-  //  1. esRequest/kibanaRequest only support `Authorization: ApiKey ...`
-  //     and we need an admin-privilege key for seed-fixture queries
-  //     (fetchAlerts, listCases, createCase, etc.).
+  //  1. The standard ES + Kibana client factories only support
+  //     `Authorization: ApiKey ...` and we need an admin-privilege key for
+  //     seed-fixture queries (fetchAlerts, listCases, createCase, etc.).
   //  2. The user may not have a usable API key in .env (we don't want to
   //     require them to mint one manually). Basic auth is the
   //     local-dev-friendly path.
@@ -909,6 +944,11 @@ async function main() {
     kibanaUrl: basics.kibanaUrl,
   };
 
+  // The admin services bundle is the long-lived "control plane" — used
+  // for provisioning, cleanup, and fixture seeding. A short-lived "data
+  // plane" bundle is built per role swap inside the run loop below.
+  const adminSvc = adminServices(admin);
+
   const provisioned: RoleArtifacts[] = [];
   const provisionedQuickstarts: QuickstartArtifacts[] = [];
   let seededExceptionListId: string | undefined;
@@ -916,8 +956,7 @@ async function main() {
 
   const cleanupBootstrap = async () => {
     try {
-      useAdminConfig(admin);
-      await deleteApiKey(bootstrapKey.id);
+      await deleteApiKey(adminSvc.esClient, bootstrapKey.id);
     } catch (err) {
       console.warn(
         `  warning: failed to invalidate bootstrap admin key ${bootstrapKey.id}: ${formatError(err)}`
@@ -929,7 +968,7 @@ async function main() {
     interrupted = true;
     console.log("\n→ Caught SIGINT, cleaning up before exit…");
     cleanupRoleArtifacts(
-      admin,
+      adminSvc,
       provisioned,
       provisionedQuickstarts,
       seededExceptionListId,
@@ -944,13 +983,12 @@ async function main() {
   let exitCode = 0;
   try {
     if (opts.cleanupStale) {
-      useAdminConfig(admin);
       console.log(`→ --cleanup-stale: removing leftover ${TEST_RESOURCE_PREFIX}* resources…`);
-      await cleanupStaleResources(opts);
+      await cleanupStaleResources(adminSvc, opts);
     }
 
     console.log("→ Pre-flight: checking connectivity and seed data…");
-    const fixtures = await preflight(admin, opts);
+    const fixtures = await preflight(adminSvc, opts);
     seededExceptionListId = fixtures.exceptionListId;
     if (opts.verbose) {
       console.log(`  alertId:          ${fixtures.alertId}`);
@@ -972,16 +1010,19 @@ async function main() {
 
     for (const role of opts.roles) {
       console.log(`\n→ Provisioning role "${role}"…`);
-      useAdminConfig(admin);
       let apiKey: CreatedApiKey;
       let layerA: LayerAResult | null = null;
       if (role === "full" || role === "readonly") {
-        const artifacts = await provisionRole(admin, role, fixtures.suffix);
+        const artifacts = await provisionRole(adminSvc, admin, role, fixtures.suffix);
         provisioned.push(artifacts);
         apiKey = artifacts.apiKey;
-        layerA = await runLayerA(role, admin, artifacts.apiKey);
+        // Layer A runs as the scoped role (the privilege check answers
+        // "does this caller have these privileges?", which only makes
+        // sense for the scoped key, not the admin).
+        const layerASvc = scopedServices(admin, apiKey.encoded);
+        layerA = await runLayerA(role, layerASvc);
       } else {
-        const result = await provisionQuickstart(admin, role, fixtures.suffix);
+        const result = await provisionQuickstart(adminSvc, admin, role, fixtures.suffix);
         if ("reason" in result) {
           console.warn(`  ! ${role} unavailable: ${result.reason}`);
           unavailableQuickstarts.push(result);
@@ -990,7 +1031,8 @@ async function main() {
         provisionedQuickstarts.push(result);
         apiKey = result.apiKey;
       }
-      const { checkResults } = await runLayerB(role, admin, apiKey, fixtures);
+      const scopedSvc = scopedServices(admin, apiKey.encoded);
+      const { checkResults } = await runLayerB(role, scopedSvc, fixtures);
       assertedRuns.push({ role, layerA, layerB: checkResults });
     }
 
@@ -1017,10 +1059,9 @@ async function main() {
     }
 
     // Surface leftover test resources so the user can clean them up. We
-    // query under the admin key to make sure we see everything regardless
-    // of which scoped role still has setConfig active.
-    useAdminConfig(admin);
-    const leftover = await countLeftoverTaggedResources();
+    // query through the admin services bundle to make sure we see
+    // everything regardless of which scoped role most recently ran.
+    const leftover = await countLeftoverTaggedResources(adminSvc);
     if (leftover.cases > 0 || leftover.rules > 0) {
       const parts: string[] = [];
       if (leftover.cases > 0) parts.push(`${leftover.cases} case(s)`);
@@ -1038,7 +1079,7 @@ async function main() {
     if (!interrupted) {
       try {
         await cleanupRoleArtifacts(
-          admin,
+          adminSvc,
           provisioned,
           provisionedQuickstarts,
           seededExceptionListId,
