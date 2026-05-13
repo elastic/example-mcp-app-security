@@ -5,11 +5,13 @@
  * 2.0.
  */
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
 import type { EsqlResult } from "../../shared/types";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
 // TODO: re-enable the force-directed Network view once it's stable.
@@ -67,6 +69,14 @@ const DEFAULT_RESULTS: EsqlResult = {
 };
 
 export function App() {
+  return (
+    <McpAppProvider name="threat-hunt" version="1.0.0">
+      <AppContent />
+    </McpAppProvider>
+  );
+}
+
+function AppContent() {
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [results, setResults] = useState<EsqlResult | null>(DEFAULT_RESULTS);
   const [queryError, setQueryError] = useState<string | null>(null);
@@ -97,9 +107,8 @@ export function App() {
   // need to call flush) and the closures themselves (which need `getApp`).
   const flushPendingRef = useRef<() => void>(() => {});
 
-  const { connected, getApp } = useMcpApp({
-    name: "threat-hunt",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  useMcpAppEvents({
     onToolResult: (result) => {
       try {
         const text = extractToolText(result);
@@ -123,6 +132,11 @@ export function App() {
       flushPendingRef.current();
     },
   });
+
+  const { trackViewRendered } = useAnalytics();
+  useEffect(() => {
+    trackViewRendered("threat-hunt");
+  }, [trackViewRendered]);
 
   const fullscreen = useFullscreen(getApp);
 

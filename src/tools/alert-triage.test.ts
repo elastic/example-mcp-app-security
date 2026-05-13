@@ -16,6 +16,7 @@ import {
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
 import { createMockAlertsService } from "../test/helpers/mockServices.js";
+import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
 import type { AlertSummary, SecurityAlert } from "../shared/types.js";
 import type { AlertsService } from "../elastic/service/index.js";
 
@@ -58,7 +59,10 @@ describe("registerAlertTriageTools", () => {
     alertsService = createMockAlertsService();
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
     vi.spyOn(fs, "readFileSync").mockReturnValue("<html>triage</html>");
-    registerAlertTriageTools(server as unknown as McpServer, { alertsService });
+    registerAlertTriageTools(server as unknown as McpServer, {
+      alertsService,
+      analytics: noopAnalyticsClient,
+    });
   });
 
   it("registers every alert-triage tool plus its UI resource", () => {

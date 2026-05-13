@@ -7,13 +7,14 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
 import type { RulesService } from "../elastic/service/index.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://manage-rules/mcp-app.html";
@@ -21,14 +22,16 @@ const RESOURCE_URI = "ui://manage-rules/mcp-app.html";
 /** Services the detection-rules tools depend on (default cluster only, for now). */
 export interface DetectionRuleToolDeps {
   readonly rulesService: RulesService;
+  readonly analytics: AnalyticsClient;
 }
 
 export function registerDetectionRuleTools(
   server: McpServer,
   deps: DetectionRuleToolDeps
 ) {
-  const { rulesService } = deps;
-  registerAppTool(
+  const { rulesService, analytics } = deps;
+  registerTrackedAppTool(
+    analytics,
     server,
     "manage-rules",
     {
@@ -66,7 +69,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "find-rules",
     {
@@ -87,7 +91,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-rule",
     {
@@ -102,7 +107,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "create-rule",
     {
@@ -120,7 +126,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "patch-rule",
     {
@@ -141,7 +148,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "toggle-rule",
     {
@@ -159,7 +167,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "validate-query",
     {
@@ -177,7 +186,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "noisy-rules",
     {
@@ -195,7 +205,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "manage-exceptions",
     {

@@ -35,11 +35,13 @@ import {
   SampleDataService,
 } from "./elastic/service/index.js";
 import { registerAlertTriageTools } from "./tools/alert-triage.js";
+import { registerAnalyticsTools } from "./tools/analytics.js";
 import { registerAttackDiscoveryTools } from "./tools/attack-discovery.js";
 import { registerCaseManagementTools } from "./tools/case-management.js";
 import { registerDetectionRuleTools } from "./tools/detection-rules.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
+import type { AnalyticsClient } from "./elastic/analytics/index.js";
 
 export interface CreateServerDeps {
   /**
@@ -50,6 +52,13 @@ export interface CreateServerDeps {
    * call `createServer()` once.
    */
   readonly credentialClient?: CredentialClient;
+  /**
+   * Pre-built analytics client. Must be constructed by `main.ts` so its
+   * shipper, context providers, and opt-in lifecycle outlive the
+   * per-request servers in HTTP mode. Wired through to each tool group
+   * so handlers can emit `mcp_tool_called` via `registerTrackedAppTool`.
+   */
+  readonly analytics: AnalyticsClient;
 }
 
 /**
@@ -60,9 +69,10 @@ export interface CreateServerDeps {
  * moment. Once tools accept a cluster parameter, this will be replaced with
  * a per-request factory call.
  */
-export function createServer(deps: CreateServerDeps = {}): McpServer {
+export function createServer(deps: CreateServerDeps): McpServer {
   const credentialClient = deps.credentialClient ?? createCredentialClient();
   const credentials = credentialClient.get();
+  const { analytics } = deps;
 
   const esClient = createEsClient(credentials);
   const kibanaClient = createKibanaClient(credentials);
@@ -101,20 +111,23 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     version: "1.0.0",
   });
 
-  registerAlertTriageTools(server, { alertsService });
-  registerCaseManagementTools(server, { casesService });
-  registerDetectionRuleTools(server, { rulesService });
+  registerAlertTriageTools(server, { alertsService, analytics });
+  registerCaseManagementTools(server, { casesService, analytics });
+  registerDetectionRuleTools(server, { rulesService, analytics });
   registerThreatHuntTools(server, {
     esqlService,
     indicesService,
     investigateService,
     entityDetailService,
+    analytics,
   });
-  registerSampleDataTools(server, { sampleDataService });
+  registerSampleDataTools(server, { sampleDataService, analytics });
   registerAttackDiscoveryTools(server, {
     attackDiscoveryService,
     casesService,
+    analytics,
   });
+  registerAnalyticsTools(server, { analytics });
 
   return server;
 }

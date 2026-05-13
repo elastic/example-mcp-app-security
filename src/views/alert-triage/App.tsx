@@ -29,7 +29,9 @@ import {
   useToast,
 } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import { useAlertSort } from "./hooks/useAlertSort";
 import type { GroupKey, SortKey } from "./hooks/useAlertSort";
 import "./styles.css";
@@ -75,7 +77,9 @@ const isLimitKey = (v: string): v is LimitKey =>
 export function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <McpAppProvider name="alert-triage" version="1.0.0">
+        <AppContent />
+      </McpAppProvider>
     </ToastProvider>
   );
 }
@@ -114,9 +118,8 @@ function AppContent() {
     }
   }, []);
 
-  const { connected, getApp } = useMcpApp({
-    name: "alert-triage",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  useMcpAppEvents({
     onToolResult: (result, app) => {
       try {
         const text = extractToolText(result);
@@ -143,6 +146,11 @@ function AppContent() {
       if (!gotResult) loadAlertsImpl(app);
     },
   });
+
+  const { trackViewRendered } = useAnalytics();
+  useEffect(() => {
+    trackViewRendered("alert-triage");
+  }, [trackViewRendered]);
 
   const loadAlerts = useCallback((overrideParams?: Partial<FilterParams>) => {
     const app = getApp();

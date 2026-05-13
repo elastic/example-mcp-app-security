@@ -15,6 +15,7 @@ import {
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
 import { createMockSampleDataService } from "../test/helpers/mockServices.js";
+import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
 import type { SampleDataService } from "../elastic/service/index.js";
 
 const RESOURCE_URI = "ui://generate-sample-data/mcp-app.html";
@@ -32,7 +33,10 @@ async function setup(): Promise<{
   const { registerSampleDataTools } = await import("./sample-data.js");
   const server = createMockMcpServer();
   const sampleDataService = createMockSampleDataService();
-  registerSampleDataTools(server as unknown as McpServer, { sampleDataService });
+  registerSampleDataTools(server as unknown as McpServer, {
+    sampleDataService,
+    analytics: noopAnalyticsClient,
+  });
   return { server, sampleDataService };
 }
 

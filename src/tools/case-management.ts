@@ -7,13 +7,14 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
 import type { CasesService } from "../elastic/service/index.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://manage-cases/mcp-app.html";
@@ -21,14 +22,16 @@ const RESOURCE_URI = "ui://manage-cases/mcp-app.html";
 /** Services the case-management tools depend on (default cluster only, for now). */
 export interface CaseManagementToolDeps {
   readonly casesService: CasesService;
+  readonly analytics: AnalyticsClient;
 }
 
 export function registerCaseManagementTools(
   server: McpServer,
   deps: CaseManagementToolDeps
 ) {
-  const { casesService } = deps;
-  registerAppTool(
+  const { casesService, analytics } = deps;
+  registerTrackedAppTool(
+    analytics,
     server,
     "manage-cases",
     {
@@ -62,7 +65,8 @@ export function registerCaseManagementTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "list-cases",
     {
@@ -91,7 +95,8 @@ export function registerCaseManagementTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-case",
     {
@@ -106,7 +111,8 @@ export function registerCaseManagementTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "create-case",
     {
@@ -138,7 +144,8 @@ export function registerCaseManagementTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "update-case",
     {
@@ -163,7 +170,8 @@ export function registerCaseManagementTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "add-case-comment",
     {
@@ -181,7 +189,8 @@ export function registerCaseManagementTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "attach-alert-to-case",
     {
@@ -202,7 +211,8 @@ export function registerCaseManagementTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-case-alerts",
     {
@@ -221,7 +231,8 @@ export function registerCaseManagementTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-case-comments",
     {
@@ -236,7 +247,8 @@ export function registerCaseManagementTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-user-profile",
     {

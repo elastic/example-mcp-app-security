@@ -16,6 +16,7 @@ import {
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
 import { createMockRulesService } from "../test/helpers/mockServices.js";
+import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
 import type { RulesService } from "../elastic/service/index.js";
 import type { DetectionRule } from "../shared/types.js";
 
@@ -59,7 +60,10 @@ describe("registerDetectionRuleTools", () => {
     rulesService = createMockRulesService();
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
     vi.spyOn(fs, "readFileSync").mockReturnValue("<html>rules</html>");
-    registerDetectionRuleTools(server as unknown as McpServer, { rulesService });
+    registerDetectionRuleTools(server as unknown as McpServer, {
+      rulesService,
+      analytics: noopAnalyticsClient,
+    });
   });
 
   it("registers every detection-rules tool plus the UI resource", () => {

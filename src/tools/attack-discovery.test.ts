@@ -19,6 +19,7 @@ import {
   createMockAttackDiscoveryService,
   createMockCasesService,
 } from "../test/helpers/mockServices.js";
+import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
 import type {
   AttackDiscovery,
   TriagedDiscovery,
@@ -70,6 +71,7 @@ describe("registerAttackDiscoveryTools", () => {
     registerAttackDiscoveryTools(server as unknown as McpServer, {
       attackDiscoveryService,
       casesService,
+      analytics: noopAnalyticsClient,
     });
   });
 

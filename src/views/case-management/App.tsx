@@ -39,7 +39,9 @@ import {
 } from "../../shared/components";
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import "./styles.css";
 
 type SeverityKey = Severity;
@@ -129,7 +131,9 @@ function normalizeCase(raw: unknown): KibanaCase | null {
 export function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <McpAppProvider name="case-management" version="1.0.0">
+        <AppContent />
+      </McpAppProvider>
     </ToastProvider>
   );
 }
@@ -180,9 +184,8 @@ function AppContent() {
     }
   }, []);
 
-  const { connected, getApp } = useMcpApp({
-    name: "case-management",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  useMcpAppEvents({
     onToolResult: (result, app) => {
       try {
         const text = extractToolText(result);
@@ -206,6 +209,11 @@ function AppContent() {
       if (!gotResult) loadCasesImpl(app);
     },
   });
+
+  const { trackViewRendered } = useAnalytics();
+  useEffect(() => {
+    trackViewRendered("case-management");
+  }, [trackViewRendered]);
 
   const fullscreen = useFullscreen(getApp);
   const toast = useToast();

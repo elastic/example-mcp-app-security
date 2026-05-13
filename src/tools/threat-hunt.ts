@@ -7,7 +7,6 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
@@ -19,6 +18,8 @@ import type {
   IndicesService,
   InvestigateService,
 } from "../elastic/service/index.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://threat-hunt/mcp-app.html";
@@ -29,14 +30,16 @@ export interface ThreatHuntToolDeps {
   readonly indicesService: IndicesService;
   readonly investigateService: InvestigateService;
   readonly entityDetailService: EntityDetailService;
+  readonly analytics: AnalyticsClient;
 }
 
 export function registerThreatHuntTools(
   server: McpServer,
   deps: ThreatHuntToolDeps
 ) {
-  const { esqlService, indicesService, investigateService, entityDetailService } = deps;
-  registerAppTool(
+  const { esqlService, indicesService, investigateService, entityDetailService, analytics } = deps;
+  registerTrackedAppTool(
+    analytics,
     server,
     "threat-hunt",
     {
@@ -92,7 +95,8 @@ export function registerThreatHuntTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "execute-esql",
     {
@@ -113,7 +117,8 @@ export function registerThreatHuntTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "list-indices",
     {
@@ -130,7 +135,8 @@ export function registerThreatHuntTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-mapping",
     {
@@ -145,7 +151,8 @@ export function registerThreatHuntTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-entity-detail",
     {
@@ -163,7 +170,8 @@ export function registerThreatHuntTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "investigate-entity",
     {

@@ -7,7 +7,6 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
@@ -18,6 +17,8 @@ import type {
   AttackDiscoveryService,
   CasesService,
 } from "../elastic/service/index.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-attack-discoveries/mcp-app.html";
@@ -82,14 +83,16 @@ function splitDiscoveryDetails(detailsMarkdown: string | undefined): {
 export interface AttackDiscoveryToolDeps {
   readonly attackDiscoveryService: AttackDiscoveryService;
   readonly casesService: CasesService;
+  readonly analytics: AnalyticsClient;
 }
 
 export function registerAttackDiscoveryTools(
   server: McpServer,
   deps: AttackDiscoveryToolDeps
 ) {
-  const { attackDiscoveryService, casesService } = deps;
-  registerAppTool(
+  const { attackDiscoveryService, casesService, analytics } = deps;
+  registerTrackedAppTool(
+    analytics,
     server,
     "triage-attack-discoveries",
     {
@@ -148,7 +151,8 @@ export function registerAttackDiscoveryTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "poll-discoveries",
     {
@@ -168,7 +172,8 @@ export function registerAttackDiscoveryTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "assess-discovery-confidence",
     {
@@ -188,7 +193,8 @@ export function registerAttackDiscoveryTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "enrich-discovery",
     {
@@ -208,7 +214,8 @@ export function registerAttackDiscoveryTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "approve-discoveries",
     {
@@ -286,7 +293,8 @@ export function registerAttackDiscoveryTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "acknowledge-discoveries",
     {
@@ -307,7 +315,8 @@ export function registerAttackDiscoveryTools(
 
   // ─── On-Demand Generation ───
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "generate-attack-discovery",
     {
@@ -350,7 +359,8 @@ export function registerAttackDiscoveryTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-generation-status",
     {
@@ -369,7 +379,8 @@ export function registerAttackDiscoveryTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "list-ai-connectors",
     {

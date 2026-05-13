@@ -5,11 +5,13 @@
  * 2.0.
  */
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractCallResult } from "../../shared/extract-tool-text";
 import { SeverityChip } from "../../shared/components";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import "./styles.css";
 
 interface AlertInfo {
@@ -496,6 +498,14 @@ const AppGlyph = () => (
 );
 
 export function App() {
+  return (
+    <McpAppProvider name="sample-data" version="1.0.0">
+      <AppContent />
+    </McpAppProvider>
+  );
+}
+
+function AppContent() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [count, setCount] = useState(50);
@@ -519,9 +529,8 @@ export function App() {
     } catch { /* cluster might not be reachable */ }
   }, []);
 
-  const { connected, getApp } = useMcpApp({
-    name: "sample-data",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  useMcpAppEvents({
     onToolResult: (toolResult) => {
       try {
         const text = extractCallResult(toolResult);
@@ -537,6 +546,11 @@ export function App() {
       loadExistingData(app);
     },
   });
+
+  const { trackViewRendered } = useAnalytics();
+  useEffect(() => {
+    trackViewRendered("sample-data");
+  }, [trackViewRendered]);
 
   const toggleScenario = useCallback((id: string) => {
     setSelected((prev) => {

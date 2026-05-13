@@ -16,6 +16,7 @@ import {
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
 import { createMockCasesService } from "../test/helpers/mockServices.js";
+import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
 import type { CasesService } from "../elastic/service/index.js";
 import type { KibanaCase } from "../shared/types.js";
 
@@ -52,6 +53,7 @@ describe("registerCaseManagementTools", () => {
     vi.spyOn(fs, "readFileSync").mockReturnValue("<html>cases</html>");
     registerCaseManagementTools(server as unknown as McpServer, {
       casesService,
+      analytics: noopAnalyticsClient,
     });
   });
 

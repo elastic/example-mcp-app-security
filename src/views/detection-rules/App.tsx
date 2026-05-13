@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
 import type { DetectionRule } from "../../shared/types";
@@ -35,7 +35,9 @@ import {
 } from "../../shared/components";
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import "./styles.css";
 
 type SeverityKey = Severity;
@@ -74,6 +76,14 @@ const GROUP_LABEL: Record<GroupKey, string> = Object.fromEntries(
 ) as Record<GroupKey, string>;
 
 export function App() {
+  return (
+    <McpAppProvider name="detection-rules" version="1.0.0">
+      <AppContent />
+    </McpAppProvider>
+  );
+}
+
+function AppContent() {
   const [rules, setRules] = useState<DetectionRule[]>([]);
   const [total, setTotal] = useState(0);
   const [selectedRule, setSelectedRule] = useState<DetectionRule | null>(null);
@@ -109,9 +119,8 @@ export function App() {
     }
   }, []);
 
-  const { connected, getApp } = useMcpApp({
-    name: "detection-rules",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  useMcpAppEvents({
     onToolResult: (params, app) => {
       try {
         const text = extractToolText(params);
@@ -129,6 +138,11 @@ export function App() {
       if (!gotResult) loadRulesImpl(app);
     },
   });
+
+  const { trackViewRendered } = useAnalytics();
+  useEffect(() => {
+    trackViewRendered("detection-rules");
+  }, [trackViewRendered]);
 
   const loadRules = useCallback((filter?: string) => {
     const app = getApp();

@@ -7,7 +7,6 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
@@ -15,6 +14,8 @@ import { z } from "zod";
 import fs from "fs";
 import type { SecurityAlert } from "../shared/types.js";
 import type { AlertsService } from "../elastic/service/index.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-alerts/mcp-app.html";
@@ -22,14 +23,16 @@ const RESOURCE_URI = "ui://triage-alerts/mcp-app.html";
 /** Services the alert-triage tools depend on (default cluster only, for now). */
 export interface AlertTriageToolDeps {
   readonly alertsService: AlertsService;
+  readonly analytics: AnalyticsClient;
 }
 
 export function registerAlertTriageTools(
   server: McpServer,
   deps: AlertTriageToolDeps
 ) {
-  const { alertsService } = deps;
-  registerAppTool(
+  const { alertsService, analytics } = deps;
+  registerTrackedAppTool(
+    analytics,
     server,
     "triage-alerts",
     {
@@ -99,7 +102,8 @@ export function registerAlertTriageTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "poll-alerts",
     {
@@ -122,7 +126,8 @@ export function registerAlertTriageTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-alert-context",
     {
@@ -143,7 +148,8 @@ export function registerAlertTriageTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "acknowledge-alert",
     {
@@ -162,7 +168,8 @@ export function registerAlertTriageTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "unacknowledge-alert",
     {
@@ -181,7 +188,8 @@ export function registerAlertTriageTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "acknowledge-alerts-bulk",
     {

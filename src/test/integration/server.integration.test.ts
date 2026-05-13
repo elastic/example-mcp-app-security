@@ -19,6 +19,7 @@ import fs from "fs";
 import { createServer } from "../../server.js";
 import { MockAxios } from "../helpers/mockAxios.js";
 import { connectInProcess } from "../helpers/integrationServer.js";
+import { noopAnalyticsClient } from "../helpers/mockAnalytics.js";
 
 const ES_BASE_URL = "https://es.example.com";
 const KIBANA_BASE_URL = "https://kb.example.com";
@@ -78,7 +79,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
 
   /** Boot a fresh in-process server / client pair for one test. */
   function bootHarness() {
-    return connectInProcess(createServer());
+    return connectInProcess(createServer({ analytics: noopAnalyticsClient }));
   }
 
   it("advertises every registered tool over `tools/list`", async () => {
@@ -139,6 +140,8 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "generate-attack-discovery",
           "get-generation-status",
           "list-ai-connectors",
+          // analytics
+          "report-analytics-event",
         ].sort()
       );
     } finally {
@@ -619,23 +622,25 @@ describe("MCP server integration (in-process Client + Server)", () => {
 
     it("crashes with a clear error when no cluster config is set", () => {
       withClustersJson(undefined, () => {
-        expect(() => createServer()).toThrowError(/No clusters configured/);
+        expect(() =>
+          createServer({ analytics: noopAnalyticsClient })
+        ).toThrowError(/No clusters configured/);
       });
     });
 
     it("crashes when CLUSTERS_JSON is an empty array", () => {
       withClustersJson("[]", () => {
-        expect(() => createServer()).toThrowError(
-          /at least one cluster is required/
-        );
+        expect(() =>
+          createServer({ analytics: noopAnalyticsClient })
+        ).toThrowError(/at least one cluster is required/);
       });
     });
 
     it("crashes when CLUSTERS_JSON is malformed JSON", () => {
       withClustersJson("{not json", () => {
-        expect(() => createServer()).toThrowError(
-          /CLUSTERS_JSON: invalid JSON/
-        );
+        expect(() =>
+          createServer({ analytics: noopAnalyticsClient })
+        ).toThrowError(/CLUSTERS_JSON: invalid JSON/);
       });
     });
 
@@ -656,7 +661,9 @@ describe("MCP server integration (in-process Client + Server)", () => {
         delete cluster[field];
 
         withClustersJson(JSON.stringify([cluster]), () => {
-          expect(() => createServer()).toThrowError(
+          expect(() =>
+            createServer({ analytics: noopAnalyticsClient })
+          ).toThrowError(
             new RegExp(`invalid clusters config[\\s\\S]*0\\.${field}`)
           );
         });

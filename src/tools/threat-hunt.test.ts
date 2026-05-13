@@ -21,6 +21,7 @@ import {
   createMockIndicesService,
   createMockInvestigateService,
 } from "../test/helpers/mockServices.js";
+import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
 import type {
   EntityDetailService,
   EsqlService,
@@ -50,6 +51,7 @@ describe("registerThreatHuntTools", () => {
       indicesService,
       investigateService,
       entityDetailService,
+      analytics: noopAnalyticsClient,
     });
   });
 
