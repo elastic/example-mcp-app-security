@@ -14,6 +14,8 @@ Claude Desktop installs the extension and then opens a configuration dialog. Fil
 - **Elasticsearch API Key** — see [Creating an API key](./setup-local.md#creating-an-api-key)
 - **Kibana URL**
 
+> **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
+
 After install:
 
 - Claude Desktop may show the connector as disabled at first. Toggle it on to enable the server.

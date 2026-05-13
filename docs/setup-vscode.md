@@ -31,6 +31,8 @@ Add to `.vscode/mcp.json`:
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 >
 > **Keeping secrets out of `mcp.json`:** replace `CLUSTERS_JSON` with `CLUSTERS_FILE` pointing at the absolute path of a JSON file containing the same array. See [Cluster configuration](./setup-local.md#cluster-configuration).
+>
+> **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
 ## Option 2: Local server (stdio)
 
