@@ -68,7 +68,7 @@ POST /_security/api_key/grant
 }
 ```
 
-Use the `encoded` field from the last response as `ELASTICSEARCH_API_KEY` in your MCP app config.
+Use the `encoded` field from the last response as the `elasticsearchApiKey` for your cluster entry in `CLUSTERS_JSON` (or `CLUSTERS_FILE`) — see [Cluster configuration](setup-local.md#cluster-configuration).
 
 Targets **9.4+**. For 9.3 or 9.0–9.2, swap the Kibana feature names — see the [version-specific tables](#kibana-feature-privileges). For a strict read-only key, see the [Read-Only Role](#read-only-role).
 
@@ -122,7 +122,7 @@ POST /_security/api_key/grant
 }
 ```
 
-The response includes an `encoded` field — that's what you set as `ELASTICSEARCH_API_KEY` in the MCP app config. The key inherits the user's combined privileges from `editor` + the companion role.
+The response includes an `encoded` field — use that as the `elasticsearchApiKey` for your cluster entry in `CLUSTERS_JSON` (or `CLUSTERS_FILE`). The key inherits the user's combined privileges from `editor` + the companion role.
 
 ### Read-only access
 
@@ -347,7 +347,7 @@ POST /_security/api_key/grant
 }
 ```
 
-The response includes an `encoded` field — use that as your `ELASTICSEARCH_API_KEY`. The key inherits the user's role privileges directly.
+The response includes an `encoded` field — use that as the `elasticsearchApiKey` for your cluster entry in `CLUSTERS_JSON` (or `CLUSTERS_FILE`). The key inherits the user's role privileges directly.
 
 ### Read-Only Role
 
