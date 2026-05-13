@@ -11,6 +11,71 @@ This guide defines the least-privilege roles for the Elastic Security MCP app on
 
 ---
 
+## TL;DR — Paste this in Dev Tools
+
+If you just want a working role and aren't picky about going through the UI or using built-ins, paste these three commands into **Stack Management → Dev Tools** (as `elastic` or any user with `manage_security`). Replace `<space-id>` with your space (typically `default`) and pick a strong password.
+
+```
+PUT /_security/role/mcp_app_full
+{
+  "cluster": ["monitor"],
+  "indices": [
+    {
+      "names": [
+        ".alerts-security.alerts-<space-id>",
+        ".alerts-security.attack.discovery.alerts-<space-id>",
+        ".adhoc.alerts-security.attack.discovery.alerts-<space-id>",
+        ".internal.alerts-security.alerts-<space-id>-*",
+        ".internal.alerts-security.attack.discovery.alerts-<space-id>-*",
+        ".internal.adhoc.alerts-security.attack.discovery.alerts-<space-id>-*",
+        "logs-*",
+        "risk-score.risk-score-latest-*"
+      ],
+      "privileges": ["read", "write", "monitor", "view_index_metadata"]
+    }
+  ],
+  "applications": [
+    {
+      "application": "kibana-.kibana",
+      "privileges": [
+        "feature_siemV5.all",
+        "feature_securitySolutionCasesV3.all",
+        "feature_securitySolutionTimeline.all",
+        "feature_securitySolutionNotes.all",
+        "feature_securitySolutionRulesV4.all",
+        "feature_securitySolutionAlertsV1.all",
+        "feature_securitySolutionAssistant.all",
+        "feature_securitySolutionAttackDiscovery.all",
+        "feature_actions.all"
+      ],
+      "resources": ["space:<space-id>"]
+    }
+  ]
+}
+
+PUT /_security/user/mcp_app_user
+{
+  "password": "<choose-a-strong-password>",
+  "roles": ["mcp_app_full"]
+}
+
+POST /_security/api_key/grant
+{
+  "grant_type": "password",
+  "username": "mcp_app_user",
+  "password": "<the password you chose above>",
+  "api_key": { "name": "mcp-app-full" }
+}
+```
+
+Use the `encoded` field from the last response as `ELASTICSEARCH_API_KEY` in your MCP app config.
+
+Targets **9.4+**. For 9.3 or 9.0–9.2, swap the Kibana feature names — see the [version-specific tables](#kibana-feature-privileges). For a strict read-only key, see the [Read-Only Role](#read-only-role).
+
+Prefer built-in Kibana roles (`editor`/`viewer`) instead? See the [Quickstart](#quickstart--built-in-roles) below.
+
+---
+
 ## Quickstart — Built-in roles
 
 Two pre-built Kibana roles cover the entire Kibana feature surface the MCP app needs (Security, Cases, Timeline, Notes, Rules, Alerts, AI Assistant, Attack Discovery, Actions and Connectors). You only need to add a small block of **Elasticsearch index privileges** on top — Kibana feature privileges require no toggling.
