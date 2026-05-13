@@ -16,7 +16,7 @@ git clone https://github.com/elastic/example-mcp-app-security.git
 cd example-mcp-app-security
 npm install
 cp .env.example .env
-# Edit .env with your Elasticsearch/Kibana URLs and API keys
+# Edit .env and set CLUSTERS_JSON (or CLUSTERS_FILE) for your cluster(s) — see docs/setup-local.md#cluster-configuration
 ```
 
 ## Development
@@ -75,6 +75,8 @@ The resulting file is `example-mcp-app-security.mcpb` in the repo root.
 
 - `manifest.json` — MCPB spec v0.3 manifest declaring server config, user-configurable credentials, tool metadata, and compatibility
 - `.mcpbignore` — controls which files are excluded from the bundle (keeps it lean by only including the esbuild bundle + views)
+
+> **Single-cluster only in the manifest (for now):** `manifest.json` exposes only the three required single-cluster fields (`elasticsearch_url`, `elasticsearch_api_key`, `kibana_url`) and assembles them into a single-entry `CLUSTERS_JSON` env var. The server itself supports multi-cluster config (`CLUSTERS_JSON` / `CLUSTERS_FILE`, see `src/elastic/credential-client/create-credential-client.ts`), but the `clusters_file` picker and `configuration_acknowledged` checkbox have been removed from the manifest until full multi-cluster support (per-tool cluster routing, file-picker UX) lands. The MCPB spec doesn't support conditional/either-or required fields ([modelcontextprotocol/mcpb#196](https://github.com/modelcontextprotocol/mcpb/issues/196), closed `not_planned`), so re-introducing a clusters-file alternative will need a different UX.
 
 ### npm Tarball (for VS Code / npx)
 

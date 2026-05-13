@@ -8,11 +8,11 @@ Download `example-mcp-app-security.mcpb` from the [latest GitHub release](https:
 
 If double-click doesn't work (e.g. Claude Desktop is not associated with `.mcpb` files on your system): open Claude Desktop → **Settings → Extensions → Advanced settings → Install Extension...** → select the `.mcpb` file.
 
-Claude Desktop opens an install dialog with fields for your Elasticsearch URL, Kibana URL, and Elasticsearch API key:
+Claude Desktop installs the extension and then opens a configuration dialog. Fill in all three required fields and click **Save**:
 
-- `ELASTICSEARCH_URL`
-- `ELASTICSEARCH_API_KEY`
-- `KIBANA_URL`
+- **Elasticsearch URL**
+- **Elasticsearch API Key** — see [Creating an API key](./setup-local.md#creating-an-api-key)
+- **Kibana URL**
 
 > **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
@@ -33,9 +33,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
       "env": {
-        "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
-        "ELASTICSEARCH_API_KEY": "your-api-key",
-        "KIBANA_URL": "https://your-cluster.kb.cloud.example.com"
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\"}]"
       }
     }
   }

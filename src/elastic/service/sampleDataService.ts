@@ -5,9 +5,73 @@
  * 2.0.
  */
 
-import { esRequest } from "./client.js";
+import type { SampleDataClient } from "../client/sampleDataClient.js";
+import type { RulesService } from "./rulesService.js";
 
 const TAG = "elastic-security-sample-data";
+
+interface SampleDataServiceOptions {
+  readonly sampleDataClient: SampleDataClient;
+  readonly rulesService: RulesService;
+}
+
+/**
+ * Business logic for sample-data scenarios.
+ *
+ * Generates synthetic Security Solution events (and matching alerts /
+ * detection rules), bulk-indexes them into Elasticsearch via
+ * {@link SampleDataClient}, and provisions optional detection rules via
+ * the injected {@link RulesService}.
+ *
+ * Preserves the legacy `sample-data.ts` behaviour 1:1: the same
+ * `SCENARIOS` map, the same `SCENARIO_RULES` table, the same generators,
+ * the same chunked `_bulk` strategy, and the same per-index swallowing
+ * cleanup. The `_ruleIdMap` singleton is intentionally preserved as a
+ * module-level `let` to match legacy semantics; per-instance state is a
+ * follow-up concern.
+ */
+export class SampleDataService {
+  constructor(private readonly options: SampleDataServiceOptions) {}
+
+  generateSampleData(options: {
+    scenario?: ScenarioName;
+    count?: number;
+    ruleIdMap?: Record<string, string>;
+  }): Promise<{ indexed: number; scenario: string; indices: string[] }> {
+    return generateSampleData(this.options.sampleDataClient, options);
+  }
+
+  cleanupSampleData(): Promise<{ deleted: number }> {
+    return cleanupSampleData(this.options.sampleDataClient);
+  }
+
+  checkExistingData(): Promise<{
+    totalDocs: number;
+    totalAlerts: number;
+    existingRules: number;
+    byScenario: Record<string, { events: number; alerts: number }>;
+  }> {
+    return checkExistingData(
+      this.options.sampleDataClient,
+      this.options.rulesService
+    );
+  }
+
+  createRulesForScenario(
+    scenario: ScenarioName
+  ): Promise<{
+    created: number;
+    existing: number;
+    ruleIds: string[];
+    ruleIdMap: Record<string, string>;
+  }> {
+    return createRulesForScenario(this.options.rulesService, scenario);
+  }
+
+  setRuleIdMap(map: Record<string, string>): void {
+    setRuleIdMap(map);
+  }
+}
 
 function getCrowdstrikeHost() {
   return {
@@ -41,17 +105,20 @@ const SCENARIOS = {
 export type ScenarioName = keyof typeof SCENARIOS;
 export const SCENARIO_NAMES = Object.keys(SCENARIOS) as ScenarioName[];
 
-export async function generateSampleData(options: {
-  scenario?: ScenarioName;
-  count?: number;
-  ruleIdMap?: Record<string, string>;
-}): Promise<{ indexed: number; scenario: string; indices: string[] }> {
+async function generateSampleData(
+  sampleDataClient: SampleDataClient,
+  options: {
+    scenario?: ScenarioName;
+    count?: number;
+    ruleIdMap?: Record<string, string>;
+  }
+): Promise<{ indexed: number; scenario: string; indices: string[] }> {
   const { scenario, count = 50, ruleIdMap } = options;
   if (ruleIdMap) setRuleIdMap(ruleIdMap);
 
   if (scenario && SCENARIOS[scenario]) {
     const events = SCENARIOS[scenario](count);
-    const result = await bulkIndex(events);
+    const result = await bulkIndex(sampleDataClient, events);
     return {
       indexed: result.indexed,
       scenario,
@@ -63,7 +130,7 @@ export async function generateSampleData(options: {
   for (const gen of Object.values(SCENARIOS)) {
     allEvents.push(...gen(Math.ceil(count / Object.keys(SCENARIOS).length)));
   }
-  const result = await bulkIndex(allEvents);
+  const result = await bulkIndex(sampleDataClient, allEvents);
   return {
     indexed: result.indexed,
     scenario: "all",
@@ -71,7 +138,9 @@ export async function generateSampleData(options: {
   };
 }
 
-export async function cleanupSampleData(): Promise<{ deleted: number }> {
+async function cleanupSampleData(
+  sampleDataClient: SampleDataClient
+): Promise<{ deleted: number }> {
   const indices = [
     "logs-endpoint.events.process-default",
     "logs-endpoint.events.network-default",
@@ -101,8 +170,8 @@ export async function cleanupSampleData(): Promise<{ deleted: number }> {
   let totalDeleted = 0;
   for (const index of indices) {
     try {
-      const result = await esRequest<{ deleted: number }>(`/${index}/_delete_by_query`, {
-        body: { query: { term: { "tags": TAG } } },
+      const result = await sampleDataClient.deleteByQuery(index, {
+        query: { term: { tags: TAG } },
       });
       totalDeleted += result.deleted || 0;
     } catch {
@@ -112,7 +181,15 @@ export async function cleanupSampleData(): Promise<{ deleted: number }> {
   return { deleted: totalDeleted };
 }
 
-export async function checkExistingData(): Promise<{ totalDocs: number; totalAlerts: number; existingRules: number; byScenario: Record<string, { events: number; alerts: number }> }> {
+async function checkExistingData(
+  sampleDataClient: SampleDataClient,
+  rulesService: RulesService
+): Promise<{
+  totalDocs: number;
+  totalAlerts: number;
+  existingRules: number;
+  byScenario: Record<string, { events: number; alerts: number }>;
+}> {
   const scenarioIndices: Record<string, string[]> = {
     "windows-credential-theft": ["logs-endpoint.events.process-default", "logs-endpoint.events.network-default"],
     "ransomware-kill-chain": ["logs-endpoint.events.process-default", "logs-endpoint.events.network-default", "logs-endpoint.events.file-default"],
@@ -137,25 +214,21 @@ export async function checkExistingData(): Promise<{ totalDocs: number; totalAle
   let totalAlerts = 0;
   const byScenario: Record<string, { events: number; alerts: number }> = {};
 
-  // Count alerts by rule name to map to scenarios
   try {
-    const alertResult = await esRequest<{ hits: { total: { value: number } }; aggregations: { by_rule: { buckets: { key: string; doc_count: number }[] } } }>("/.alerts-security.alerts-*/_search", {
-      body: {
-        size: 0,
-        query: { term: { tags: TAG } },
-        aggs: { by_rule: { terms: { field: "kibana.alert.rule.name", size: 100 } } },
-      },
+    const alertResult = await sampleDataClient.searchAlertsAggregation({
+      size: 0,
+      query: { term: { tags: TAG } },
+      aggs: { by_rule: { terms: { field: "kibana.alert.rule.name", size: 100 } } },
     });
     totalAlerts = alertResult.hits.total.value;
   } catch { /* index may not exist */ }
 
-  // Count events per scenario index group
   for (const [scenario, indices] of Object.entries(scenarioIndices)) {
     let events = 0;
     for (const index of indices) {
       try {
-        const r = await esRequest<{ count: number }>(`/${index}/_count`, {
-          body: { query: { term: { tags: TAG } } },
+        const r = await sampleDataClient.count(index, {
+          query: { term: { tags: TAG } },
         });
         events += r.count;
       } catch { /* index may not exist */ }
@@ -177,7 +250,10 @@ export async function checkExistingData(): Promise<{ totalDocs: number; totalAle
 
   let existingRules = 0;
   try {
-    const found = await findRules({ filter: `alert.attributes.tags:"${TAG}"`, perPage: 1 });
+    const found = await rulesService.findRules({
+      filter: `alert.attributes.tags:"${TAG}"`,
+      perPage: 1,
+    });
     existingRules = found.total;
   } catch { /* ignore */ }
 
@@ -191,7 +267,10 @@ interface IndexedDoc {
 
 const BULK_CHUNK_SIZE = 200;
 
-async function bulkIndex(docs: IndexedDoc[]): Promise<{ indexed: number }> {
+async function bulkIndex(
+  sampleDataClient: SampleDataClient,
+  docs: IndexedDoc[]
+): Promise<{ indexed: number }> {
   if (docs.length === 0) return { indexed: 0 };
 
   let totalIndexed = 0;
@@ -202,14 +281,17 @@ async function bulkIndex(docs: IndexedDoc[]): Promise<{ indexed: number }> {
       doc._source,
     ]);
 
-    const result = await esRequest<{ items: Array<{ create: { _index: string; status: number; error?: unknown } }>; errors: boolean }>("/_bulk", {
-      body: body.map((line) => JSON.stringify(line)).join("\n") + "\n",
-    });
+    const ndjson = body.map((line) => JSON.stringify(line)).join("\n") + "\n";
+    const result = await sampleDataClient.bulkIndex(ndjson);
 
     if (result.errors) {
-      const succeeded = result.items.filter((item) => item.create.status >= 200 && item.create.status < 300).length;
+      const succeeded = result.items.filter(
+        (item) => item.create.status >= 200 && item.create.status < 300
+      ).length;
       const firstError = result.items.find((item) => item.create.error);
-      throw new Error(`Bulk indexing had errors: ${succeeded}/${result.items.length} succeeded. First error: ${JSON.stringify(firstError?.create.error)}`);
+      throw new Error(
+        `Bulk indexing had errors: ${succeeded}/${result.items.length} succeeded. First error: ${JSON.stringify(firstError?.create.error)}`
+      );
     }
     totalIndexed += result.items.length;
   }
@@ -285,7 +367,7 @@ interface AlertFields {
 
 let _ruleIdMap: Record<string, string> = {};
 
-export function setRuleIdMap(map: Record<string, string>) { _ruleIdMap = map; }
+function setRuleIdMap(map: Record<string, string>) { _ruleIdMap = map; }
 
 function alert(timestamp: string, fields: AlertFields): IndexedDoc {
   const ruleUuid = _ruleIdMap[fields.ruleName] || crypto.randomUUID();
@@ -527,7 +609,15 @@ export const SCENARIO_RULES: Record<string, ScenarioRuleDef[]> = {
   ],
 };
 
-export async function createRulesForScenario(scenario: ScenarioName): Promise<{ created: number; existing: number; ruleIds: string[]; ruleIdMap: Record<string, string> }> {
+async function createRulesForScenario(
+  rulesService: RulesService,
+  scenario: ScenarioName
+): Promise<{
+  created: number;
+  existing: number;
+  ruleIds: string[];
+  ruleIdMap: Record<string, string>;
+}> {
   const defs = SCENARIO_RULES[scenario] || [];
   if (defs.length === 0) return { created: 0, existing: 0, ruleIds: [], ruleIdMap: {} };
 
@@ -535,10 +625,12 @@ export async function createRulesForScenario(scenario: ScenarioName): Promise<{ 
   const ruleIdMap: Record<string, string> = {};
   let existing = 0;
 
-  // Check for existing rules by name to avoid duplicates
-  let existingRules: Record<string, string> = {};
+  const existingRules: Record<string, string> = {};
   try {
-    const found = await findRules({ filter: `alert.attributes.tags:"${TAG}"`, perPage: 100 });
+    const found = await rulesService.findRules({
+      filter: `alert.attributes.tags:"${TAG}"`,
+      perPage: 100,
+    });
     for (const r of found.data) {
       existingRules[r.name] = r.id;
     }
@@ -570,7 +662,7 @@ export async function createRulesForScenario(scenario: ScenarioName): Promise<{ 
       if (def.type !== "esql") {
         ruleBody.index = def.index;
       }
-      const rule = await createRule(ruleBody);
+      const rule = await rulesService.createRule(ruleBody);
       ruleIds.push(rule.id);
       ruleIdMap[def.name] = rule.id;
     } catch {
@@ -579,8 +671,6 @@ export async function createRulesForScenario(scenario: ScenarioName): Promise<{ 
   }
   return { created: ruleIds.length - existing, existing, ruleIds, ruleIdMap };
 }
-
-import { createRule, findRules } from "./rules.js";
 
 // --- Scenarios ---
 

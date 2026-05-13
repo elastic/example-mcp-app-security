@@ -13,13 +13,21 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
-import * as cases from "../elastic/cases.js";
-import { esRequest } from "../elastic/client.js";
+import type { CasesService } from "../elastic/service/index.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://manage-cases/mcp-app.html";
 
-export function registerCaseManagementTools(server: McpServer) {
+/** Services the case-management tools depend on (default cluster only, for now). */
+export interface CaseManagementToolDeps {
+  readonly casesService: CasesService;
+}
+
+export function registerCaseManagementTools(
+  server: McpServer,
+  deps: CaseManagementToolDeps
+) {
+  const { casesService } = deps;
   registerAppTool(
     server,
     "manage-cases",
@@ -35,7 +43,7 @@ export function registerCaseManagementTools(server: McpServer) {
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ status, severity, search }) => {
-      const result = await cases.listCases({ status, severity, search });
+      const result = await casesService.listCases({ status, severity, search });
       const compact = {
         total: result.total,
         cases: result.cases.slice(0, 20).map((c) => ({
@@ -71,7 +79,7 @@ export function registerCaseManagementTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ status, severity, search, tags, page, perPage }) => {
-      const result = await cases.listCases({
+      const result = await casesService.listCases({
         status,
         severity,
         search,
@@ -93,7 +101,7 @@ export function registerCaseManagementTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ caseId }) => {
-      const result = await cases.getCase(caseId);
+      const result = await casesService.getCase(caseId);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -114,37 +122,17 @@ export function registerCaseManagementTools(server: McpServer) {
       _meta: { ui: {} },
     },
     async ({ title, description, tags, severity, alertIds }) => {
-      const result = await cases.createCase({
+      const result = await casesService.createCase({
         title,
         description,
         tags: tags ? tags.split(",") : undefined,
         severity,
       });
 
-      let alertsAttached = 0;
-      if (alertIds && alertIds.length > 0) {
-        try {
-          const alertDocs = await esRequest<{
-            docs: Array<{ _index: string; _id: string; found: boolean; _source?: Record<string, unknown> }>;
-          }>("/.alerts-security.alerts-default/_mget", {
-            body: { ids: alertIds },
-          });
-
-          for (const doc of alertDocs.docs) {
-            if (!doc.found || !doc._source) continue;
-            try {
-              const ruleId = (doc._source["kibana.alert.rule.uuid"] as string) || "";
-              const ruleName = (doc._source["kibana.alert.rule.name"] as string) || "Unknown Rule";
-              await cases.attachAlert(result.id, doc._id, doc._index, ruleId, ruleName);
-              alertsAttached++;
-            } catch {
-              // skip individual alert attachment failures
-            }
-          }
-        } catch {
-          // alert lookup failed — case still created
-        }
-      }
+      const alertsAttached = await casesService.attachAlertsByIds(
+        result.id,
+        alertIds || []
+      );
 
       return { content: [{ type: "text" as const, text: JSON.stringify({ ...result, alertsAttached }) }] };
     }
@@ -166,7 +154,7 @@ export function registerCaseManagementTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ caseId, version, status, severity, tags }) => {
-      const result = await cases.updateCase(caseId, version, {
+      const result = await casesService.updateCase(caseId, version, {
         status,
         severity,
         tags: tags ? tags.split(",") : undefined,
@@ -188,7 +176,7 @@ export function registerCaseManagementTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ caseId, comment }) => {
-      const result = await cases.addComment(caseId, comment);
+      const result = await casesService.addComment(caseId, comment);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -209,7 +197,7 @@ export function registerCaseManagementTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ caseId, alertId, alertIndex, ruleId, ruleName }) => {
-      const result = await cases.attachAlert(caseId, alertId, alertIndex, ruleId, ruleName);
+      const result = await casesService.attachAlert(caseId, alertId, alertIndex, ruleId, ruleName);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -225,7 +213,7 @@ export function registerCaseManagementTools(server: McpServer) {
     },
     async ({ caseId }) => {
       try {
-        const attachments = await cases.getCaseAlerts(caseId);
+        const attachments = await casesService.getCaseAlerts(caseId);
         return { content: [{ type: "text" as const, text: JSON.stringify(attachments) }] };
       } catch {
         return { content: [{ type: "text" as const, text: JSON.stringify([]) }] };
@@ -243,7 +231,7 @@ export function registerCaseManagementTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ caseId }) => {
-      const result = await cases.getComments(caseId);
+      const result = await casesService.getComments(caseId);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -259,7 +247,7 @@ export function registerCaseManagementTools(server: McpServer) {
     },
     async () => {
       try {
-        const result = await cases.getUserProfile();
+        const result = await casesService.getUserProfile();
         return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
       } catch {
         return { content: [{ type: "text" as const, text: JSON.stringify({ username: "", avatar: {} }) }] };

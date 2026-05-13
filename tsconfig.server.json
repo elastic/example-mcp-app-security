@@ -14,5 +14,13 @@
     "lib": ["ES2022"]
   },
   "include": ["main.ts", "src/server.ts", "src/elastic/**/*", "src/tools/**/*", "src/shared/types.ts"],
-  "exclude": ["node_modules", "src/views/**/*"]
+  "exclude": [
+    "node_modules",
+    "src/views/**/*",
+    "src/test/**/*",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ]
 }

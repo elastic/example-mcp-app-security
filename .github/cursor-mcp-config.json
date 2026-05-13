@@ -6,8 +6,6 @@
     "--stdio"
   ],
   "env": {
-    "ELASTICSEARCH_URL": "https://your-cluster.es.cloud.example.com",
-    "ELASTICSEARCH_API_KEY": "your-api-key",
-    "KIBANA_URL": "https://your-cluster.kb.cloud.example.com"
+    "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\"}]"
   }
 }

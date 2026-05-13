@@ -13,12 +13,21 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
-import * as rules from "../elastic/rules.js";
+import type { RulesService } from "../elastic/service/index.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://manage-rules/mcp-app.html";
 
-export function registerDetectionRuleTools(server: McpServer) {
+/** Services the detection-rules tools depend on (default cluster only, for now). */
+export interface DetectionRuleToolDeps {
+  readonly rulesService: RulesService;
+}
+
+export function registerDetectionRuleTools(
+  server: McpServer,
+  deps: DetectionRuleToolDeps
+) {
+  const { rulesService } = deps;
   registerAppTool(
     server,
     "manage-rules",
@@ -34,7 +43,7 @@ export function registerDetectionRuleTools(server: McpServer) {
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ filter, page, perPage }) => {
-      const result = await rules.findRules({ filter, page, perPage });
+      const result = await rulesService.findRules({ filter, page, perPage });
       const compact = {
         total: result.total,
         rules: result.data.slice(0, 20).map((r) => ({
@@ -73,7 +82,7 @@ export function registerDetectionRuleTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async (args) => {
-      const result = await rules.findRules(args);
+      const result = await rulesService.findRules(args);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -88,7 +97,7 @@ export function registerDetectionRuleTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ id }) => {
-      const result = await rules.getRule(id);
+      const result = await rulesService.getRule(id);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -105,8 +114,8 @@ export function registerDetectionRuleTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ rule: ruleJson }) => {
-      const ruleConfig = JSON.parse(ruleJson);
-      const result = await rules.createRule(ruleConfig);
+      const ruleConfig = JSON.parse(ruleJson) as Record<string, unknown>;
+      const result = await rulesService.createRule(ruleConfig);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -124,7 +133,10 @@ export function registerDetectionRuleTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ id, updates }) => {
-      const result = await rules.patchRule(id, JSON.parse(updates));
+      const result = await rulesService.patchRule(
+        id,
+        JSON.parse(updates) as Record<string, unknown>
+      );
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -142,7 +154,7 @@ export function registerDetectionRuleTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ id, enabled }) => {
-      const result = await rules.toggleRule(id, enabled);
+      const result = await rulesService.toggleRule(id, enabled);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -160,7 +172,7 @@ export function registerDetectionRuleTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ query, language }) => {
-      const result = await rules.validateQuery(query, language);
+      const result = await rulesService.validateQuery(query, language);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -178,7 +190,7 @@ export function registerDetectionRuleTools(server: McpServer) {
       _meta: { ui: { visibility: ["app"] } },
     },
     async ({ days, limit }) => {
-      const result = await rules.noisyRules({ days, limit });
+      const result = await rulesService.noisyRules({ days, limit });
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -199,13 +211,17 @@ export function registerDetectionRuleTools(server: McpServer) {
     },
     async ({ action, ruleId, listId, exception: exceptionJson }) => {
       if (action === "list") {
-        const result = await rules.listExceptions(listId);
+        const result = await rulesService.listExceptions(listId);
         return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
       }
       if (!ruleId || !exceptionJson) {
         return { content: [{ type: "text" as const, text: JSON.stringify({ error: "ruleId and exception required for add" }) }] };
       }
-      const result = await rules.addException(ruleId, listId, JSON.parse(exceptionJson));
+      const result = await rulesService.addException(
+        ruleId,
+        listId,
+        JSON.parse(exceptionJson)
+      );
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
