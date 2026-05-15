@@ -16,6 +16,25 @@ import { createDefaultLlmProvider } from "./llm/index.js";
 /** Maximum LLM → tool-call turns before halting to prevent runaway evals. */
 const MAX_TURNS = 8;
 
+/**
+ * Returns true when an MCP tool should be exposed to the LLM.
+ *
+ * Mirrors the MCP host visibility contract — tools marked
+ * `_meta.ui.visibility: ["app"]` (without `"model"`) are invoked exclusively
+ * by an MCP app via `app.callServerTool()`. Real hosts (Claude Desktop,
+ * Cursor) hide those from the LLM; the eval harness must do the same to
+ * match what the model actually sees in production.
+ */
+function isVisibleToModel(tool: { _meta?: unknown }): boolean {
+  const meta = tool._meta as
+    | { ui?: { visibility?: readonly string[] } }
+    | undefined;
+  const visibility = meta?.ui?.visibility;
+  if (!visibility || visibility.length === 0) return true;
+  if (visibility.includes("model")) return true;
+  return !visibility.includes("app");
+}
+
 export interface HostLoopOptions {
   /**
    * Pre-built MCP server to test against.
@@ -72,7 +91,13 @@ export async function runMcpHostLoop(
 
   try {
     const { tools: mcpTools } = await client.listTools();
-    const toolDefs = mcpTools.map((t) => ({
+    // Strip app-only tools — they're invoked by the React workbench via
+    // `app.callServerTool()` and a real MCP host (Claude Desktop, Cursor)
+    // hides them from the LLM by inspecting `_meta.ui.visibility`. Without
+    // this filter the model sees `find-rules`, `start-translation`,
+    // `install-rules`, etc. as alternatives to the model-facing entry
+    // points and the activation rate collapses on smaller models.
+    const toolDefs = mcpTools.filter(isVisibleToModel).map((t) => ({
       name: t.name,
       description: t.description ?? "",
       parameters: t.inputSchema as Record<string, unknown>,
