@@ -32,10 +32,6 @@
   box-shadow: 0 0 0 2px var(--accent-color-alpha, rgba(0, 119, 204, 0.15));
 }
 
-.migration-vendor-card--disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 
 .migration-vendor-label {
   font-size: 14px;

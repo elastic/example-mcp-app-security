@@ -519,16 +519,18 @@ function VendorSelect({ onSelect }: { onSelect: (vendor: string) => void }) {
       </p>
       <div className="migration-vendor-grid">
         {VENDOR_CATALOGUE.map(({ id, label }) => {
-          const supported = SUPPORTED_VENDORS.includes(id);
+          // ≤5-LOC client-side gate: only Splunk is production-ready.
+          // Add a vendor to SUPPORTED_VENDORS to re-enable it.
+          const active = SUPPORTED_VENDORS.includes(id);
           return (
             <button
               key={id}
-              className={`migration-vendor-card${supported ? "" : " migration-vendor-card--disabled"}`}
-              disabled={!supported}
-              onClick={() => supported && onSelect(id)}
+              className={`migration-vendor-card${active ? "" : " opacity-50 cursor-not-allowed"}`}
+              disabled={!active}
+              onClick={() => active && onSelect(id)}
             >
               <span className="migration-vendor-label">{label}</span>
-              {!supported && <span className="migration-vendor-badge">Coming soon</span>}
+              {!active && <span className="migration-vendor-badge">Coming soon</span>}
             </button>
           );
         })}
