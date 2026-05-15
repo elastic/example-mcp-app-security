@@ -19,3 +19,18 @@ export type {
   ScenarioRuleDef,
 } from "./sampleDataService.js";
 export { SampleDataService, SCENARIO_NAMES, SCENARIO_RULES } from "./sampleDataService.js";
+export type {
+  SiemMigration,
+  TranslatedRule,
+  MigrationResource,
+  MigrationStats,
+  ListTranslatedRulesOptions,
+  ListTranslatedRulesResult,
+  InstallRulesOptions,
+  InstallRulesResult,
+} from "./migrationsService.js";
+export {
+  MigrationApiError,
+  MigrationsService,
+  SIEM_MIGRATIONS_API_BASE,
+} from "./migrationsService.js";
