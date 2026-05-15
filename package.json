@@ -47,6 +47,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:evals": "cross-env RUN_LLM_EVALS=1 vitest run --config evals/vitest.config.ts",
     "prepublishOnly": "npm run build",
     "prepare": "husky",
     "version": "node -e \"const m=JSON.parse(require('fs').readFileSync('manifest.json','utf8'));m.version=require('./package.json').version;require('fs').writeFileSync('manifest.json',JSON.stringify(m,null,2)+'\\n')\" && git add manifest.json"
