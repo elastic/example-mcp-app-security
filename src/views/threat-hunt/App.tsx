@@ -36,42 +36,12 @@ const ExitFullscreenIcon = () => (
   </svg>
 );
 
-/**
- * Default state seeds a realistic ES|QL scenario on first load (results table).
- * The investigation graph stays hidden until the user runs a query that returns
- * rows and clicks entities, or uses "Example graph".
- */
-const DEFAULT_QUERY = `FROM logs-*
-| WHERE host.name == "win-dc-01"
-| STATS count = COUNT(*) BY user.name, process.name
-| SORT count DESC
-| LIMIT 10`;
-
-const DEFAULT_RESULTS: EsqlResult = {
-  columns: [
-    { name: "user.name", type: "keyword" },
-    { name: "process.name", type: "keyword" },
-    { name: "host.name", type: "keyword" },
-    { name: "count", type: "long" },
-  ],
-  values: [
-    ["svc_backup", "powershell.exe", "win-dc-01", 147],
-    ["svc_backup", "procdump.exe", "win-dc-01", 42],
-    ["admin.backup", "powershell.exe", "win-dc-01", 38],
-    ["svc_backup", "cmd.exe", "win-dc-01", 29],
-    ["admin.backup", "rundll32.exe", "win-dc-01", 21],
-    ["svc_backup", "net.exe", "win-dc-01", 17],
-    ["admin.backup", "wmic.exe", "win-dc-01", 14],
-    ["svc_backup", "reg.exe", "win-dc-01", 11],
-  ],
-};
-
 export function App() {
-  const [query, setQuery] = useState(DEFAULT_QUERY);
-  const [results, setResults] = useState<EsqlResult | null>(DEFAULT_RESULTS);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<EsqlResult | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
-  const [hasExecuted, setHasExecuted] = useState(true);
+  const [hasExecuted, setHasExecuted] = useState(false);
 
   const [graphNodes, setGraphNodes] = useState<GNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GEdge[]>([]);
