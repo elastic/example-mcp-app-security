@@ -214,11 +214,21 @@ that structural evaluators can't express.
 
    ```bash
    # Anthropic (preferred)
-   ANTHROPIC_API_KEY=sk-ant-... CLUSTERS_JSON='[{...}]' npm run test:evals
+   ANTHROPIC_API_KEY=sk-ant-... npm run test:evals
 
    # OpenAI / LiteLLM proxy
-   OPENAI_API_KEY=sk-... LITELLM_BASE_URL=https://... CLUSTERS_JSON='[{...}]' npm run test:evals
+   OPENAI_API_KEY=sk-... LITELLM_BASE_URL=https://... npm run test:evals
+
+   # Local Ollama (zero-cost smoke run; tool-calling quality varies by model)
+   OPENAI_API_KEY=ollama \
+     LITELLM_BASE_URL=http://localhost:11434/v1 \
+     OPENAI_MODEL=qwen2.5:32b-instruct-q4_K_M \
+     npm run test:evals
    ```
+
+   `createEvalServer` stubs all Elastic-cluster calls, so no `CLUSTERS_JSON`
+   is needed when running skill-routing evaluators (`skill-activation`,
+   `tool-selection`, `negative-activation`, `trajectory`, `criteria`).
 
 4. **Trigger in CI**: open a PR and add the `evals` label (requires write access).
 
