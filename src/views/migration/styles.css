@@ -218,3 +218,22 @@
   background: var(--surface-color, #fff);
   gap: 8px;
 }
+
+/* Shared input style used across the ElasticRuleForm and drawer selects */
+
+.migration-form-input {
+  width: 100%;
+  font-size: 13px;
+  border: 1px solid var(--border-color, #d4d4d4);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: var(--surface-color, #fff);
+  color: var(--text-color, #171717);
+  line-height: 1.5;
+}
+
+.migration-form-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #0077cc);
+  box-shadow: 0 0 0 2px var(--accent-color-alpha, rgba(0, 119, 204, 0.15));
+}

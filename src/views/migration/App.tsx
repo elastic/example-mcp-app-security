@@ -933,6 +933,136 @@ function TranslationBadge({ result }: { result?: string }) {
   return <span className={cls}>{label}</span>;
 }
 
+// ---------------------------------------------------------------------------
+// ElasticRulePartial — key fields of an Elastic detection rule
+// ---------------------------------------------------------------------------
+
+interface ElasticRulePartial {
+  name: string;
+  description: string;
+  type: string;
+  query: string;
+  language: string;
+  severity: string;
+  risk_score: number;
+  [key: string]: unknown;
+}
+
+function fromRuleJson(raw: Record<string, unknown>): ElasticRulePartial {
+  return {
+    name: (raw.name as string | undefined) ?? "",
+    description: (raw.description as string | undefined) ?? "",
+    type: (raw.type as string | undefined) ?? "query",
+    query: (raw.query as string | undefined) ?? "",
+    language: (raw.language as string | undefined) ?? "kuery",
+    severity: (raw.severity as string | undefined) ?? "medium",
+    risk_score: typeof raw.risk_score === "number" ? raw.risk_score : 50,
+    ...raw,
+  };
+}
+
+function ElasticRuleForm({
+  fields,
+  onChange,
+}: {
+  fields: ElasticRulePartial;
+  onChange: (patch: Partial<ElasticRulePartial>) => void;
+}) {
+  return (
+    <div className="space-y-3 text-sm">
+      <FormRow label="Name">
+        <input
+          className="migration-form-input"
+          value={fields.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+        />
+      </FormRow>
+      <FormRow label="Description">
+        <textarea
+          className="migration-form-input h-16 resize-none"
+          value={fields.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+        />
+      </FormRow>
+      <div className="flex gap-3">
+        <FormRow label="Type" className="flex-1">
+          <select
+            className="migration-form-input"
+            value={fields.type}
+            onChange={(e) => onChange({ type: e.target.value })}
+          >
+            {["query", "eql", "esql", "threshold", "machine_learning", "new_terms"].map(
+              (t) => <option key={t} value={t}>{t}</option>
+            )}
+          </select>
+        </FormRow>
+        <FormRow label="Language" className="flex-1">
+          <select
+            className="migration-form-input"
+            value={fields.language}
+            onChange={(e) => onChange({ language: e.target.value })}
+          >
+            {["kuery", "eql", "esql", "lucene"].map(
+              (l) => <option key={l} value={l}>{l}</option>
+            )}
+          </select>
+        </FormRow>
+      </div>
+      <FormRow label="Query">
+        <textarea
+          className="migration-form-input h-28 resize-y font-mono text-xs"
+          value={fields.query}
+          onChange={(e) => onChange({ query: e.target.value })}
+        />
+      </FormRow>
+      <div className="flex gap-3">
+        <FormRow label="Severity" className="flex-1">
+          <select
+            className="migration-form-input"
+            value={fields.severity}
+            onChange={(e) => onChange({ severity: e.target.value })}
+          >
+            {["low", "medium", "high", "critical"].map(
+              (s) => <option key={s} value={s}>{s}</option>
+            )}
+          </select>
+        </FormRow>
+        <FormRow label="Risk score" className="flex-1">
+          <input
+            type="number"
+            min={0}
+            max={100}
+            className="migration-form-input"
+            value={fields.risk_score}
+            onChange={(e) => onChange({ risk_score: Math.min(100, Math.max(0, Number(e.target.value))) })}
+          />
+        </FormRow>
+      </div>
+    </div>
+  );
+}
+
+function FormRow({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={className}>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RuleDrawer — slide-over with ElasticRulePartial form
+// ---------------------------------------------------------------------------
+
 function RuleDrawer({
   rule,
   onSave,
@@ -942,34 +1072,55 @@ function RuleDrawer({
   onSave: (json: string, result: "full" | "partial" | "untranslatable") => void;
   onClose: () => void;
 }) {
-  const [json, setJson] = useState(() =>
-    JSON.stringify(rule.elastic_rule ?? {}, null, 2)
-  );
+  const rawRule = rule.elastic_rule ?? {};
+  const [fields, setFields] = useState<ElasticRulePartial>(() => fromRuleJson(rawRule));
   const [result, setResult] = useState<"full" | "partial" | "untranslatable">(
     rule.translation_result ?? "partial"
   );
+  const [revalidating, setRevalidating] = useState(false);
+
+  const patch = (update: Partial<ElasticRulePartial>) =>
+    setFields((prev) => ({ ...prev, ...update }));
+
+  const toJson = () => JSON.stringify({ ...rawRule, ...fields }, null, 2);
+
+  const handleRevalidate = async () => {
+    setRevalidating(true);
+    try {
+      // Save the current edits; caller persists via update-translated-rule
+      // and can determine a new translation result from the API response.
+      onSave(toJson(), "partial");
+    } finally {
+      setRevalidating(false);
+    }
+  };
+
+  const ruleName =
+    fields.name ||
+    (rule.original_rule?.title as string | undefined) ||
+    rule.id;
 
   return (
     <div className="migration-drawer">
       <div className="migration-drawer-header">
-        <h3 className="font-semibold text-sm">Fix translated rule</h3>
-        <button className="text-gray-400 hover:text-gray-700" onClick={onClose}>
+        <div className="min-w-0">
+          <h3 className="font-semibold text-sm truncate">{ruleName}</h3>
+          <TranslationBadge result={rule.translation_result} />
+        </div>
+        <button className="text-gray-400 hover:text-gray-700 shrink-0" onClick={onClose}>
           ✕
         </button>
       </div>
+
       <div className="migration-drawer-body">
-        <p className="text-xs text-gray-500 mb-2">
-          Edit the Elastic rule JSON and select the translation quality.
-        </p>
-        <textarea
-          className="migration-rule-json-editor"
-          value={json}
-          onChange={(e) => setJson(e.target.value)}
-        />
-        <div className="mt-3">
-          <label className="block text-xs font-medium mb-1">Translation result</label>
+        <ElasticRuleForm fields={fields} onChange={patch} />
+
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Translation result
+          </label>
           <select
-            className="w-full text-sm border border-gray-200 rounded p-1.5"
+            className="migration-form-input"
             value={result}
             onChange={(e) => setResult(e.target.value as typeof result)}
           >
@@ -979,13 +1130,22 @@ function RuleDrawer({
           </select>
         </div>
       </div>
+
       <div className="migration-drawer-footer">
         <button className="text-sm text-gray-500" onClick={onClose}>
           Cancel
         </button>
         <button
+          className="text-sm px-3 py-1.5 border border-gray-300 rounded disabled:opacity-50"
+          disabled={revalidating}
+          onClick={() => void handleRevalidate()}
+          title="Save edits and mark as partial for further review"
+        >
+          {revalidating ? "Saving…" : "Re-validate"}
+        </button>
+        <button
           className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded"
-          onClick={() => onSave(json, result)}
+          onClick={() => onSave(toJson(), result)}
         >
           Save
         </button>
