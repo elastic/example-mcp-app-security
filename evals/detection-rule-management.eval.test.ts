@@ -29,6 +29,7 @@ import {
 import { skillActivation } from "./evaluators/skill-activation.js";
 import { negativeActivation } from "./evaluators/negative-activation.js";
 import { toolSelection } from "./evaluators/tool-selection.js";
+import { createEvalServer } from "./helpers/evalServer.js";
 
 runDataset(
   {
@@ -39,7 +40,7 @@ runDataset(
     "skill-activation": skillActivation,
     "tool-selection": toolSelection,
   },
-  { passingScore: 0.8 }
+  { passingScore: 0.8, createServer: createEvalServer }
 );
 
 runDataset(
@@ -50,5 +51,5 @@ runDataset(
   {
     "negative-activation": negativeActivation,
   },
-  { passingScore: 1.0 } // 100% — any false positive is a regression
+  { passingScore: 1.0, createServer: createEvalServer } // 100% — any false positive is a regression
 );

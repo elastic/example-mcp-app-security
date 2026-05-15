@@ -18,7 +18,7 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    include: ["evals/**/*.{test,spec,eval}.ts", "evals/datasets/**/*.dataset.ts"],
+    include: ["evals/**/*.{test,spec,eval}.ts"],
     testTimeout: 120_000,
   },
 });

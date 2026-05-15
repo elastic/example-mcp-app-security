@@ -6,12 +6,24 @@
  */
 
 import { describe, it, expect, afterAll } from "vitest";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Dataset, EvalResult, EvaluatorResult, Evaluator } from "./types.js";
 import { runMcpHostLoop } from "./runMcpHostLoop.js";
 
 export interface RunnerOptions {
   /** Minimum numeric score [0–1] for a test to pass. Defaults to 0.5. */
   passingScore?: number;
+  /**
+   * Factory that produces a fresh McpServer for each example.
+   *
+   * A fresh instance is required per-run because InMemoryTransport is torn
+   * down after each `runMcpHostLoop` call. When omitted, `runMcpHostLoop`
+   * falls back to `createServer()`, which requires `CLUSTERS_JSON`.
+   *
+   * Pass `createEvalServer` from `evals/helpers/evalServer.ts` to run eval
+   * suites without a live Elastic cluster (only API keys are needed).
+   */
+  createServer?: () => McpServer;
 }
 
 /**
@@ -33,14 +45,18 @@ export function runDataset(
   evaluators: Record<string, Evaluator>,
   options: RunnerOptions = {}
 ): void {
-  const { passingScore = 0.5 } = options;
+  const { passingScore = 0.5, createServer } = options;
 
-  describe.skipIf(!process.env.RUN_LLM_EVALS)(dataset.name, () => {
+  const hasLlmProvider =
+    !!process.env.ANTHROPIC_API_KEY || !!process.env.OPENAI_API_KEY;
+  describe.skipIf(!process.env.RUN_LLM_EVALS || !hasLlmProvider)(dataset.name, () => {
     const results: EvalResult[] = [];
 
     for (const example of dataset.examples) {
       it(example.id, async () => {
-        const trajectory = await runMcpHostLoop(example.input);
+        const trajectory = await runMcpHostLoop(example.input, {
+          server: createServer?.(),
+        });
 
         const evalResults: Record<string, EvaluatorResult> = {};
         for (const [name, evaluator] of Object.entries(evaluators)) {
