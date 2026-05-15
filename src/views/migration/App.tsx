@@ -27,7 +27,9 @@ import "./styles.css";
 
 interface MigrationStats {
   id: string;
-  status: string;
+  name?: string;
+  /** Lifecycle status returned by get-migration. */
+  status: "ready" | "running" | "finished" | "error" | string;
   rules: {
     total: number;
     pending: number;
@@ -230,22 +232,21 @@ export function App() {
     (app: McpApp, vendor: string, migrationId: string) => {
       clearPoll();
       pollTimerRef.current = setTimeout(async () => {
-        const stats = await callTool<MigrationStats>(app, "get-stats", { migrationId });
+        // Use get-migration (not get-stats) so we get the strongly-typed status
+        // field ("ready" | "running" | "finished" | "error") alongside the rule counts.
+        const migration = await callTool<MigrationStats>(app, "get-migration", { migrationId });
         setState((prev) => {
           if (prev.stage !== "translating") return prev;
-          return { ...prev, stats: stats ?? prev.stats };
+          return { ...prev, stats: migration ?? prev.stats };
         });
-        if (stats && stats.rules.processing === 0 && stats.status !== "running") {
-          // Translation finished — load translated rules and resources, move to review
+        // Translation is complete when Kibana sets status to "finished" or "error".
+        if (migration && (migration.status === "finished" || migration.status === "error")) {
           void (async () => {
-            const translationsRes = await callTool<{
-              data: TranslatedRule[];
-            }>(app, "get-translated-rules", { migrationId, vendor, perPage: 500 });
+            const translationsRes = await callTool<{ data: TranslatedRule[] }>(
+              app, "get-translated-rules", { migrationId, vendor, perPage: 500 }
+            );
             const resources =
-              (await callTool<MigrationResource[]>(app, "get-resources", {
-                migrationId,
-                vendor,
-              })) ?? [];
+              (await callTool<MigrationResource[]>(app, "get-resources", { migrationId, vendor })) ?? [];
             setState({
               stage: "review",
               vendor,
@@ -612,12 +613,20 @@ function Upload({ vendor, onUpload }: { vendor: string; onUpload: (json: string)
 
 function Translating({ stats }: { stats: MigrationStats | null }) {
   const rules = stats?.rules;
-  const pct = rules && rules.total > 0 ? Math.round(((rules.total - rules.pending) / rules.total) * 100) : 0;
+  const done = stats?.rules.total ?? 0;
+  const pending = rules?.pending ?? 0;
+  const pct = done > 0 ? Math.round(((done - pending) / done) * 100) : 0;
+  const isError = stats?.status === "error";
+
   return (
     <div className="p-6 max-w-xl mx-auto">
-      <h2 className="text-lg font-semibold mb-1">Translating rules…</h2>
+      <h2 className="text-lg font-semibold mb-1">
+        {isError ? "Translation encountered an error" : "Translating rules…"}
+      </h2>
       <p className="text-sm text-gray-500 mb-6">
-        The AI translator is converting your rules to Elastic detection rule format. This may take a few minutes.
+        {isError
+          ? "Some rules could not be translated. Loading results…"
+          : "The AI translator is converting your rules to Elastic detection rule format. This may take a few minutes."}
       </p>
       {rules && (
         <>
@@ -627,10 +636,14 @@ function Translating({ stats }: { stats: MigrationStats | null }) {
             <KpiTile label="Pending" value={rules.pending} />
             <KpiTile label="Failed" value={rules.failed} />
           </KpiStrip>
-          <div className="migration-progress-bar-track mt-4">
-            <div className="migration-progress-bar-fill" style={{ width: `${pct}%` }} />
-          </div>
-          <p className="text-xs text-gray-400 mt-1">{pct}% complete</p>
+          {!isError && (
+            <>
+              <div className="migration-progress-bar-track mt-4">
+                <div className="migration-progress-bar-fill" style={{ width: `${pct}%` }} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">{pct}% complete</p>
+            </>
+          )}
         </>
       )}
       {!rules && <LoadingState>Waiting for translation to start…</LoadingState>}
