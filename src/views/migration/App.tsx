@@ -356,7 +356,7 @@ export function App() {
         await callTool(app, "upsert-resource", { migrationId, vendor, ...resource });
         const resources =
           (await callTool<MigrationResource[]>(app, "get-resources", { migrationId, vendor })) ?? [];
-        setState({ stage: "review", vendor, migrationId, translations, resources });
+        setState({ stage: "fix-resources-drawer", vendor, migrationId, translations, resources });
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -1163,66 +1163,182 @@ function ResourcesDrawer({
   onSave: (resource: MigrationResource) => void;
   onClose: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState<"macro" | "lookup">("macro");
-  const [content, setContent] = useState("");
+  const [addName, setAddName] = useState("");
+  const [addType, setAddType] = useState<"macro" | "lookup">("macro");
+  const [addContent, setAddContent] = useState("");
+
+  const unresolved = resources.filter((r) => !r.content.trim());
+  const resolved = resources.filter((r) => r.content.trim());
 
   return (
     <div className="migration-drawer">
       <div className="migration-drawer-header">
-        <h3 className="font-semibold text-sm">Manage resources</h3>
-        <button className="text-gray-400 hover:text-gray-700" onClick={onClose}>
+        <div className="min-w-0">
+          <h3 className="font-semibold text-sm">Manage resources</h3>
+          {unresolved.length > 0 && (
+            <span className="text-xs text-yellow-700">
+              {unresolved.length} unresolved
+            </span>
+          )}
+        </div>
+        <button className="text-gray-400 hover:text-gray-700 shrink-0" onClick={onClose}>
           ✕
         </button>
       </div>
-      <div className="migration-drawer-body">
-        {resources.length > 0 && (
-          <div className="mb-4">
-            <p className="text-xs font-medium mb-2 text-gray-600">Existing resources</p>
-            {resources.map((r) => (
-              <div key={`${r.type}:${r.name}`} className="migration-resource-row">
-                <span className="text-xs font-mono bg-gray-100 px-1 rounded">{r.type}</span>
-                <span className="text-sm">{r.name}</span>
-              </div>
-            ))}
-          </div>
+
+      <div className="migration-drawer-body space-y-4">
+        {unresolved.length > 0 && (
+          <section>
+            <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">
+              Unresolved ({unresolved.length})
+            </p>
+            <div className="space-y-2">
+              {unresolved.map((r) => (
+                <ResourceEditRow
+                  key={`${r.type}:${r.name}`}
+                  resource={r}
+                  defaultExpanded
+                  onSave={onSave}
+                />
+              ))}
+            </div>
+          </section>
         )}
-        <p className="text-xs font-medium mb-2 text-gray-600">Add / update resource</p>
-        <div className="space-y-2">
-          <select
-            className="w-full text-sm border border-gray-200 rounded p-1.5"
-            value={type}
-            onChange={(e) => setType(e.target.value as typeof type)}
-          >
-            <option value="macro">Macro</option>
-            <option value="lookup">Lookup</option>
-          </select>
-          <input
-            className="w-full text-sm border border-gray-200 rounded p-1.5"
-            placeholder="Resource name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+
+        {resolved.length > 0 && (
+          <section>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Defined ({resolved.length})
+            </p>
+            <div className="space-y-2">
+              {resolved.map((r) => (
+                <ResourceEditRow
+                  key={`${r.type}:${r.name}`}
+                  resource={r}
+                  defaultExpanded={false}
+                  onSave={onSave}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {resources.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-8">No resources found.</p>
+        )}
+
+        <section>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Add resource
+          </p>
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <select
+                className="migration-form-input"
+                value={addType}
+                onChange={(e) => setAddType(e.target.value as typeof addType)}
+              >
+                <option value="macro">Macro</option>
+                <option value="lookup">Lookup</option>
+              </select>
+              <input
+                className="migration-form-input"
+                placeholder="Resource name"
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+              />
+            </div>
+            <textarea
+              className="migration-rule-json-editor h-20"
+              placeholder="Paste definition…"
+              value={addContent}
+              onChange={(e) => setAddContent(e.target.value)}
+            />
+            <div className="flex justify-end">
+              <button
+                className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded disabled:opacity-50"
+                disabled={!addName.trim()}
+                onClick={() => {
+                  onSave({ type: addType, name: addName.trim(), content: addContent });
+                  setAddName("");
+                  setAddContent("");
+                }}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="migration-drawer-footer">
+        <button className="text-sm text-gray-500" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ResourceEditRow({
+  resource,
+  defaultExpanded,
+  onSave,
+}: {
+  resource: MigrationResource;
+  defaultExpanded: boolean;
+  onSave: (r: MigrationResource) => void;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [content, setContent] = useState(resource.content);
+  const isUnresolved = !resource.content.trim();
+  const isDirty = content !== resource.content;
+
+  useEffect(() => {
+    setContent(resource.content);
+  }, [resource.content]);
+
+  return (
+    <div
+      className={`border rounded p-2 space-y-2${isUnresolved ? " border-yellow-300 bg-yellow-50" : " border-gray-200"}`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-mono bg-gray-100 px-1 rounded shrink-0">
+            {resource.type}
+          </span>
+          <span className="text-sm font-medium truncate">{resource.name}</span>
+          {isUnresolved && (
+            <span className="text-xs text-yellow-600 shrink-0">unresolved</span>
+          )}
+        </div>
+        <button
+          className="text-xs text-gray-400 shrink-0 ml-2"
+          onClick={() => setExpanded((p) => !p)}
+        >
+          {expanded ? "▲" : "▼"}
+        </button>
+      </div>
+
+      {expanded && (
+        <>
           <textarea
-            className="migration-rule-json-editor h-24"
-            placeholder="Resource content / definition"
+            className="migration-rule-json-editor h-24 w-full"
+            placeholder="Paste macro or lookup definition…"
             value={content}
             onChange={(e) => setContent(e.target.value)}
           />
-        </div>
-      </div>
-      <div className="migration-drawer-footer">
-        <button className="text-sm text-gray-500" onClick={onClose}>
-          Close
-        </button>
-        <button
-          className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded disabled:opacity-50"
-          disabled={!name.trim()}
-          onClick={() => onSave({ type, name: name.trim(), content })}
-        >
-          Save resource
-        </button>
-      </div>
+          <div className="flex justify-end">
+            <button
+              className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded disabled:opacity-50"
+              disabled={!isDirty && !isUnresolved}
+              onClick={() => onSave({ ...resource, content })}
+            >
+              Save
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
