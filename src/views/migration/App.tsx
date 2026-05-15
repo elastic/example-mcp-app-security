@@ -541,22 +541,66 @@ function VendorSelect({ onSelect }: { onSelect: (vendor: string) => void }) {
 
 function Upload({ vendor, onUpload }: { vendor: string; onUpload: (json: string) => void }) {
   const [text, setText] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const readFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => setText((e.target?.result as string | null) ?? "");
+    reader.readAsText(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) readFile(file);
+  };
+
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <h2 className="text-lg font-semibold mb-1">Upload {vendor} rules</h2>
       <p className="text-sm text-gray-500 mb-4">
-        Paste your exported {vendor} rules as a JSON array, then start translation.
+        Drop a JSON export file, use the file picker, or paste the rules array directly.
       </p>
-      <div className="migration-upload-area">
+
+      {/* Hidden file input wired to the drop zone button */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) readFile(file);
+          e.target.value = "";
+        }}
+      />
+
+      <div
+        className={`migration-upload-area${dragOver ? " border-blue-400 bg-blue-50" : ""}`}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        <button
+          type="button"
+          className="mb-3 px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Choose file…
+        </button>
+        <p className="text-xs text-gray-400 mb-2">or drop a .json file here, or paste below</p>
         <textarea
-          className="w-full h-40 p-2 text-xs font-mono border border-gray-200 rounded resize-y"
+          className="w-full h-36 p-2 text-xs font-mono border border-gray-200 rounded resize-y"
           placeholder={`[\n  { "search": "index=main sourcetype=syslog..." },\n  ...\n]`}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
       </div>
+
       <button
-        className="mt-2 px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium disabled:opacity-50"
+        className="mt-3 px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium disabled:opacity-50"
         disabled={!text.trim()}
         onClick={() => onUpload(text)}
       >
