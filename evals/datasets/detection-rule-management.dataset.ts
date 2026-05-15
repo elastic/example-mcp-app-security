@@ -6,10 +6,6 @@
  */
 
 import type { Dataset, Example } from "../types.js";
-import { runDataset } from "../runner.js";
-import { skillActivation } from "../evaluators/skill-activation.js";
-import { negativeActivation } from "../evaluators/negative-activation.js";
-import { toolSelection } from "../evaluators/tool-selection.js";
 
 /**
  * The model-facing entry-point tool registered by the
@@ -21,7 +17,7 @@ const SKILL_TOOL = "manage-rules";
 // Positive examples — the LLM should call manage-rules
 // ---------------------------------------------------------------------------
 
-const positiveExamples: Example[] = [
+export const positiveExamples: Example[] = [
   {
     id: "drm-pos-01",
     input: "Show me my noisy rules — which detection rules are generating the most alerts?",
@@ -60,7 +56,7 @@ const positiveExamples: Example[] = [
 // Distractor examples — the LLM should NOT call manage-rules
 // ---------------------------------------------------------------------------
 
-const distractorExamples: Example[] = [
+export const distractorExamples: Example[] = [
   {
     id: "drm-neg-01",
     input: "Create a new case for a ransomware incident I'm currently investigating",
@@ -101,25 +97,3 @@ export const detectionRuleManagementDataset: Dataset = {
   examples: [...positiveExamples, ...distractorExamples],
 };
 
-// ---------------------------------------------------------------------------
-// Vitest eval suites
-// Each runDataset call registers a describe block gated on RUN_LLM_EVALS.
-// Positives and distractors use different evaluators and passing thresholds.
-// ---------------------------------------------------------------------------
-
-runDataset(
-  { name: "detection-rule-management: positives", examples: positiveExamples },
-  {
-    "skill-activation": skillActivation,
-    "tool-selection": toolSelection,
-  },
-  { passingScore: 0.8 }
-);
-
-runDataset(
-  { name: "detection-rule-management: distractors", examples: distractorExamples },
-  {
-    "negative-activation": negativeActivation,
-  },
-  { passingScore: 1.0 } // 100% — any false positive is a regression
-);
