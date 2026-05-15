@@ -114,6 +114,7 @@ export type WorkbenchState =
       vendor: string;
       migrationId: string;
       translations: TranslatedRule[];
+      resources: MigrationResource[];
     }
   | {
       stage: "done";
@@ -375,6 +376,9 @@ export function App() {
         void _stage;
         return { ...(rest as { vendor: string; migrationId: string; translations: TranslatedRule[]; resources: MigrationResource[] }), stage: "review" };
       }
+      if (prev.stage === "install") {
+        return { stage: "review", vendor: prev.vendor, migrationId: prev.migrationId, translations: prev.translations, resources: prev.resources };
+      }
       return prev;
     });
   }, []);
@@ -382,7 +386,7 @@ export function App() {
   const startInstall = useCallback(() => {
     setState((prev) => {
       if (prev.stage !== "review") return prev;
-      return { stage: "install", vendor: prev.vendor, migrationId: prev.migrationId, translations: prev.translations };
+      return { stage: "install", vendor: prev.vendor, migrationId: prev.migrationId, translations: prev.translations, resources: prev.resources };
     });
   }, []);
 
