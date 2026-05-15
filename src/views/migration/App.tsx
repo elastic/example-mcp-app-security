@@ -6,8 +6,6 @@
  */
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import Editor from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractCallResult } from "../../shared/extract-tool-text";
 import {
@@ -824,26 +822,11 @@ function RuleRow({
 
 // ---------------------------------------------------------------------------
 // Three-column diff panel (inline within the review step)
+//
+// Monaco editor is intentionally omitted to keep the singlefile HTML bundle
+// under 1 MB. The generated column uses a styled <pre>; the editable column
+// uses a <textarea> with the same monospace style.
 // ---------------------------------------------------------------------------
-
-const MONACO_OPTIONS_RO: editor.IStandaloneEditorConstructionOptions = {
-  readOnly: true,
-  minimap: { enabled: false },
-  scrollBeyondLastLine: false,
-  lineNumbers: "off",
-  glyphMargin: false,
-  folding: false,
-  renderLineHighlight: "none",
-  wordWrap: "on",
-  automaticLayout: true,
-  fontSize: 12,
-};
-
-const MONACO_OPTIONS_EDIT: editor.IStandaloneEditorConstructionOptions = {
-  ...MONACO_OPTIONS_RO,
-  readOnly: false,
-  lineNumbers: "on",
-};
 
 function RuleDiff({
   rule,
@@ -875,32 +858,26 @@ function RuleDiff({
   return (
     <div className="migration-diff-panel border-t border-gray-200">
       <div className="migration-diff-columns">
-        {/* Left: original SPL (read-only code block) */}
+        {/* Left: original SPL */}
         <div className="migration-diff-col">
           <div className="migration-diff-col-header">Original SPL</div>
           <pre className="migration-diff-spl">{originalSpl}</pre>
         </div>
 
-        {/* Middle: generated Elastic rule JSON (read-only Monaco) */}
+        {/* Middle: generated Elastic rule JSON (read-only) */}
         <div className="migration-diff-col">
           <div className="migration-diff-col-header">Generated (read-only)</div>
-          <Editor
-            height="280px"
-            language="json"
-            value={generatedJson}
-            options={MONACO_OPTIONS_RO}
-          />
+          <pre className="migration-diff-spl">{generatedJson}</pre>
         </div>
 
-        {/* Right: user-editable Elastic rule JSON (Monaco) */}
+        {/* Right: user-editable Elastic rule JSON */}
         <div className="migration-diff-col">
           <div className="migration-diff-col-header">Edit</div>
-          <Editor
-            height="280px"
-            language="json"
+          <textarea
+            className="migration-diff-spl migration-diff-textarea"
             value={editedJson}
-            options={MONACO_OPTIONS_EDIT}
-            onChange={(v) => setEditedJson(v ?? "")}
+            onChange={(e) => setEditedJson(e.target.value)}
+            spellCheck={false}
           />
         </div>
       </div>

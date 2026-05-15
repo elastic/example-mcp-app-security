@@ -209,6 +209,15 @@
   color: var(--text-color, #171717);
 }
 
+/* Editable column textarea — same look as the read-only <pre> siblings */
+
+.migration-diff-textarea {
+  resize: vertical;
+  border: none;
+  outline: none;
+  min-height: 280px;
+}
+
 .migration-diff-footer {
   display: flex;
   align-items: center;
