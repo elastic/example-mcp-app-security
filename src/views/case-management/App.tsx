@@ -40,6 +40,7 @@ import {
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
 import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { FactIcon } from "../../shared/components/icons/icons";
 import "./styles.css";
 
 type SeverityKey = Severity;
@@ -937,52 +938,6 @@ function FactCol({ label, value, icon, onFilter }: { label: string; value?: stri
   );
 }
 
-// ─── Fact icons ──────────────────────────────────────────────────────────────
-
-const FactIcon = {
-  status: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-      <circle cx="8" cy="8" r="5.5" />
-      <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none" />
-    </svg>
-  ),
-  severity: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 2.5 1.5 13.5h13z" />
-      <path d="M8 7v3" />
-      <circle cx="8" cy="12" r="0.4" fill="currentColor" stroke="none" />
-    </svg>
-  ),
-  alerts: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 12.5V7a5 5 0 0 1 10 0v5.5z" />
-      <path d="M6.5 14.5a1.5 1.5 0 0 0 3 0" />
-    </svg>
-  ),
-  comments: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 3h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2v-2H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-    </svg>
-  ),
-  createdBy: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-      <circle cx="8" cy="6" r="2.5" />
-      <path d="M3 13c0-2.5 2.2-4 5-4s5 1.5 5 4" />
-    </svg>
-  ),
-  created: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="8" cy="8" r="6" />
-      <path d="M8 4.5V8l2.2 1.5" />
-    </svg>
-  ),
-  updated: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M13 8a5 5 0 1 1-1.5-3.5" />
-      <path d="M13 2.5V5H10.5" />
-    </svg>
-  ),
-};
 
 function ExpandSection({ title, count, expanded, onToggle, previewCount, children }: {
   title: string; count: number; expanded: boolean; onToggle: () => void; previewCount: number; children: React.ReactNode;

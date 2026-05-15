@@ -8,34 +8,7 @@
 import React from "react";
 import { timeAgo } from "../../../shared/theme";
 import type { SecurityAlert } from "../../../shared/types";
-
-export const EntityIcon = {
-  host: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="2" y="3" width="12" height="8" rx="1" />
-      <path d="M5 13h6M8 11v2" />
-      <circle cx="4.5" cy="7" r="0.4" fill="currentColor" stroke="none" />
-    </svg>
-  ),
-  user: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-      <circle cx="8" cy="6" r="2.5" />
-      <path d="M3 13c0-2.5 2.2-4 5-4s5 1.5 5 4" />
-    </svg>
-  ),
-  process: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="2" y="3" width="12" height="10" rx="1" />
-      <path d="M4.5 6.5 6 8 4.5 9.5M7.5 9.5h3" />
-    </svg>
-  ),
-  executable: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
-      <path d="M10 2v3h3" />
-    </svg>
-  ),
-};
+import { EntityIcon } from "../../../shared/components/icons/icons";
 
 interface AlertCardProps {
   alert: SecurityAlert;
