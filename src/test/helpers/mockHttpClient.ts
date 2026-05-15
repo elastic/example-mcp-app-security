@@ -17,6 +17,7 @@ import type { KibanaClient } from "../../elastic/kibana-client/kibana-client.js"
 export interface MockHttpClient {
   get: Mock;
   post: Mock;
+  put: Mock;
   patch: Mock;
   delete: Mock;
   clusterName: string;
@@ -48,6 +49,7 @@ function makeMock(clusterName: string): MockHttpClient {
   return {
     get: vi.fn().mockResolvedValue({ data: undefined }),
     post: vi.fn().mockResolvedValue({ data: undefined }),
+    put: vi.fn().mockResolvedValue({ data: undefined }),
     patch: vi.fn().mockResolvedValue({ data: undefined }),
     delete: vi.fn().mockResolvedValue({ data: undefined }),
     clusterName,
