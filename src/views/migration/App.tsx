@@ -5,7 +5,9 @@
  * 2.0.
  */
 
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import Editor from "@monaco-editor/react";
+import type { editor } from "monaco-editor";
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractCallResult } from "../../shared/extract-tool-text";
 import {
@@ -301,6 +303,41 @@ export function App() {
     [getApp, state]
   );
 
+  const saveRuleInline = useCallback(
+    async (
+      ruleId: string,
+      elasticRuleJson: string,
+      translationResult: "full" | "partial" | "untranslatable"
+    ) => {
+      const app = getApp();
+      if (!app || state.stage !== "review") return;
+      const { vendor, migrationId, translations, resources } = state;
+      setLoading(true);
+      setError(null);
+      try {
+        const updated = await callTool<TranslatedRule>(app, "update-translated-rule", {
+          migrationId,
+          ruleId,
+          vendor,
+          elasticRule: elasticRuleJson,
+          translationResult,
+        });
+        setState({
+          stage: "review",
+          vendor,
+          migrationId,
+          resources,
+          translations: translations.map((t) => (t.id === ruleId ? (updated ?? t) : t)),
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [getApp, state]
+  );
+
   const openResourcesDrawer = useCallback(() => {
     setState((prev) => {
       if (prev.stage !== "review") return prev;
@@ -413,6 +450,7 @@ export function App() {
         uploadRules,
         openRuleDrawer,
         saveRuleFix,
+        saveRuleInline,
         openResourcesDrawer,
         saveResources,
         closeDrawer,
@@ -433,6 +471,7 @@ interface StageHandlers {
   uploadRules: (json: string) => void;
   openRuleDrawer: (rule: TranslatedRule) => void;
   saveRuleFix: (json: string, result: "full" | "partial" | "untranslatable") => void;
+  saveRuleInline: (id: string, json: string, result: "full" | "partial" | "untranslatable") => void;
   openResourcesDrawer: () => void;
   saveResources: (resource: MigrationResource) => void;
   closeDrawer: () => void;
@@ -458,6 +497,7 @@ function renderStage(state: WorkbenchState, h: StageHandlers): React.ReactNode {
           translations={state.translations}
           resources={state.resources}
           onOpenRule={h.openRuleDrawer}
+          onSaveRule={h.saveRuleInline}
           onOpenResources={h.openResourcesDrawer}
           onInstall={h.startInstall}
         />
@@ -470,6 +510,7 @@ function renderStage(state: WorkbenchState, h: StageHandlers): React.ReactNode {
             translations={state.translations}
             resources={state.resources}
             onOpenRule={h.openRuleDrawer}
+            onSaveRule={h.saveRuleInline}
             onOpenResources={h.openResourcesDrawer}
             onInstall={h.startInstall}
             dimmed
@@ -485,6 +526,7 @@ function renderStage(state: WorkbenchState, h: StageHandlers): React.ReactNode {
             translations={state.translations}
             resources={state.resources}
             onOpenRule={h.openRuleDrawer}
+            onSaveRule={h.saveRuleInline}
             onOpenResources={h.openResourcesDrawer}
             onInstall={h.startInstall}
             dimmed
@@ -655,6 +697,7 @@ function Review({
   translations,
   resources,
   onOpenRule,
+  onSaveRule,
   onOpenResources,
   onInstall,
   dimmed,
@@ -662,14 +705,20 @@ function Review({
   translations: TranslatedRule[];
   resources: MigrationResource[];
   onOpenRule: (rule: TranslatedRule) => void;
+  onSaveRule: (id: string, json: string, result: "full" | "partial" | "untranslatable") => void;
   onOpenResources: () => void;
   onInstall: () => void;
   dimmed?: boolean;
 }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   const installable = translations.filter(
     (t) => t.translation_result && t.translation_result !== "untranslatable"
   ).length;
   const needsFix = translations.filter((t) => t.translation_result === "partial").length;
+
+  const toggleExpand = (id: string) =>
+    setExpandedId((prev) => (prev === id ? null : id));
 
   return (
     <div className={`p-6${dimmed ? " opacity-50 pointer-events-none" : ""}`}>
@@ -705,7 +754,24 @@ function Review({
       ) : (
         <div className="space-y-2">
           {translations.map((rule) => (
-            <RuleRow key={rule.id} rule={rule} onFix={() => onOpenRule(rule)} />
+            <div key={rule.id} className="border border-gray-200 rounded overflow-hidden">
+              <RuleRow
+                rule={rule}
+                expanded={expandedId === rule.id}
+                onToggle={() => toggleExpand(rule.id)}
+                onOpenDrawer={() => onOpenRule(rule)}
+              />
+              {expandedId === rule.id && (
+                <RuleDiff
+                  rule={rule}
+                  onSave={(json, result) => {
+                    onSaveRule(rule.id, json, result);
+                    setExpandedId(null);
+                  }}
+                  onCancel={() => setExpandedId(null)}
+                />
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -713,22 +779,150 @@ function Review({
   );
 }
 
-function RuleRow({ rule, onFix }: { rule: TranslatedRule; onFix: () => void }) {
+function RuleRow({
+  rule,
+  expanded,
+  onToggle,
+  onOpenDrawer,
+}: {
+  rule: TranslatedRule;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpenDrawer: () => void;
+}) {
   const name =
     (rule.elastic_rule?.name as string | undefined) ??
     (rule.original_rule?.title as string | undefined) ??
     rule.id;
   return (
-    <div className="flex items-center justify-between p-3 border border-gray-200 rounded">
+    <div
+      className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 select-none"
+      onClick={onToggle}
+    >
       <div className="flex items-center gap-3 min-w-0">
         <TranslationBadge result={rule.translation_result} />
         <span className="text-sm truncate">{name}</span>
       </div>
-      {(rule.translation_result === "partial" || !rule.elastic_rule) && (
-        <button className="text-xs text-blue-600 underline shrink-0" onClick={onFix}>
-          Fix
-        </button>
-      )}
+      <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+        {(rule.translation_result === "partial" || !rule.elastic_rule) && (
+          <button
+            className="text-xs text-blue-600 underline"
+            onClick={(e) => { e.stopPropagation(); onOpenDrawer(); }}
+          >
+            Drawer
+          </button>
+        )}
+        <span className="text-xs text-gray-400">{expanded ? "▲" : "▼"}</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Three-column diff panel (inline within the review step)
+// ---------------------------------------------------------------------------
+
+const MONACO_OPTIONS_RO: editor.IStandaloneEditorConstructionOptions = {
+  readOnly: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  lineNumbers: "off",
+  glyphMargin: false,
+  folding: false,
+  renderLineHighlight: "none",
+  wordWrap: "on",
+  automaticLayout: true,
+  fontSize: 12,
+};
+
+const MONACO_OPTIONS_EDIT: editor.IStandaloneEditorConstructionOptions = {
+  ...MONACO_OPTIONS_RO,
+  readOnly: false,
+  lineNumbers: "on",
+};
+
+function RuleDiff({
+  rule,
+  onSave,
+  onCancel,
+}: {
+  rule: TranslatedRule;
+  onSave: (json: string, result: "full" | "partial" | "untranslatable") => void;
+  onCancel: () => void;
+}) {
+  const [editedJson, setEditedJson] = useState(() =>
+    JSON.stringify(rule.elastic_rule ?? {}, null, 2)
+  );
+  const [result, setResult] = useState<"full" | "partial" | "untranslatable">(
+    rule.translation_result ?? "partial"
+  );
+
+  const originalSpl = useMemo(() => {
+    const r = rule.original_rule;
+    return (r.search as string | undefined) ?? (r.spl as string | undefined) ??
+      JSON.stringify(r, null, 2);
+  }, [rule.original_rule]);
+
+  const generatedJson = useMemo(
+    () => JSON.stringify(rule.elastic_rule ?? {}, null, 2),
+    [rule.elastic_rule]
+  );
+
+  return (
+    <div className="migration-diff-panel border-t border-gray-200">
+      <div className="migration-diff-columns">
+        {/* Left: original SPL (read-only code block) */}
+        <div className="migration-diff-col">
+          <div className="migration-diff-col-header">Original SPL</div>
+          <pre className="migration-diff-spl">{originalSpl}</pre>
+        </div>
+
+        {/* Middle: generated Elastic rule JSON (read-only Monaco) */}
+        <div className="migration-diff-col">
+          <div className="migration-diff-col-header">Generated (read-only)</div>
+          <Editor
+            height="280px"
+            language="json"
+            value={generatedJson}
+            options={MONACO_OPTIONS_RO}
+          />
+        </div>
+
+        {/* Right: user-editable Elastic rule JSON (Monaco) */}
+        <div className="migration-diff-col">
+          <div className="migration-diff-col-header">Edit</div>
+          <Editor
+            height="280px"
+            language="json"
+            value={editedJson}
+            options={MONACO_OPTIONS_EDIT}
+            onChange={(v) => setEditedJson(v ?? "")}
+          />
+        </div>
+      </div>
+
+      <div className="migration-diff-footer">
+        <select
+          className="text-sm border border-gray-200 rounded p-1"
+          value={result}
+          onChange={(e) => setResult(e.target.value as typeof result)}
+        >
+          <option value="full">Full — production-ready</option>
+          <option value="partial">Partial — needs tuning</option>
+          <option value="untranslatable">Untranslatable — skip</option>
+        </select>
+        <div className="flex gap-2">
+          <button className="text-sm text-gray-500 px-3 py-1.5" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded"
+            onClick={() => onSave(editedJson, result)}
+          >
+            Save
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
