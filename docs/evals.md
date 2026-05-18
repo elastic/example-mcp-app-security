@@ -221,12 +221,22 @@ that structural evaluators can't express.
    OPENAI_API_KEY=sk-... LITELLM_BASE_URL=https://... npm run test:evals
 
    # Local Ollama (zero-cost smoke run; tool-calling quality varies by model)
-   # Use a model that speaks the OpenAI chat-completions schema. `llama3.1:8b`
-   # is a good baseline; `qwen2.5:32b-instruct-q4_K_M` exposes /generate only
-   # and returns "does not support chat" against this harness.
+   #
+   # Pick a model that meets BOTH of these requirements:
+   #   (1) ≥14B parameters — anything smaller (e.g. llama3.1:8b, qwen3:8b)
+   #       falls below the threshold where tool-calling decisions become
+   #       useful signal rather than noise; sub-14B "passes" are coincidence,
+   #       not a result.
+   #   (2) Exposes /v1/chat/completions — required by this harness. A few
+   #       Ollama tags expose /generate only and return
+   #       "does not support chat" (notably qwen2.5:32b-instruct-q4_K_M as
+   #       of Ollama 0.3.x).
+   #
+   # Verified candidates: `qwen2.5:14b-instruct`, `qwen3:14b`, `mistral-small:24b`,
+   # `qwen2.5:32b-instruct` (non-q4_K_M tags). `ollama pull <model>` first.
    OPENAI_API_KEY=ollama \
      LITELLM_BASE_URL=http://localhost:11434/v1 \
-     OPENAI_MODEL=llama3.1:8b \
+     OPENAI_MODEL=qwen2.5:14b-instruct \
      npm run test:evals
    ```
 
