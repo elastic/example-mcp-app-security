@@ -47,6 +47,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:evals": "cross-env RUN_LLM_EVALS=1 vitest run --config evals/vitest.config.ts --reporter=verbose",
     "prepublishOnly": "npm run build",
     "prepare": "husky",
     "version": "node -e \"const m=JSON.parse(require('fs').readFileSync('manifest.json','utf8'));m.version=require('./package.json').version;require('fs').writeFileSync('manifest.json',JSON.stringify(m,null,2)+'\\n')\" && git add manifest.json"
@@ -81,6 +82,7 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
     "@tailwindcss/vite": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -102,6 +104,7 @@
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "lint-staged": "^16.4.0",
+    "openai": "^6.37.0",
     "tailwindcss": "^4.2.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",

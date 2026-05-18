@@ -13,6 +13,7 @@ import type { EntityDetailService } from "../../elastic/service/entityDetailServ
 import type { EsqlService } from "../../elastic/service/esqlService.js";
 import type { IndicesService } from "../../elastic/service/indicesService.js";
 import type { InvestigateService } from "../../elastic/service/investigateService.js";
+import type { MigrationsService } from "../../elastic/service/migrationsService.js";
 import type { RulesService } from "../../elastic/service/rulesService.js";
 import type { SampleDataService } from "../../elastic/service/sampleDataService.js";
 
@@ -96,6 +97,25 @@ export function createMockRulesService(): RulesService {
     "listExceptions",
     "validateQuery",
     "noisyRules",
+  ]);
+}
+
+export function createMockMigrationsService(): MigrationsService {
+  return mockService<MigrationsService>([
+    "createMigration",
+    "listMigrations",
+    "getMigration",
+    "deleteMigration",
+    "uploadRules",
+    "getTranslatedRules",
+    "getTranslatedRule",
+    "updateTranslatedRule",
+    "startTranslation",
+    "stopTranslation",
+    "getResources",
+    "upsertResources",
+    "installRules",
+    "getStats",
   ]);
 }
 

@@ -14,7 +14,7 @@ An [MCP App](https://modelcontextprotocol.io/extensions/apps/overview) that brin
 
 ## What This Does
 
-This project provides six interactive security operations tools, each with a rich React-based UI that renders inline when Claude (or another MCP host) calls the tool:
+This project provides seven interactive security operations tools, each with a rich React-based UI that renders inline when Claude (or another MCP host) calls the tool:
 
 | Tool | What It Does |
 |------|-------------|
@@ -24,6 +24,7 @@ This project provides six interactive security operations tools, each with a ric
 | **Detection Rules** | Browse, tune, and manage detection rules with KQL search and noisy rules analysis |
 | **Threat Hunt** | ES\|QL workbench with clickable entities and a D3 investigation graph |
 | **Sample Data** | Generate ECS security events for demos across 4 attack chain scenarios |
+| **SIEM Migration** | Migrate detection rules from Splunk to Elastic Security — upload SPL, AI-translate, review per-rule diff, fix resources, and install |
 
 See [docs/features.md](docs/features.md) for a full breakdown of each tool's capabilities.
 

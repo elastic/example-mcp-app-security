@@ -14,6 +14,6 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src/**/*", "main.ts", "vite.config.ts", "vitest.config.ts", "scripts/**/*"],
+  "include": ["src/**/*", "evals/**/*", "main.ts", "vite.config.ts", "vitest.config.ts", "scripts/**/*"],
   "exclude": ["node_modules", "dist"]
 }

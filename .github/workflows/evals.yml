@@ -1,0 +1,87 @@
+# Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+# or more contributor license agreements. Licensed under the Elastic License
+# 2.0; you may not use this file except in compliance with the Elastic License
+# 2.0.
+
+name: Evals
+
+on:
+  # Manually trigger a run from the Actions UI (useful for ad-hoc evaluation).
+  workflow_dispatch:
+
+  # Nightly run at 02:00 UTC to catch regressions before the work day starts.
+  schedule:
+    - cron: "0 2 * * *"
+
+  # Run when a PR is labeled with `evals`. Labels require write permission, so
+  # this implicitly limits triggering to maintainers — acceptable because
+  # pull_request_target runs with base-repo secrets.
+  pull_request_target:
+    types: [labeled]
+
+# Cancel any in-progress run for the same ref so a fast push doesn't queue up
+# redundant eval jobs that waste LLM quota.
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evals:
+    name: LLM Eval Suite
+    runs-on: ubuntu-latest
+
+    # For pull_request_target, gate strictly on the evals label so the job
+    # doesn't fire for every other label event.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request_target' && github.event.label.name == 'evals')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # For pull_request_target, check out the PR head so the eval runs
+          # against the proposed changes, not the base branch.
+          ref: >-
+            ${{
+              github.event_name == 'pull_request_target'
+                && github.event.pull_request.head.sha
+                || github.sha
+            }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run evals
+        env:
+          RUN_LLM_EVALS: "1"
+          # Set ANTHROPIC_API_KEY to use Claude Haiku (preferred); fall back to
+          # OPENAI_API_KEY for GPT-4o-mini. Set EVAL_LITELLM_BASE_URL to route
+          # through a LiteLLM proxy instead of the direct OpenAI endpoint.
+          ANTHROPIC_API_KEY: ${{ secrets.EVAL_ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.EVAL_OPENAI_API_KEY }}
+          LITELLM_BASE_URL: ${{ secrets.EVAL_LITELLM_BASE_URL }}
+          # JSON array describing the Elastic cluster the MCP server targets.
+          # Shape: [{"name":"primary","elasticsearchUrl":"...","kibanaUrl":"...","elasticsearchApiKey":"..."}]
+          CLUSTERS_JSON: ${{ secrets.EVAL_CLUSTERS_JSON }}
+        run: |
+          set -o pipefail
+          npm run test:evals 2>&1 | tee eval-output.txt
+
+      - name: Post eval results to job summary
+        if: always()
+        run: |
+          if [ -f eval-output.txt ]; then
+            echo "## Eval results" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            cat eval-output.txt >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Eval results" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "_No eval output captured._" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -139,6 +139,18 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "generate-attack-discovery",
           "get-generation-status",
           "list-ai-connectors",
+          // automatic-migration
+          "migrate-rules",
+          "list-migrations",
+          "get-migration",
+          "get-translated-rules",
+          "start-translation",
+          "stop-translation",
+          "update-translated-rule",
+          "get-resources",
+          "upsert-resource",
+          "install-rules",
+          "get-stats",
         ].sort()
       );
     } finally {
@@ -159,6 +171,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "ui://threat-hunt/mcp-app.html",
           "ui://generate-sample-data/mcp-app.html",
           "ui://triage-attack-discoveries/mcp-app.html",
+          "ui://migrate-rules/mcp-app.html",
         ].sort()
       );
     } finally {

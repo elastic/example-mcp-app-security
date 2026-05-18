@@ -1,0 +1,248 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+/* Migration workbench — view-specific overrides */
+
+.migration-vendor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.migration-vendor-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border: 1px solid var(--border-color, #d4d4d4);
+  border-radius: 8px;
+  background: var(--surface-color, #fff);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.migration-vendor-card:hover:not(.migration-vendor-card--disabled) {
+  border-color: var(--accent-color, #0077cc);
+  box-shadow: 0 0 0 2px var(--accent-color-alpha, rgba(0, 119, 204, 0.15));
+}
+
+
+.migration-vendor-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.migration-vendor-badge {
+  font-size: 11px;
+  color: var(--text-muted, #737373);
+}
+
+.migration-upload-area {
+  border: 2px dashed var(--border-color, #d4d4d4);
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  margin: 16px 0;
+  transition: border-color 0.15s;
+}
+
+.migration-upload-area:hover {
+  border-color: var(--accent-color, #0077cc);
+}
+
+.migration-progress-bar-track {
+  height: 6px;
+  background: var(--surface-subtle, #f0f0f0);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.migration-progress-bar-fill {
+  height: 100%;
+  background: var(--accent-color, #0077cc);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.migration-rule-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.migration-rule-status-badge--full {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.migration-rule-status-badge--partial {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.migration-rule-status-badge--untranslatable {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.migration-rule-status-badge--pending {
+  background: #f0f0f0;
+  color: #525252;
+}
+
+.migration-drawer {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 520px;
+  max-width: 100vw;
+  background: var(--surface-color, #fff);
+  border-left: 1px solid var(--border-color, #d4d4d4);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+}
+
+.migration-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #d4d4d4);
+}
+
+.migration-drawer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.migration-drawer-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color, #d4d4d4);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.migration-rule-json-editor {
+  width: 100%;
+  font-family: "Fira Code", "Cascadia Code", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid var(--border-color, #d4d4d4);
+  border-radius: 4px;
+  padding: 8px;
+  resize: vertical;
+  min-height: 240px;
+  background: var(--surface-subtle, #fafafa);
+}
+
+.migration-resource-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+}
+
+/* Three-column diff panel */
+
+.migration-diff-panel {
+  background: var(--surface-subtle, #fafafa);
+}
+
+.migration-diff-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  min-height: 320px;
+}
+
+.migration-diff-col {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-color, #e5e5e5);
+  overflow: hidden;
+}
+
+.migration-diff-col:last-child {
+  border-right: none;
+}
+
+.migration-diff-col-header {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #737373);
+  background: var(--surface-color, #fff);
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  flex-shrink: 0;
+}
+
+.migration-diff-spl {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  font-family: "Fira Code", "Cascadia Code", monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow: auto;
+  background: var(--surface-subtle, #fafafa);
+  color: var(--text-color, #171717);
+}
+
+/* Editable column textarea — same look as the read-only <pre> siblings */
+
+.migration-diff-textarea {
+  resize: vertical;
+  border: none;
+  outline: none;
+  min-height: 280px;
+}
+
+.migration-diff-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-color, #e5e5e5);
+  background: var(--surface-color, #fff);
+  gap: 8px;
+}
+
+/* Shared input style used across the ElasticRuleForm and drawer selects */
+
+.migration-form-input {
+  width: 100%;
+  font-size: 13px;
+  border: 1px solid var(--border-color, #d4d4d4);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: var(--surface-color, #fff);
+  color: var(--text-color, #171717);
+  line-height: 1.5;
+}
+
+.migration-form-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #0077cc);
+  box-shadow: 0 0 0 2px var(--accent-color-alpha, rgba(0, 119, 204, 0.15));
+}

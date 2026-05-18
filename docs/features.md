@@ -79,3 +79,17 @@ Rule management dashboard:
 Generate ECS-compliant security events:
 - Windows Credential Theft, AWS Privilege Escalation, Okta Identity Takeover, Ransomware Kill Chain
 - All data tagged for safe cleanup
+
+## SIEM Migration
+
+Guided workbench for migrating detection rules from Splunk (QRadar and Sentinel-One support coming) to Elastic Security. Triggered by the `automatic-migration` skill (`migrate-rules` tool):
+
+- **Vendor selector**: Splunk active; QRadar and Sentinel-One shown as "Coming soon" — re-enabling a vendor is a one-line flag flip
+- **Upload step**: drag-and-drop a JSON export file, use the file picker, or paste a rules array directly
+- **AI translation**: Kibana's SIEM migrations service converts SPL to Elastic detection rule JSON; a live progress bar polls every 3 seconds
+- **Three-column review**: original SPL / generated rule (read-only) / editable rule side-by-side for every translated rule
+- **Per-rule drawer**: structured form for key rule fields (name, description, type, query, language, severity, risk score); "Re-validate" saves as `partial`, "Save" uses the selected translation result
+- **Resources drawer**: lists all unresolved macros and lookups auto-expanded; each row has an individual Save button; resolved definitions collapsible
+- **Translation statuses**: `full` (production-ready), `partial` (needs tuning), `untranslatable` (skipped at install)
+- **Install step**: one-click install of all translatable rules into Elastic Security as disabled; "Back to review" available before confirming
+- **Done summary**: installed/failed tile counts; "Start another migration" resets the workbench

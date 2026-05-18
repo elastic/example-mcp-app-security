@@ -31,6 +31,7 @@ import {
   EsqlService,
   IndicesService,
   InvestigateService,
+  MigrationsService,
   RulesService,
   SampleDataService,
 } from "./elastic/service/index.js";
@@ -38,6 +39,7 @@ import { registerAlertTriageTools } from "./tools/alert-triage.js";
 import { registerAttackDiscoveryTools } from "./tools/attack-discovery.js";
 import { registerCaseManagementTools } from "./tools/case-management.js";
 import { registerDetectionRuleTools } from "./tools/detection-rules.js";
+import { registerMigrationTools } from "./tools/migration.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
 
@@ -95,6 +97,7 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     sampleDataClient: new SampleDataClient({ esClient }),
     rulesService,
   });
+  const migrationsService = new MigrationsService({ kibanaClient });
 
   const server = new McpServer({
     name: "elastic-security",
@@ -115,6 +118,7 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     attackDiscoveryService,
     casesService,
   });
+  registerMigrationTools(server, { migrationsService });
 
   return server;
 }
