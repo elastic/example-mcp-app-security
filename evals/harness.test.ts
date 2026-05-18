@@ -31,7 +31,11 @@ import {
   positiveExamples as amPositives,
   distractorExamples as amDistractors,
 } from "./datasets/automatic-migration.dataset.js";
-import type { LlmProvider, AssistantMessage } from "./llm/types.js";
+import type {
+  LlmProvider,
+  AssistantMessage,
+  LlmMessage,
+} from "./llm/types.js";
 import { createEvalServer } from "./helpers/evalServer.js";
 
 // ---------------------------------------------------------------------------
@@ -162,4 +166,82 @@ describe("eval harness: automatic-migration distractors", () => {
       }
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// HostLoopOptions.systemPrompt — propagation contract
+//
+// Real MCP hosts inject a system prompt that constrains tool selection.
+// Verify the option flows from `runMcpHostLoop` to the provider's `chat()`
+// as a `role: "system"` message, AND that empty / whitespace-only strings
+// are dropped so the absence of a system prompt is observable.
+// ---------------------------------------------------------------------------
+
+describe("eval harness: systemPrompt propagation", () => {
+  /**
+   * Captures every `messages` array the provider's `chat()` receives so
+   * the test can assert what the harness handed off.
+   */
+  function makeRecordingLlm(): {
+    provider: LlmProvider;
+    calls: LlmMessage[][];
+  } {
+    const calls: LlmMessage[][] = [];
+    const provider: LlmProvider = {
+      async chat(messages): Promise<AssistantMessage> {
+        calls.push([...messages]);
+        return { role: "assistant", content: "Done." };
+      },
+    };
+    return { provider, calls };
+  }
+
+  it("prepends a system message when systemPrompt is provided", async () => {
+    const { provider, calls } = makeRecordingLlm();
+    await runMcpHostLoop("Find me my noisy rules", {
+      server: createEvalServer(),
+      llm: provider,
+      systemPrompt: "You are a security analyst. Always call a tool before answering.",
+    });
+
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    const firstTurn = calls[0]!;
+    expect(firstTurn[0]).toEqual({
+      role: "system",
+      content: "You are a security analyst. Always call a tool before answering.",
+    });
+    expect(firstTurn[1]).toEqual({
+      role: "user",
+      content: "Find me my noisy rules",
+    });
+  });
+
+  it("does not inject a system message when systemPrompt is omitted", async () => {
+    const { provider, calls } = makeRecordingLlm();
+    await runMcpHostLoop("Find me my noisy rules", {
+      server: createEvalServer(),
+      llm: provider,
+    });
+
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    const firstTurn = calls[0]!;
+    expect(firstTurn[0]?.role).toBe("user");
+    expect(firstTurn.some((m) => m.role === "system")).toBe(false);
+  });
+
+  it("treats empty / whitespace-only systemPrompt as omitted", async () => {
+    for (const prompt of ["", "   ", "\n\t"]) {
+      const { provider, calls } = makeRecordingLlm();
+      await runMcpHostLoop("Find me my noisy rules", {
+        server: createEvalServer(),
+        llm: provider,
+        systemPrompt: prompt,
+      });
+      const firstTurn = calls[0]!;
+      expect(
+        firstTurn.some((m) => m.role === "system"),
+        `empty-string systemPrompt (${JSON.stringify(prompt)}) should not inject a system message`
+      ).toBe(false);
+    }
+  });
 });

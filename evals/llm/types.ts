@@ -28,8 +28,15 @@ export interface LlmToolCallRequest {
  * Discriminated union covering every role that can appear in a chat thread.
  * Shaped after the OpenAI chat messages API so a single interface works for
  * both the OpenAI and Anthropic adapters (and any LiteLLM proxy in between).
+ *
+ * Anthropic note: Anthropic's HTTP API takes the system prompt as a
+ * top-level `system: string` parameter on `messages.create`, not inside
+ * the messages array. The adapter extracts `system`-roled messages from
+ * the union and passes them via that parameter — this discriminant only
+ * dictates the SHAPE the harness uses internally.
  */
 export type LlmMessage =
+  | { role: "system"; content: string }
   | { role: "user"; content: string }
   | {
       role: "assistant";

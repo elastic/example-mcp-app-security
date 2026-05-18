@@ -88,6 +88,8 @@ export class OpenAiProvider implements LlmProvider {
 
 function toOaiMessage(msg: LlmMessage): OpenAI.ChatCompletionMessageParam {
   switch (msg.role) {
+    case "system":
+      return { role: "system", content: msg.content };
     case "user":
       return { role: "user", content: msg.content };
     case "assistant":

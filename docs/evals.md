@@ -23,11 +23,12 @@ runner.ts ─ describe.skipIf(!RUN_LLM_EVALS)(dataset.name, () => {
    │            afterAll: print Markdown table to stdout
    │         })
    │
-   ├── runMcpHostLoop(input)
+   ├── runMcpHostLoop(input, opts?)
    │      InMemoryTransport ─ Client ─ McpServer
    │      LLM provider (Anthropic / OpenAI / LiteLLM)
    │      loop ≤ MAX_TURNS=8: LLM → tool calls → results → repeat
    │      returns Trajectory (ordered ToolCall[])
+   │      opts.systemPrompt: optional host-level system prompt (see below)
    │
    └── Evaluators
           skill-activation    binary: was skill tool called?
@@ -220,9 +221,12 @@ that structural evaluators can't express.
    OPENAI_API_KEY=sk-... LITELLM_BASE_URL=https://... npm run test:evals
 
    # Local Ollama (zero-cost smoke run; tool-calling quality varies by model)
+   # Use a model that speaks the OpenAI chat-completions schema. `llama3.1:8b`
+   # is a good baseline; `qwen2.5:32b-instruct-q4_K_M` exposes /generate only
+   # and returns "does not support chat" against this harness.
    OPENAI_API_KEY=ollama \
      LITELLM_BASE_URL=http://localhost:11434/v1 \
-     OPENAI_MODEL=qwen2.5:32b-instruct-q4_K_M \
+     OPENAI_MODEL=llama3.1:8b \
      npm run test:evals
    ```
 
@@ -231,6 +235,40 @@ that structural evaluators can't express.
    `tool-selection`, `negative-activation`, `trajectory`, `criteria`).
 
 4. **Trigger in CI**: open a PR and add the `evals` label (requires write access).
+
+---
+
+## Host system prompt (`HostLoopOptions.systemPrompt`)
+
+Real MCP hosts (Claude Desktop, Cursor) inject a host-level system
+prompt that constrains tool selection, response shape, and confirmation
+flow. Without one, the harness measures raw model-vs-tools behavior —
+which can over- or under-report activation depending on the model
+family. Use `HostLoopOptions.systemPrompt` to pin behavior to what
+production will instruct, or to swap in a `SKILL.md` body when testing
+skill-driven flows.
+
+```typescript
+import { runMcpHostLoop } from "./runMcpHostLoop.js";
+import { skillBody } from "../skills/automatic-migration/SKILL.md?raw";
+
+const trajectory = await runMcpHostLoop(example.input, {
+  server: createEvalServer(),
+  systemPrompt: skillBody,    // copy SKILL.md verbatim, like the real host
+});
+```
+
+Provider handling:
+
+- **OpenAI / LiteLLM** — `role: "system"` message is the first entry in
+  the `messages` array, per the Chat Completions schema.
+- **Anthropic** — the adapter strips system-roled messages out of the
+  array and passes their concatenated content via the top-level
+  `system` parameter on `messages.create` (the only place Anthropic
+  accepts a system prompt).
+- **Empty / whitespace-only string** — treated identically to omitting
+  the option (no system message is injected, no top-level parameter is
+  sent). This keeps "absence of system prompt" observable in evals.
 
 ---
 

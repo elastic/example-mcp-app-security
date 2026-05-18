@@ -57,6 +57,20 @@ export interface HostLoopOptions {
    * Defaults to MAX_TURNS (8).
    */
   maxTurns?: number;
+  /**
+   * Optional system prompt prepended to the message history.
+   *
+   * Real MCP hosts (Claude Desktop, Cursor) inject a host-level system prompt
+   * that constrains tool selection, response shape, and confirmation flow.
+   * Without one, the harness measures raw model-vs-tools behavior, which can
+   * over- or under-report activation depending on the model family. Use this
+   * to pin behavior to what the production host will instruct, or to swap in
+   * a SKILL.md body when testing skill-driven flows.
+   *
+   * Pass a non-empty string. Empty strings are ignored to keep behavior
+   * identical to omitting the option.
+   */
+  systemPrompt?: string;
 }
 
 /**
@@ -78,7 +92,12 @@ export interface HostLoopOptions {
  */
 export async function runMcpHostLoop(
   input: string,
-  { server, llm, maxTurns = MAX_TURNS }: HostLoopOptions = {}
+  {
+    server,
+    llm,
+    maxTurns = MAX_TURNS,
+    systemPrompt,
+  }: HostLoopOptions = {}
 ): Promise<Trajectory> {
   const resolvedServer = server ?? createServer();
   const resolvedLlm = llm ?? createDefaultLlmProvider();
@@ -103,7 +122,11 @@ export async function runMcpHostLoop(
       parameters: t.inputSchema as Record<string, unknown>,
     }));
 
-    const messages: LlmMessage[] = [{ role: "user", content: input }];
+    const messages: LlmMessage[] = [];
+    if (systemPrompt && systemPrompt.trim().length > 0) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+    messages.push({ role: "user", content: input });
     const trajectory: Trajectory = [];
 
     for (let turn = 0; turn < maxTurns; turn++) {

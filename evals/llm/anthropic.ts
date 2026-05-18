@@ -46,10 +46,23 @@ export class AnthropicProvider implements LlmProvider {
     messages: LlmMessage[],
     tools: LlmToolDefinition[]
   ): Promise<AssistantMessage> {
+    // Anthropic accepts the system prompt as a top-level parameter, not as
+    // a message in the array. Concatenate any system-roled messages from
+    // the unified LlmMessage shape into one string and strip them before
+    // converting the remaining history.
+    const systemMessages = messages.filter(
+      (m): m is Extract<LlmMessage, { role: "system" }> => m.role === "system"
+    );
+    const system = systemMessages.map((m) => m.content).join("\n\n");
+    const nonSystem = messages.filter(
+      (m): m is Exclude<LlmMessage, { role: "system" }> => m.role !== "system"
+    );
+
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: MAX_TOKENS,
-      messages: toAnthropicMessages(messages),
+      ...(system.length > 0 ? { system } : {}),
+      messages: toAnthropicMessages(nonSystem),
       ...(tools.length > 0 ? { tools: tools.map(toAnthropicTool) } : {}),
     });
 
@@ -87,12 +100,16 @@ export class AnthropicProvider implements LlmProvider {
  * Structural differences from OpenAI:
  *   - Anthropic has no `tool` role. Tool results go as `user` messages with
  *     `tool_result` content blocks.
+ *   - Anthropic has no `system` message role — system prompts flow through
+ *     the top-level `system` parameter on `messages.create`. Callers strip
+ *     system messages before calling this function; the parameter type
+ *     enforces that invariant.
  *   - Consecutive tool-result messages are merged into a single user message
  *     so the API never receives two adjacent user turns.
  *   - Assistant content is an array of TextBlockParam / ToolUseBlockParam.
  */
 function toAnthropicMessages(
-  messages: LlmMessage[]
+  messages: Exclude<LlmMessage, { role: "system" }>[]
 ): Anthropic.MessageParam[] {
   const result: Anthropic.MessageParam[] = [];
 
