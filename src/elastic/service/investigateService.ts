@@ -17,6 +17,11 @@ interface InvestigateServiceOptions {
   readonly investigateClient: InvestigateClient;
 }
 
+const DEFAULT_NAMESPACE = "default";
+function alertsIndex(namespace?: string): string {
+  return `.alerts-security.alerts-${namespace || DEFAULT_NAMESPACE}`;
+}
+
 /**
  * Business logic for graph-based investigations.
  *
@@ -32,13 +37,14 @@ export class InvestigateService {
   async investigateEntity(
     entityType: string,
     entityValue: string,
-    timeRange = "now-365d"
+    timeRange = "now-365d",
+    namespace?: string
   ): Promise<InvestigationResult> {
     switch (entityType) {
       case "user":
-        return this.investigateUser(entityValue, timeRange);
+        return this.investigateUser(entityValue, timeRange, namespace);
       case "host":
-        return this.investigateHost(entityValue, timeRange);
+        return this.investigateHost(entityValue, timeRange, namespace);
       case "ip":
         return this.investigateIP(entityValue, timeRange);
       case "process":
@@ -50,7 +56,8 @@ export class InvestigateService {
 
   private async investigateUser(
     userName: string,
-    timeRange: string
+    timeRange: string,
+    namespace?: string
   ): Promise<InvestigationResult> {
     const nodes: GraphNode[] = [
       { id: nodeId("user", userName), type: "user", value: userName },
@@ -67,7 +74,7 @@ export class InvestigateService {
         `FROM logs-endpoint.events.process-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY host.name | SORT count DESC | LIMIT 3`
       ),
       this.safeQuery(
-        `FROM .alerts-security.alerts-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name, host.name | SORT count DESC | LIMIT 3`
+        `FROM ${alertsIndex(namespace)} | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name, host.name | SORT count DESC | LIMIT 3`
       ),
     ]);
 
@@ -89,7 +96,8 @@ export class InvestigateService {
 
   private async investigateHost(
     hostName: string,
-    timeRange: string
+    timeRange: string,
+    namespace?: string
   ): Promise<InvestigationResult> {
     const nodes: GraphNode[] = [
       { id: nodeId("host", hostName), type: "host", value: hostName },
@@ -109,7 +117,7 @@ export class InvestigateService {
         `FROM logs-endpoint.events.network-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY destination.ip | SORT count DESC | LIMIT 3`
       ),
       this.safeQuery(
-        `FROM .alerts-security.alerts-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name | SORT count DESC | LIMIT 3`
+        `FROM ${alertsIndex(namespace)} | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name | SORT count DESC | LIMIT 3`
       ),
     ]);
 

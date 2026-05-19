@@ -22,6 +22,13 @@ import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-attack-discoveries/mcp-app.html";
 
+const namespaceSchema = z
+  .string()
+  .optional()
+  .describe(
+    "Kibana space ID to scope the action to (default: 'default'). Also determines the Security alerts and attack-discovery indices read (`.alerts-security.attack.discovery.alerts-<ns>`, `.alerts-security.alerts-<ns>`). Use `list-namespaces` to discover available spaces."
+  );
+
 /**
  * Split a discovery's `detailsMarkdown` into the bullets that belong on the
  * case description ("Immediate actions") and the rest of the narrative
@@ -99,16 +106,24 @@ export function registerAttackDiscoveryTools(
       inputSchema: {
         days: z.number().optional().describe("Number of days to look back (default: 1)"),
         limit: z.number().optional().describe("Max discoveries to return (default: 50)"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ days, limit }) => {
-      const summary = await attackDiscoveryService.getDiscoveries({ days, limit });
+    async ({ days, limit, namespace }) => {
+      const summary = await attackDiscoveryService.getDiscoveries({
+        days,
+        limit,
+        namespace,
+      });
 
       let triaged = null;
       if (summary.discoveries.length > 0) {
         try {
-          triaged = await attackDiscoveryService.assessConfidence(summary.discoveries);
+          triaged = await attackDiscoveryService.assessConfidence(
+            summary.discoveries,
+            namespace
+          );
         } catch {
           triaged = null;
         }
@@ -116,7 +131,7 @@ export function registerAttackDiscoveryTools(
 
       const compact = {
         total: summary.total,
-        params: { days: days || 1, limit: limit || 50 },
+        params: { days: days || 1, limit: limit || 50, namespace },
         discoveries: (triaged || summary.discoveries).slice(0, 20).map((d) => {
           const base: Record<string, unknown> = {
             id: d.id,
@@ -157,11 +172,16 @@ export function registerAttackDiscoveryTools(
       inputSchema: {
         days: z.number().optional(),
         limit: z.number().optional(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ days, limit }) => {
-      const summary = await attackDiscoveryService.getDiscoveries({ days, limit });
+    async ({ days, limit, namespace }) => {
+      const summary = await attackDiscoveryService.getDiscoveries({
+        days,
+        limit,
+        namespace,
+      });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(summary) }],
       };
@@ -176,12 +196,16 @@ export function registerAttackDiscoveryTools(
       description: "Run bulk confidence scoring across all discoveries",
       inputSchema: {
         discoveries: z.string().describe("JSON-encoded array of AttackDiscovery objects"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ discoveries: discoveriesJson }) => {
+    async ({ discoveries: discoveriesJson, namespace }) => {
       const discoveries: AttackDiscovery[] = JSON.parse(discoveriesJson);
-      const triaged = await attackDiscoveryService.assessConfidence(discoveries);
+      const triaged = await attackDiscoveryService.assessConfidence(
+        discoveries,
+        namespace
+      );
       return {
         content: [{ type: "text" as const, text: JSON.stringify(triaged) }],
       };
@@ -196,12 +220,16 @@ export function registerAttackDiscoveryTools(
       description: "Fetch detailed context for a single attack discovery finding",
       inputSchema: {
         discovery: z.string().describe("JSON-encoded AttackDiscovery object"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ discovery: discoveryJson }) => {
+    async ({ discovery: discoveryJson, namespace }) => {
       const discovery: AttackDiscovery = JSON.parse(discoveryJson);
-      const detail = await attackDiscoveryService.getDiscoveryDetail(discovery);
+      const detail = await attackDiscoveryService.getDiscoveryDetail(
+        discovery,
+        namespace
+      );
       return {
         content: [{ type: "text" as const, text: JSON.stringify(detail) }],
       };
@@ -227,10 +255,11 @@ export function registerAttackDiscoveryTools(
             confidence: z.string().optional(),
           })
         ).describe("Array of approved findings to create cases for"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { resourceUri: "ui://manage-cases/mcp-app.html" } },
     },
-    async ({ findings }) => {
+    async ({ findings, namespace }) => {
       const results: { findingId: string; caseId: string; caseTitle: string; alertsAttached: number }[] = [];
 
       for (const finding of findings) {
@@ -257,6 +286,7 @@ export function registerAttackDiscoveryTools(
           description: descriptionLines.join("\n"),
           tags: ["attack-discovery", "ease", ...finding.mitreTactics.map((t) => `mitre:${t}`)],
           severity: finding.riskScore >= 80 ? "critical" : finding.riskScore >= 60 ? "high" : finding.riskScore >= 40 ? "medium" : "low",
+          namespace,
         });
 
         // First comment: the full attack chain narrative (everything except
@@ -265,7 +295,8 @@ export function registerAttackDiscoveryTools(
           try {
             await casesService.addComment(
               caseData.id,
-              [`## Attack chain`, ``, attackChain].join("\n")
+              [`## Attack chain`, ``, attackChain].join("\n"),
+              namespace
             );
           } catch {
             // comment failed — case still created
@@ -274,7 +305,8 @@ export function registerAttackDiscoveryTools(
 
         const alertsAttached = await casesService.attachAlertsByIds(
           caseData.id,
-          finding.alertIds
+          finding.alertIds,
+          namespace
         );
 
         results.push({ findingId: finding.id, caseId: caseData.id, caseTitle: caseData.title, alertsAttached });
@@ -294,11 +326,15 @@ export function registerAttackDiscoveryTools(
       description: "Mark attack discovery findings as acknowledged",
       inputSchema: {
         discoveryIds: z.array(z.string()).describe("Array of discovery document IDs"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ discoveryIds }) => {
-      const result = await attackDiscoveryService.acknowledgeDiscoveries(discoveryIds);
+    async ({ discoveryIds, namespace }) => {
+      const result = await attackDiscoveryService.acknowledgeDiscoveries(
+        discoveryIds,
+        namespace
+      );
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],
       };
@@ -319,12 +355,15 @@ export function registerAttackDiscoveryTools(
         start: z.string().optional().describe("Start time (default: now-7d)"),
         end: z.string().optional().describe("End time (default: now)"),
         filter: z.string().optional().describe("Optional ES DSL filter as JSON string"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ connectorName, size, start, end, filter }) => {
+    async ({ connectorName, size, start, end, filter, namespace }) => {
       try {
-        const connectors = await attackDiscoveryService.listAIConnectors();
+        const connectors = await attackDiscoveryService.listAIConnectors(
+          namespace
+        );
         let connector = connectors.find((c) => c.name.toLowerCase().includes(connectorName.toLowerCase()));
         if (!connector && connectors.length === 1) {
           connector = connectors[0];
@@ -341,6 +380,7 @@ export function registerAttackDiscoveryTools(
           start,
           end,
           filter: filterObj,
+          namespace,
         });
         return { content: [{ type: "text" as const, text: JSON.stringify({ status: "generation_started", execution_uuid: result.execution_uuid, connector: connector.name, message: "Attack discovery generation has been started using " + connector.name + ". This typically takes 1-3 minutes. The interactive dashboard will show a progress banner and auto-refresh when results are ready. Do NOT call triage-attack-discoveries yet — wait for the user to tell you the results are in, or let them view results directly in the dashboard." }) }] };
       } catch (e) {
@@ -360,11 +400,17 @@ export function registerAttackDiscoveryTools(
         size: z.number().optional(),
         start: z.string().optional(),
         end: z.string().optional(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ size, start, end }) => {
-      const result = await attackDiscoveryService.getGenerations({ size, start, end });
+    async ({ size, start, end, namespace }) => {
+      const result = await attackDiscoveryService.getGenerations({
+        size,
+        start,
+        end,
+        namespace,
+      });
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -375,11 +421,13 @@ export function registerAttackDiscoveryTools(
     {
       title: "List AI Connectors",
       description: "List available AI connectors. Call this first before generate-attack-discovery to find valid connector names.",
-      inputSchema: {},
+      inputSchema: { namespace: namespaceSchema },
       _meta: { ui: {} },
     },
-    async () => {
-      const connectors = await attackDiscoveryService.listAIConnectors();
+    async ({ namespace }) => {
+      const connectors = await attackDiscoveryService.listAIConnectors(
+        namespace
+      );
       return { content: [{ type: "text" as const, text: JSON.stringify(connectors) }] };
     }
   );

@@ -9,6 +9,22 @@ import type { SampleDataClient } from "../client/sampleDataClient.js";
 import type { RulesService } from "./rulesService.js";
 
 const TAG = "elastic-security-sample-data";
+const DEFAULT_NAMESPACE = "default";
+
+/**
+ * Module-level current namespace, set by `generateSampleData` and read by
+ * the `alert()` helper to stamp each generated alert with the correct
+ * `_index` and `kibana.space_ids`. Mirrors the existing `_ruleIdMap`
+ * pattern — per-run state lives at module scope; threading it through
+ * every scenario generator's signature would be a much larger change.
+ */
+let _namespace: string = DEFAULT_NAMESPACE;
+function setNamespace(ns?: string): void {
+  _namespace = ns || DEFAULT_NAMESPACE;
+}
+function currentAlertsIndex(): string {
+  return `.alerts-security.alerts-${_namespace}`;
+}
 
 interface SampleDataServiceOptions {
   readonly sampleDataClient: SampleDataClient;
@@ -37,15 +53,16 @@ export class SampleDataService {
     scenario?: ScenarioName;
     count?: number;
     ruleIdMap?: Record<string, string>;
+    namespace?: string;
   }): Promise<{ indexed: number; scenario: string; indices: string[] }> {
     return generateSampleData(this.options.sampleDataClient, options);
   }
 
-  cleanupSampleData(): Promise<{ deleted: number }> {
-    return cleanupSampleData(this.options.sampleDataClient);
+  cleanupSampleData(namespace?: string): Promise<{ deleted: number }> {
+    return cleanupSampleData(this.options.sampleDataClient, namespace);
   }
 
-  checkExistingData(): Promise<{
+  checkExistingData(namespace?: string): Promise<{
     totalDocs: number;
     totalAlerts: number;
     existingRules: number;
@@ -53,19 +70,25 @@ export class SampleDataService {
   }> {
     return checkExistingData(
       this.options.sampleDataClient,
-      this.options.rulesService
+      this.options.rulesService,
+      namespace
     );
   }
 
   createRulesForScenario(
-    scenario: ScenarioName
+    scenario: ScenarioName,
+    namespace?: string
   ): Promise<{
     created: number;
     existing: number;
     ruleIds: string[];
     ruleIdMap: Record<string, string>;
   }> {
-    return createRulesForScenario(this.options.rulesService, scenario);
+    return createRulesForScenario(
+      this.options.rulesService,
+      scenario,
+      namespace
+    );
   }
 
   setRuleIdMap(map: Record<string, string>): void {
@@ -111,10 +134,12 @@ async function generateSampleData(
     scenario?: ScenarioName;
     count?: number;
     ruleIdMap?: Record<string, string>;
+    namespace?: string;
   }
 ): Promise<{ indexed: number; scenario: string; indices: string[] }> {
-  const { scenario, count = 50, ruleIdMap } = options;
+  const { scenario, count = 50, ruleIdMap, namespace } = options;
   if (ruleIdMap) setRuleIdMap(ruleIdMap);
+  setNamespace(namespace);
 
   if (scenario && SCENARIOS[scenario]) {
     const events = SCENARIOS[scenario](count);
@@ -139,9 +164,15 @@ async function generateSampleData(
 }
 
 async function cleanupSampleData(
-  sampleDataClient: SampleDataClient
+  sampleDataClient: SampleDataClient,
+  namespace?: string
 ): Promise<{ deleted: number }> {
+  const ns = namespace || DEFAULT_NAMESPACE;
   const indices = [
+    // Fleet integration data stream namespaces tracks the Kibana space
+    // here, so cleanup mirrors whatever the generator wrote during this
+    // run. The Fleet namespace is conventionally identical to the space
+    // id; if your deployment overrides it, set namespace accordingly.
     "logs-endpoint.events.process-default",
     "logs-endpoint.events.network-default",
     "logs-endpoint.events.file-default",
@@ -164,7 +195,7 @@ async function cleanupSampleData(
     "logs-docker.events-default",
     "logs-kubernetes.audit-default",
     "logs-custom.messy-default",
-    ".alerts-security.alerts-default",
+    `.alerts-security.alerts-${ns}`,
   ];
 
   let totalDeleted = 0;
@@ -183,7 +214,8 @@ async function cleanupSampleData(
 
 async function checkExistingData(
   sampleDataClient: SampleDataClient,
-  rulesService: RulesService
+  rulesService: RulesService,
+  namespace?: string
 ): Promise<{
   totalDocs: number;
   totalAlerts: number;
@@ -215,11 +247,14 @@ async function checkExistingData(
   const byScenario: Record<string, { events: number; alerts: number }> = {};
 
   try {
-    const alertResult = await sampleDataClient.searchAlertsAggregation({
-      size: 0,
-      query: { term: { tags: TAG } },
-      aggs: { by_rule: { terms: { field: "kibana.alert.rule.name", size: 100 } } },
-    });
+    const alertResult = await sampleDataClient.searchAlertsAggregation(
+      {
+        size: 0,
+        query: { term: { tags: TAG } },
+        aggs: { by_rule: { terms: { field: "kibana.alert.rule.name", size: 100 } } },
+      },
+      namespace
+    );
     totalAlerts = alertResult.hits.total.value;
   } catch { /* index may not exist */ }
 
@@ -253,6 +288,7 @@ async function checkExistingData(
     const found = await rulesService.findRules({
       filter: `alert.attributes.tags:"${TAG}"`,
       perPage: 1,
+      namespace,
     });
     existingRules = found.total;
   } catch { /* ignore */ }
@@ -404,7 +440,7 @@ function alert(timestamp: string, fields: AlertFields): IndexedDoc {
     "kibana.alert.original_event.category": ["process"],
     "kibana.alert.original_event.action": "start",
     "kibana.alert.original_event.dataset": dataset,
-    "kibana.space_ids": ["default"],
+    "kibana.space_ids": [_namespace],
     "kibana.version": "8.17.0",
   };
 
@@ -429,7 +465,7 @@ function alert(timestamp: string, fields: AlertFields): IndexedDoc {
 
   if (fields.extra) Object.assign(src, fields.extra);
 
-  return { _index: ".alerts-security.alerts-default", _source: src };
+  return { _index: currentAlertsIndex(), _source: src };
 }
 
 function randomIp(): string {
@@ -611,7 +647,8 @@ export const SCENARIO_RULES: Record<string, ScenarioRuleDef[]> = {
 
 async function createRulesForScenario(
   rulesService: RulesService,
-  scenario: ScenarioName
+  scenario: ScenarioName,
+  namespace?: string
 ): Promise<{
   created: number;
   existing: number;
@@ -630,11 +667,30 @@ async function createRulesForScenario(
     const found = await rulesService.findRules({
       filter: `alert.attributes.tags:"${TAG}"`,
       perPage: 100,
+      namespace,
     });
     for (const r of found.data) {
       existingRules[r.name] = r.id;
     }
   } catch { /* ignore */ }
+
+  // Some rule defs (notably the CDR higher-order rule) bake the default
+  // alerts index into their ES|QL query and `index` list. When we're
+  // provisioning rules into a non-default space, rewrite both to the
+  // matching namespace so the rule queries its own space's alerts.
+  const ns = namespace || DEFAULT_NAMESPACE;
+  const rewriteAlertsIndex = <T>(value: T): T => {
+    if (typeof value === "string") {
+      return value.replace(
+        /\.alerts-security\.alerts-(\*|default)/g,
+        `.alerts-security.alerts-${ns}`
+      ) as unknown as T;
+    }
+    if (Array.isArray(value)) {
+      return value.map((v) => rewriteAlertsIndex(v)) as unknown as T;
+    }
+    return value;
+  };
 
   for (const def of defs) {
     if (existingRules[def.name]) {
@@ -650,7 +706,7 @@ async function createRulesForScenario(
         description: def.description,
         severity: def.severity,
         risk_score: def.risk_score,
-        query: def.query,
+        query: rewriteAlertsIndex(def.query),
         language: def.type === "esql" ? "esql" : def.language,
         threat: def.threat,
         tags: def.tags,
@@ -660,9 +716,9 @@ async function createRulesForScenario(
         interval: "5m",
       };
       if (def.type !== "esql") {
-        ruleBody.index = def.index;
+        ruleBody.index = rewriteAlertsIndex(def.index);
       }
-      const rule = await rulesService.createRule(ruleBody);
+      const rule = await rulesService.createRule(ruleBody, namespace);
       ruleIds.push(rule.id);
       ruleIdMap[def.name] = rule.id;
     } catch {

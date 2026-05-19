@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractCallResult } from "../../shared/extract-tool-text";
 import { SeverityChip } from "../../shared/components";
@@ -511,9 +511,19 @@ export function App() {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [searchInput, setSearchInput] = useState("");
 
+  /**
+   * Kibana space ID echoed from the model's `generate-sample-data` tool
+   * result. Forwarded on every follow-up call so the alerts the generator
+   * writes (and the rules it provisions) land in the right space.
+   */
+  const namespaceRef = useRef<string | undefined>(undefined);
+
   const loadExistingData = useCallback(async (app: McpApp) => {
     try {
-      const toolResult = await app.callServerTool({ name: "check-existing-sample-data", arguments: {} });
+      const toolResult = await app.callServerTool({
+        name: "check-existing-sample-data",
+        arguments: { namespace: namespaceRef.current },
+      });
       const text = extractCallResult(toolResult);
       if (text) setExistingData(JSON.parse(text));
     } catch { /* cluster might not be reachable */ }
@@ -527,6 +537,9 @@ export function App() {
         const text = extractCallResult(toolResult);
         if (text) {
           const data = JSON.parse(text);
+          if (data.params?.namespace !== undefined) {
+            namespaceRef.current = data.params.namespace;
+          }
           if (data.indexed !== undefined) {
             setResults((prev) => [...prev, data]);
           }
@@ -583,7 +596,7 @@ export function App() {
           try {
             const toolResult = await app.callServerTool({
               name: "create-rules-for-scenario",
-              arguments: { scenario },
+              arguments: { scenario, namespace: namespaceRef.current },
             });
             const text = extractCallResult(toolResult);
             if (text) {
@@ -600,7 +613,7 @@ export function App() {
         setStatusMessage(null);
         const toolResult = await app.callServerTool({
           name: "generate-scenario",
-          arguments: { scenario, count },
+          arguments: { scenario, count, namespace: namespaceRef.current },
         });
         const text = extractCallResult(toolResult);
         if (text) {
@@ -626,7 +639,7 @@ export function App() {
     try {
       const toolResult = await app.callServerTool({
         name: "cleanup-sample-data",
-        arguments: {},
+        arguments: { namespace: namespaceRef.current },
       });
       const text = extractCallResult(toolResult);
       if (text) {

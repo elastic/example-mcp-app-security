@@ -96,6 +96,13 @@ export function App() {
   // sidesteps the temporal dead zone between `useMcpApp`'s callbacks (which
   // need to call flush) and the closures themselves (which need `getApp`).
   const flushPendingRef = useRef<() => void>(() => {});
+  /**
+   * Kibana space ID echoed from the model's `threat-hunt` tool result.
+   * Forwarded to `investigate-entity` and `get-entity-detail` so the graph
+   * queries the same space's alerts the model did. ES|QL execution and
+   * index listing are space-agnostic and don't use this.
+   */
+  const namespaceRef = useRef<string | undefined>(undefined);
 
   const { connected, getApp } = useMcpApp({
     name: "threat-hunt",
@@ -112,6 +119,9 @@ export function App() {
           }
           if (data.params?.entity) {
             pendingRef.current.entity = data.params.entity;
+          }
+          if (data.params?.namespace !== undefined) {
+            namespaceRef.current = data.params.namespace;
           }
         }
       } catch { /* ignore */ }
@@ -174,7 +184,11 @@ export function App() {
     try {
       const result = await app.callServerTool({
         name: "investigate-entity",
-        arguments: { entityType: type, entityValue: value },
+        arguments: {
+          entityType: type,
+          entityValue: value,
+          namespace: namespaceRef.current,
+        },
       });
       const text = extractCallResult(result);
       if (text) {
@@ -211,7 +225,11 @@ export function App() {
     try {
       const result = await app.callServerTool({
         name: "get-entity-detail",
-        arguments: { entityType: node.type, entityValue: node.value },
+        arguments: {
+          entityType: node.type,
+          entityValue: node.value,
+          namespace: namespaceRef.current,
+        },
       });
       const text = extractCallResult(result);
       if (text) setNodeDetail(JSON.parse(text));

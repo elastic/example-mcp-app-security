@@ -13,21 +13,32 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
-import type { CasesService } from "../elastic/service/index.js";
+import type {
+  CasesService,
+  SpacesService,
+} from "../elastic/service/index.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://manage-cases/mcp-app.html";
 
+const namespaceSchema = z
+  .string()
+  .optional()
+  .describe(
+    "Kibana space ID to scope the action to (default: 'default'). Must match the space the case lives in; for tools that touch alerts, also doubles as the Security alerts index namespace."
+  );
+
 /** Services the case-management tools depend on (default cluster only, for now). */
 export interface CaseManagementToolDeps {
   readonly casesService: CasesService;
+  readonly spacesService: SpacesService;
 }
 
 export function registerCaseManagementTools(
   server: McpServer,
   deps: CaseManagementToolDeps
 ) {
-  const { casesService } = deps;
+  const { casesService, spacesService } = deps;
   registerAppTool(
     server,
     "manage-cases",
@@ -39,11 +50,17 @@ export function registerCaseManagementTools(
         status: z.enum(["open", "in-progress", "closed"]).optional().describe("Filter by status"),
         severity: z.enum(["low", "medium", "high", "critical"]).optional().describe("Filter by severity"),
         search: z.string().optional().describe("Search text"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ status, severity, search }) => {
-      const result = await casesService.listCases({ status, severity, search });
+    async ({ status, severity, search, namespace }) => {
+      const result = await casesService.listCases({
+        status,
+        severity,
+        search,
+        namespace,
+      });
       const compact = {
         total: result.total,
         cases: result.cases.slice(0, 20).map((c) => ({
@@ -54,7 +71,7 @@ export function registerCaseManagementTools(
           created_at: c.created_at, updated_at: c.updated_at,
           created_by: c.created_by?.username,
         })),
-        params: { status, severity, search },
+        params: { status, severity, search, namespace },
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(compact) }],
@@ -75,10 +92,11 @@ export function registerCaseManagementTools(
         tags: z.string().optional().describe("Comma-separated tags"),
         page: z.number().optional(),
         perPage: z.number().optional(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ status, severity, search, tags, page, perPage }) => {
+    async ({ status, severity, search, tags, page, perPage, namespace }) => {
       const result = await casesService.listCases({
         status,
         severity,
@@ -86,6 +104,7 @@ export function registerCaseManagementTools(
         tags: tags ? tags.split(",") : undefined,
         page,
         perPage,
+        namespace,
       });
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
@@ -97,11 +116,11 @@ export function registerCaseManagementTools(
     {
       title: "Get Case",
       description: "Get a specific case by ID",
-      inputSchema: { caseId: z.string() },
+      inputSchema: { caseId: z.string(), namespace: namespaceSchema },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ caseId }) => {
-      const result = await casesService.getCase(caseId);
+    async ({ caseId, namespace }) => {
+      const result = await casesService.getCase(caseId, namespace);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -118,20 +137,23 @@ export function registerCaseManagementTools(
         tags: z.string().optional().describe("Comma-separated tags"),
         severity: z.string().optional(),
         alertIds: z.array(z.string()).optional().describe("Alert document IDs to attach to the case"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: {} },
     },
-    async ({ title, description, tags, severity, alertIds }) => {
+    async ({ title, description, tags, severity, alertIds, namespace }) => {
       const result = await casesService.createCase({
         title,
         description,
         tags: tags ? tags.split(",") : undefined,
         severity,
+        namespace,
       });
 
       const alertsAttached = await casesService.attachAlertsByIds(
         result.id,
-        alertIds || []
+        alertIds || [],
+        namespace
       );
 
       return { content: [{ type: "text" as const, text: JSON.stringify({ ...result, alertsAttached }) }] };
@@ -150,15 +172,21 @@ export function registerCaseManagementTools(
         status: z.string().optional(),
         severity: z.string().optional(),
         tags: z.string().optional().describe("Comma-separated tags"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ caseId, version, status, severity, tags }) => {
-      const result = await casesService.updateCase(caseId, version, {
-        status,
-        severity,
-        tags: tags ? tags.split(",") : undefined,
-      });
+    async ({ caseId, version, status, severity, tags, namespace }) => {
+      const result = await casesService.updateCase(
+        caseId,
+        version,
+        {
+          status,
+          severity,
+          tags: tags ? tags.split(",") : undefined,
+        },
+        namespace
+      );
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -172,11 +200,12 @@ export function registerCaseManagementTools(
       inputSchema: {
         caseId: z.string(),
         comment: z.string(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ caseId, comment }) => {
-      const result = await casesService.addComment(caseId, comment);
+    async ({ caseId, comment, namespace }) => {
+      const result = await casesService.addComment(caseId, comment, namespace);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -193,11 +222,19 @@ export function registerCaseManagementTools(
         alertIndex: z.string(),
         ruleId: z.string(),
         ruleName: z.string(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ caseId, alertId, alertIndex, ruleId, ruleName }) => {
-      const result = await casesService.attachAlert(caseId, alertId, alertIndex, ruleId, ruleName);
+    async ({ caseId, alertId, alertIndex, ruleId, ruleName, namespace }) => {
+      const result = await casesService.attachAlert(
+        caseId,
+        alertId,
+        alertIndex,
+        ruleId,
+        ruleName,
+        namespace
+      );
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -208,12 +245,12 @@ export function registerCaseManagementTools(
     {
       title: "Get Case Alerts",
       description: "Fetch alerts attached to a case with their details",
-      inputSchema: { caseId: z.string() },
+      inputSchema: { caseId: z.string(), namespace: namespaceSchema },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ caseId }) => {
+    async ({ caseId, namespace }) => {
       try {
-        const attachments = await casesService.getCaseAlerts(caseId);
+        const attachments = await casesService.getCaseAlerts(caseId, namespace);
         return { content: [{ type: "text" as const, text: JSON.stringify(attachments) }] };
       } catch {
         return { content: [{ type: "text" as const, text: JSON.stringify([]) }] };
@@ -227,11 +264,11 @@ export function registerCaseManagementTools(
     {
       title: "Get Case Comments",
       description: "Fetch comments for a case",
-      inputSchema: { caseId: z.string() },
+      inputSchema: { caseId: z.string(), namespace: namespaceSchema },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ caseId }) => {
-      const result = await casesService.getComments(caseId);
+    async ({ caseId, namespace }) => {
+      const result = await casesService.getComments(caseId, namespace);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -252,6 +289,24 @@ export function registerCaseManagementTools(
       } catch {
         return { content: [{ type: "text" as const, text: JSON.stringify({ username: "", avatar: {} }) }] };
       }
+    }
+  );
+
+  registerAppTool(
+    server,
+    "list-namespaces",
+    {
+      title: "List Available Namespaces (Kibana Spaces)",
+      description:
+        "List the Kibana spaces (namespaces) the API key can see. Call this before fanning out case tools across a deployment — e.g. when the user asks for 'all open cases in the deployment' or otherwise wants a view that isn't scoped to a single space. Returns one entry per space: { id, name, description? }. Pass the `id` as the `namespace` parameter on subsequent case tool calls.",
+      inputSchema: {},
+      _meta: { ui: {} },
+    },
+    async () => {
+      const spaces = await spacesService.listSpaces();
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(spaces) }],
+      };
     }
   );
 

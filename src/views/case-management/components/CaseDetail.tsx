@@ -34,6 +34,8 @@ interface CaseDetailProps {
   onAddComment: (comment: string) => void;
   timeAgo: (date: string | Date) => string;
   app: McpApp;
+  /** Kibana space ID the parent picked — forwarded on every server call. */
+  namespace?: string;
 }
 
 function MetaCell({ label, children }: { label: string; children: React.ReactNode }) {
@@ -69,7 +71,7 @@ const OBSERVABLE_ICONS: Record<string, string> = {
   "observable-type-file-name": "\u{1F4C4}",
 };
 
-export function CaseDetail({ caseData, onUpdateStatus, onAddComment, timeAgo: timeAgoFn, app }: CaseDetailProps) {
+export function CaseDetail({ caseData, onUpdateStatus, onAddComment, timeAgo: timeAgoFn, app, namespace }: CaseDetailProps) {
   const [tab, setTab] = useState<"overview" | "alerts" | "observables" | "comments">("overview");
   const [comment, setComment] = useState("");
   const [comments, setComments] = useState<CaseComment[]>([]);
@@ -83,7 +85,10 @@ export function CaseDetail({ caseData, onUpdateStatus, onAddComment, timeAgo: ti
   const loadComments = useCallback(async () => {
     setLoadingComments(true);
     try {
-      const result = await app.callServerTool({ name: "get-case-comments", arguments: { caseId: caseData.id } });
+      const result = await app.callServerTool({
+        name: "get-case-comments",
+        arguments: { caseId: caseData.id, namespace },
+      });
       const text = extractCallResult(result);
       if (text) {
         const data = JSON.parse(text) as { comments?: CaseComment[] };
@@ -91,17 +96,20 @@ export function CaseDetail({ caseData, onUpdateStatus, onAddComment, timeAgo: ti
       }
     } catch { /* ignore */ }
     finally { setLoadingComments(false); }
-  }, [app, caseData.id]);
+  }, [app, caseData.id, namespace]);
 
   const loadAlerts = useCallback(async () => {
     setLoadingAlerts(true);
     try {
-      const result = await app.callServerTool({ name: "get-case-alerts", arguments: { caseId: caseData.id } });
+      const result = await app.callServerTool({
+        name: "get-case-alerts",
+        arguments: { caseId: caseData.id, namespace },
+      });
       const text = extractCallResult(result);
       if (text) setAlerts(JSON.parse(text));
     } catch { /* ignore */ }
     finally { setLoadingAlerts(false); }
-  }, [app, caseData.id]);
+  }, [app, caseData.id, namespace]);
 
   useEffect(() => { loadComments(); loadAlerts(); }, [loadComments, loadAlerts]);
 

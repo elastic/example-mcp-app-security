@@ -113,6 +113,7 @@ describe("registerAlertTriageTools", () => {
         severity: "high",
         limit: 25,
         query: "powershell",
+        namespace: undefined,
       });
 
       const body = parseToolText<{
@@ -133,8 +134,21 @@ describe("registerAlertTriageTools", () => {
         severity: "high",
         limit: 25,
         query: "powershell",
+        namespace: undefined,
       });
       expect(body.verdicts).toEqual([]);
+    });
+
+    it("forwards and echoes namespace when supplied", async () => {
+      vi.mocked(alertsService.getAlerts).mockResolvedValueOnce(emptySummary());
+      const out = await server
+        .tool("triage-alerts")
+        .callback({ namespace: "soc" });
+      expect(alertsService.getAlerts).toHaveBeenCalledWith(
+        expect.objectContaining({ namespace: "soc" })
+      );
+      const body = parseToolText<{ params: Record<string, unknown> }>(out);
+      expect(body.params.namespace).toBe("soc");
     });
 
     it("falls back to default params (days=7, limit=50) and surfaces the supplied verdicts", async () => {
@@ -161,6 +175,7 @@ describe("registerAlertTriageTools", () => {
         severity: undefined,
         limit: 50,
         query: undefined,
+        namespace: undefined,
       });
       expect(body.verdicts).toEqual(verdicts);
     });
@@ -269,8 +284,17 @@ describe("registerAlertTriageTools", () => {
         limit: 5,
         status: "acknowledged",
         query: "ransomware",
+        namespace: undefined,
       });
       expect(parseToolText(out)).toEqual(summary);
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(alertsService.getAlerts).mockResolvedValueOnce(emptySummary());
+      await server.tool("poll-alerts").callback({ namespace: "soc" });
+      expect(alertsService.getAlerts).toHaveBeenCalledWith(
+        expect.objectContaining({ namespace: "soc" })
+      );
     });
   });
 
@@ -291,9 +315,29 @@ describe("registerAlertTriageTools", () => {
 
       expect(alertsService.getAlertContext).toHaveBeenCalledWith(
         "alert-1",
-        alert
+        alert,
+        undefined
       );
       expect(parseToolText(out)).toEqual(context);
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      const alert = makeAlert();
+      vi.mocked(alertsService.getAlertContext).mockResolvedValueOnce({
+        processEvents: [],
+        networkEvents: [],
+        relatedAlerts: [],
+      });
+      await server.tool("get-alert-context").callback({
+        alertId: "alert-1",
+        alert: JSON.stringify(alert),
+        namespace: "soc",
+      });
+      expect(alertsService.getAlertContext).toHaveBeenCalledWith(
+        "alert-1",
+        alert,
+        "soc"
+      );
     });
   });
 
@@ -305,8 +349,22 @@ describe("registerAlertTriageTools", () => {
         .tool("acknowledge-alert")
         .callback({ alertId: "alert-42" });
 
-      expect(alertsService.acknowledgeAlert).toHaveBeenCalledWith("alert-42");
+      expect(alertsService.acknowledgeAlert).toHaveBeenCalledWith(
+        "alert-42",
+        undefined
+      );
       expect(parseToolText(out)).toEqual({ success: true, alertId: "alert-42" });
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(alertsService.acknowledgeAlert).mockResolvedValueOnce(undefined);
+      await server
+        .tool("acknowledge-alert")
+        .callback({ alertId: "alert-42", namespace: "soc" });
+      expect(alertsService.acknowledgeAlert).toHaveBeenCalledWith(
+        "alert-42",
+        "soc"
+      );
     });
   });
 
@@ -320,8 +378,21 @@ describe("registerAlertTriageTools", () => {
         alertIds: ["a", "b"],
       });
 
-      expect(alertsService.acknowledgeAlerts).toHaveBeenCalledWith(["a", "b"]);
+      expect(alertsService.acknowledgeAlerts).toHaveBeenCalledWith(
+        ["a", "b"],
+        undefined
+      );
       expect(parseToolText(out)).toEqual({ updated: 2 });
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(alertsService.acknowledgeAlerts).mockResolvedValueOnce({
+        updated: 1,
+      });
+      await server
+        .tool("acknowledge-alerts-bulk")
+        .callback({ alertIds: ["a"], namespace: "soc" });
+      expect(alertsService.acknowledgeAlerts).toHaveBeenCalledWith(["a"], "soc");
     });
   });
 

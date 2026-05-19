@@ -19,6 +19,13 @@ import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-alerts/mcp-app.html";
 
+const namespaceSchema = z
+  .string()
+  .optional()
+  .describe(
+    "Kibana space ID whose alerts to query (default: 'default'). Use `list-namespaces` to discover available spaces; for a deployment-wide view, call this tool once per returned id."
+  );
+
 /** Services the alert-triage tools depend on (default cluster only, for now). */
 export interface AlertTriageToolDeps {
   readonly alertsService: AlertsService;
@@ -52,17 +59,24 @@ export function registerAlertTriageTools(
           action: z.string().describe("Recommended next action"),
           hosts: z.array(z.string()).optional().describe("Affected hostnames"),
         })).optional().describe("Your triage verdicts — one per detection rule or alert group. Provide these based on your analysis of the alert data."),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ days, severity, limit, query, verdicts }) => {
-      const summary = await alertsService.getAlerts({ days, severity, limit, query });
+    async ({ days, severity, limit, query, verdicts, namespace }) => {
+      const summary = await alertsService.getAlerts({
+        days,
+        severity,
+        limit,
+        query,
+        namespace,
+      });
       const compact = {
         total: summary.total,
         bySeverity: summary.bySeverity,
         byRule: summary.byRule.slice(0, 10),
         byHost: summary.byHost.slice(0, 10),
-        params: { days: days || 7, severity, limit: limit || 50, query },
+        params: { days: days || 7, severity, limit: limit || 50, query, namespace },
         verdicts: verdicts || [],
         alerts: summary.alerts.slice(0, 30).map((a) => {
           const s = a._source;
@@ -111,11 +125,19 @@ export function registerAlertTriageTools(
         limit: z.number().optional(),
         status: z.string().optional(),
         query: z.string().optional(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ days, severity, limit, status, query }) => {
-      const summary = await alertsService.getAlerts({ days, severity, limit, status, query });
+    async ({ days, severity, limit, status, query, namespace }) => {
+      const summary = await alertsService.getAlerts({
+        days,
+        severity,
+        limit,
+        status,
+        query,
+        namespace,
+      });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(summary) }],
       };
@@ -131,12 +153,17 @@ export function registerAlertTriageTools(
       inputSchema: {
         alertId: z.string().describe("The alert document ID"),
         alert: z.string().describe("JSON-encoded alert document"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ alertId, alert: alertJson }) => {
+    async ({ alertId, alert: alertJson, namespace }) => {
       const alert = JSON.parse(alertJson) as SecurityAlert;
-      const context = await alertsService.getAlertContext(alertId, alert);
+      const context = await alertsService.getAlertContext(
+        alertId,
+        alert,
+        namespace
+      );
       return {
         content: [{ type: "text" as const, text: JSON.stringify(context) }],
       };
@@ -151,11 +178,12 @@ export function registerAlertTriageTools(
       description: "Mark an alert as acknowledged",
       inputSchema: {
         alertId: z.string().describe("The alert document ID"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ alertId }) => {
-      await alertsService.acknowledgeAlert(alertId);
+    async ({ alertId, namespace }) => {
+      await alertsService.acknowledgeAlert(alertId, namespace);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ success: true, alertId }) }],
       };
@@ -170,11 +198,16 @@ export function registerAlertTriageTools(
       description: "Move an alert back to the open queue (used by the Triage UI Undo affordance after acknowledging)",
       inputSchema: {
         alertId: z.string().describe("The alert document ID"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ alertId }) => {
-      const result = await alertsService.setAlertWorkflowStatus([alertId], "open");
+    async ({ alertId, namespace }) => {
+      const result = await alertsService.setAlertWorkflowStatus(
+        [alertId],
+        "open",
+        namespace
+      );
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ success: true, alertId, ...result }) }],
       };
@@ -189,11 +222,12 @@ export function registerAlertTriageTools(
       description: "Mark multiple alerts as acknowledged. Call this after triaging alerts to clear them from the queue.",
       inputSchema: {
         alertIds: z.array(z.string()).describe("Array of alert document IDs"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: {} },
     },
-    async ({ alertIds }) => {
-      const result = await alertsService.acknowledgeAlerts(alertIds);
+    async ({ alertIds, namespace }) => {
+      const result = await alertsService.acknowledgeAlerts(alertIds, namespace);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],
       };

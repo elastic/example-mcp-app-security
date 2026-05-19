@@ -17,10 +17,24 @@ import type {
   TriagedDiscovery,
 } from "../client/attackDiscoveryClient.js";
 
-const SCHEDULED_INDEX = ".alerts-security.attack.discovery.alerts-default";
-const ADHOC_INDEX = ".adhoc.alerts-security.attack.discovery.alerts-default";
-const ALERTS_INDEX = ".alerts-security.alerts-*";
+const DEFAULT_NAMESPACE = "default";
 const RISK_INDEX = "risk-score.risk-score-latest-*";
+
+/**
+ * Helpers that compute the three space-scoped indices the attack-discovery
+ * feature reads from. Defaulting `namespace` to `"default"` keeps existing
+ * single-space deployments behaving the same; pass an explicit namespace
+ * for multi-space queries.
+ */
+function scheduledIndex(namespace?: string): string {
+  return `.alerts-security.attack.discovery.alerts-${namespace || DEFAULT_NAMESPACE}`;
+}
+function adhocIndex(namespace?: string): string {
+  return `.adhoc.alerts-security.attack.discovery.alerts-${namespace || DEFAULT_NAMESPACE}`;
+}
+function alertsIndex(namespace?: string): string {
+  return `.alerts-security.alerts-${namespace || DEFAULT_NAMESPACE}`;
+}
 
 interface AttackDiscoveryServiceOptions {
   readonly attackDiscoveryClient: AttackDiscoveryClient;
@@ -50,6 +64,11 @@ interface GenerateAttackDiscoveryInput {
   start?: string;
   end?: string;
   filter?: Record<string, unknown>;
+  /**
+   * Kibana space ID to scope the generation request to. Also determines
+   * which alerts index the LLM analyzes (`.alerts-security.alerts-<ns>`).
+   */
+  namespace?: string;
 }
 
 /**
@@ -73,10 +92,13 @@ export class AttackDiscoveryService {
   async getDiscoveries(options: {
     days?: number;
     limit?: number;
+    namespace?: string;
   }): Promise<DiscoverySummary> {
-    const { days = 1, limit = 50 } = options;
+    const { days = 1, limit = 50, namespace } = options;
+    const scheduled_index = scheduledIndex(namespace);
+    const adhoc_index = adhocIndex(namespace);
 
-    const query = `FROM ${SCHEDULED_INDEX}, ${ADHOC_INDEX} METADATA _id
+    const query = `FROM ${scheduled_index}, ${adhoc_index} METADATA _id
 | WHERE kibana.alert.workflow_status == "open"
   AND @timestamp >= NOW() - ${days} day
 | KEEP @timestamp, _id,
@@ -96,14 +118,14 @@ export class AttackDiscoveryService {
     if (!result) {
       const scheduled = await this.safeEsql(
         query.replace(
-          `${SCHEDULED_INDEX}, ${ADHOC_INDEX} METADATA _id`,
-          `${SCHEDULED_INDEX} METADATA _id`
+          `${scheduled_index}, ${adhoc_index} METADATA _id`,
+          `${scheduled_index} METADATA _id`
         )
       );
       const adhoc = await this.safeEsql(
         query.replace(
-          `${SCHEDULED_INDEX}, ${ADHOC_INDEX} METADATA _id`,
-          `${ADHOC_INDEX} METADATA _id`
+          `${scheduled_index}, ${adhoc_index} METADATA _id`,
+          `${adhoc_index} METADATA _id`
         )
       );
       if (scheduled && adhoc) {
@@ -159,8 +181,10 @@ export class AttackDiscoveryService {
   }
 
   async assessConfidence(
-    discoveries: AttackDiscovery[]
+    discoveries: AttackDiscovery[],
+    namespace?: string
   ): Promise<TriagedDiscovery[]> {
+    const alerts_index = alertsIndex(namespace);
     const allAlertIds = [...new Set(discoveries.flatMap((d) => d.alertIds))];
 
     if (allAlertIds.length === 0) {
@@ -179,7 +203,7 @@ export class AttackDiscoveryService {
     }
 
     const idsClause = allAlertIds.map((id) => `"${escapeEsql(id)}"`).join(", ");
-    const diversityResult = await this.safeEsql(`FROM ${ALERTS_INDEX} METADATA _id
+    const diversityResult = await this.safeEsql(`FROM ${alerts_index} METADATA _id
 | WHERE _id IN (${idsClause})
   AND kibana.alert.workflow_status == "open"
 | KEEP _id, kibana.alert.rule.name, kibana.alert.rule.uuid, kibana.alert.severity, host.name, user.name, agent.id`);
@@ -230,7 +254,7 @@ export class AttackDiscoveryService {
       const ruleClause = allRuleNames
         .map((r) => `"${escapeEsql(r)}"`)
         .join(", ");
-      const ruleResult = await this.safeEsql(`FROM ${ALERTS_INDEX}
+      const ruleResult = await this.safeEsql(`FROM ${alerts_index}
 | WHERE kibana.alert.rule.name IN (${ruleClause})
   AND @timestamp >= NOW() - 7 day
 | STATS total = COUNT(*), hosts = COUNT_DISTINCT(host.name)
@@ -372,11 +396,12 @@ export class AttackDiscoveryService {
    * indices that did respond.
    */
   async acknowledgeDiscoveries(
-    discoveryIds: string[]
+    discoveryIds: string[],
+    namespace?: string
   ): Promise<{ updated: number }> {
     let totalUpdated = 0;
 
-    for (const index of [SCHEDULED_INDEX, ADHOC_INDEX]) {
+    for (const index of [scheduledIndex(namespace), adhocIndex(namespace)]) {
       try {
         const result =
           await this.options.attackDiscoveryClient.acknowledgeOnIndex(index, {
@@ -397,14 +422,18 @@ export class AttackDiscoveryService {
   }
 
   async getDiscoveryDetail(
-    discovery: AttackDiscovery
+    discovery: AttackDiscovery,
+    namespace?: string
   ): Promise<DiscoveryDetail> {
+    const alerts_index = alertsIndex(namespace);
+    const scheduled_index = scheduledIndex(namespace);
+    const adhoc_index = adhocIndex(namespace);
     const alertIds = discovery.alertIds || [];
     let alerts: DiscoveryDetail["alerts"] = [];
 
     if (alertIds.length > 0) {
       const idsClause = alertIds.map((id) => `"${escapeEsql(id)}"`).join(", ");
-      const result = await this.safeEsql(`FROM ${ALERTS_INDEX} METADATA _id
+      const result = await this.safeEsql(`FROM ${alerts_index} METADATA _id
 | WHERE _id IN (${idsClause})
 | KEEP _id, kibana.alert.rule.name, kibana.alert.severity, kibana.alert.rule.description,
        kibana.alert.risk_score, kibana.alert.reason,
@@ -520,7 +549,7 @@ export class AttackDiscoveryService {
     ];
 
     const withReplacementsResult =
-      await this.safeEsql(`FROM ${SCHEDULED_INDEX}, ${ADHOC_INDEX} METADATA _id
+      await this.safeEsql(`FROM ${scheduled_index}, ${adhoc_index} METADATA _id
 | WHERE _id == "${escapeEsql(discovery.id)}"
 | KEEP kibana.alert.attack_discovery.title_with_replacements,
        kibana.alert.attack_discovery.summary_markdown_with_replacements,
@@ -587,23 +616,27 @@ export class AttackDiscoveryService {
   async generateAttackDiscovery(
     options: GenerateAttackDiscoveryInput
   ): Promise<GenerationResult> {
-    const anonymizationFields = await this.getAnonymizationFields();
+    const { namespace } = options;
+    const anonymizationFields = await this.getAnonymizationFields(namespace);
 
-    return this.options.attackDiscoveryClient.generate({
-      alertsIndexPattern: ".alerts-security.alerts-default",
-      anonymizationFields,
-      apiConfig: {
-        connectorId: options.connectorId,
-        actionTypeId: options.actionTypeId,
+    return this.options.attackDiscoveryClient.generate(
+      {
+        alertsIndexPattern: alertsIndex(namespace),
+        anonymizationFields,
+        apiConfig: {
+          connectorId: options.connectorId,
+          actionTypeId: options.actionTypeId,
+        },
+        connectorName: options.connectorName,
+        size: options.size || 50,
+        subAction: "invokeAI",
+        start: options.start || "now-7d",
+        end: options.end || "now",
+        replacements: {},
+        ...(options.filter ? { filter: options.filter } : {}),
       },
-      connectorName: options.connectorName,
-      size: options.size || 50,
-      subAction: "invokeAI",
-      start: options.start || "now-7d",
-      end: options.end || "now",
-      replacements: {},
-      ...(options.filter ? { filter: options.filter } : {}),
-    });
+      namespace
+    );
   }
 
   /**
@@ -616,18 +649,24 @@ export class AttackDiscoveryService {
     size?: number;
     start?: string;
     end?: string;
+    namespace?: string;
   }): Promise<unknown> {
     const params: Record<string, string> = {};
     if (options.size) params.size = String(options.size);
     if (options.start) params.start = options.start;
     if (options.end) params.end = options.end;
-    return this.options.attackDiscoveryClient.getGenerations(params);
+    return this.options.attackDiscoveryClient.getGenerations(
+      params,
+      options.namespace
+    );
   }
 
-  async listAIConnectors(): Promise<
-    { id: string; name: string; actionTypeId: string }[]
-  > {
-    const all = await this.options.attackDiscoveryClient.listConnectors();
+  async listAIConnectors(
+    namespace?: string
+  ): Promise<{ id: string; name: string; actionTypeId: string }[]> {
+    const all = await this.options.attackDiscoveryClient.listConnectors(
+      namespace
+    );
     const aiTypes = new Set([".gen-ai", ".bedrock", ".gemini", ".inference"]);
     return all
       .filter((c) =>
@@ -640,9 +679,13 @@ export class AttackDiscoveryService {
       }));
   }
 
-  private async getAnonymizationFields(): Promise<AnonymizationField[]> {
+  private async getAnonymizationFields(
+    namespace?: string
+  ): Promise<AnonymizationField[]> {
     const result =
-      await this.options.attackDiscoveryClient.findAnonymizationFields();
+      await this.options.attackDiscoveryClient.findAnonymizationFields(
+        namespace
+      );
     const fields = result.data || [];
 
     const hasId = fields.some((f) => f.field === "_id");

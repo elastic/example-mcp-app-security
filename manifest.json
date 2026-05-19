@@ -1,8 +1,8 @@
 {
   "manifest_version": "0.3",
   "name": "elastic-security-mcp-app",
-  "display_name": "Elastic Security",
-  "version": "1.0.2",
+  "display_name": "4sConsult Elastic Security",
+  "version": "1.0.4",
   "description": "Interactive blue-team security operations for Elastic Security — alert triage, attack discovery, case management, detection rules, threat hunting, and sample data generation.",
   "long_description": "An MCP App server that brings interactive blue-team security operations directly into Claude Desktop. Provides six rich React-based UIs that render inline in the conversation: alert triage with AI verdicts, AI-powered attack discovery with confidence scoring and MITRE mapping, case management with the Kibana Cases API, detection rule browsing and tuning, an ES|QL threat-hunting workbench with a D3 investigation graph, and an ECS sample-data generator for demos.",
   "author": {
@@ -64,7 +64,7 @@
     "elasticsearch_url": {
       "type": "string",
       "title": "Elasticsearch URL",
-      "description": "Elasticsearch URL (e.g. https://your-cluster.es.cloud.example.com).",
+      "description": "Elasticsearch URL (e.g. https://elastic.es.siem.amcloud.io).",
       "required": true,
       "sensitive": false
     },
@@ -78,7 +78,7 @@
     "kibana_url": {
       "type": "string",
       "title": "Kibana URL",
-      "description": "Kibana URL (e.g. https://your-cluster.kb.cloud.example.com).",
+      "description": "Kibana URL (e.g. https://elastic.kb.siem.amcloud.io).",
       "required": true,
       "sensitive": false
     }

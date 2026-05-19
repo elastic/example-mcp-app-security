@@ -449,6 +449,25 @@ export const operationChecks: OperationCheck[] = [
       ),
     expect: { full: "ok", readonly: "403" },
   },
+  {
+    // `GET /api/spaces/space` filters its response to the spaces the API
+    // key has *any* application privilege on — it doesn't gate on a
+    // dedicated feature privilege. So a role scoped to `space:default`
+    // (as both asserted roles are) returns exactly one entry. The
+    // assertion here is that the call simply succeeds; to see additional
+    // spaces, the role's `resources` must be expanded to include them
+    // (e.g. `space:*` or specific ids) — covered in docs/permissions.md.
+    name: "listSpaces",
+    group: "cases",
+    run: async ({ services }) => {
+      const spaces = await services.spacesService.listSpaces();
+      if (spaces.length === 0) {
+        throw new Error("listSpaces returned an empty array (expected at least the default space)");
+      }
+      return spaces;
+    },
+    expect: { full: "ok", readonly: "ok" },
+  },
 
   // ─── rules ─────────────────────────────────────────────────────────────
   {

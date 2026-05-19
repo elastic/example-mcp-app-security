@@ -314,9 +314,10 @@ describe("AttackDiscoveryService", () => {
       const service = new AttackDiscoveryService({ attackDiscoveryClient });
       await service.getGenerations({ size: 5 });
 
-      expect(attackDiscoveryClient.getGenerations).toHaveBeenCalledWith({
-        size: "5",
-      });
+      expect(attackDiscoveryClient.getGenerations).toHaveBeenCalledWith(
+        { size: "5" },
+        undefined
+      );
     });
 
     it("forwards all params when supplied", async () => {
@@ -330,11 +331,23 @@ describe("AttackDiscoveryService", () => {
         end: "now",
       });
 
-      expect(attackDiscoveryClient.getGenerations).toHaveBeenCalledWith({
-        size: "10",
-        start: "now-1d",
-        end: "now",
-      });
+      expect(attackDiscoveryClient.getGenerations).toHaveBeenCalledWith(
+        { size: "10", start: "now-1d", end: "now" },
+        undefined
+      );
+    });
+
+    it("forwards namespace to the client when supplied", async () => {
+      const attackDiscoveryClient = createMockAttackDiscoveryClient();
+      vi.mocked(attackDiscoveryClient.getGenerations).mockResolvedValueOnce({});
+
+      const service = new AttackDiscoveryService({ attackDiscoveryClient });
+      await service.getGenerations({ size: 5, namespace: "soc" });
+
+      expect(attackDiscoveryClient.getGenerations).toHaveBeenCalledWith(
+        { size: "5" },
+        "soc"
+      );
     });
   });
 

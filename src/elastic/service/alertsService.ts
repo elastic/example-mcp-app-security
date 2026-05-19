@@ -39,6 +39,13 @@ interface GetAlertsOptions {
   readonly limit?: number;
   readonly status?: string;
   readonly query?: string;
+  /**
+   * Kibana space ID whose alerts index to query. Defaults to `default` so
+   * the tool matches what the Kibana UI shows when not explicitly scoped.
+   * For a deployment-wide view, callers enumerate spaces via
+   * `list-namespaces` and pass each id explicitly.
+   */
+  readonly namespace?: string;
 }
 
 interface TimeRange {
@@ -75,7 +82,14 @@ export class AlertsService {
    * Defaults: last 7 days, `open` workflow status, 50 hits, all severities.
    */
   async getAlerts(options: GetAlertsOptions = {}): Promise<AlertSummary> {
-    const { days = 7, severity, limit = 50, status = "open", query } = options;
+    const {
+      days = 7,
+      severity,
+      limit = 50,
+      status = "open",
+      query,
+      namespace,
+    } = options;
 
     const must: QueryClause[] = [
       { range: { "@timestamp": { gte: `now-${days}d`, lte: "now" } } },
@@ -91,16 +105,19 @@ export class AlertsService {
       must.push(queryClause);
     }
 
-    const response = await this.options.alertsClient.searchAlerts({
-      size: limit,
-      sort: [{ "@timestamp": "asc" }],
-      query: { bool: { must } },
-      aggs: {
-        by_severity: { terms: { field: "kibana.alert.severity", size: 10 } },
-        by_rule: { terms: { field: "kibana.alert.rule.name", size: 20 } },
-        by_host: { terms: { field: "host.name", size: 20 } },
+    const response = await this.options.alertsClient.searchAlerts(
+      {
+        size: limit,
+        sort: [{ "@timestamp": "asc" }],
+        query: { bool: { must } },
+        aggs: {
+          by_severity: { terms: { field: "kibana.alert.severity", size: 10 } },
+          by_rule: { terms: { field: "kibana.alert.rule.name", size: 20 } },
+          by_host: { terms: { field: "host.name", size: 20 } },
+        },
       },
-    });
+      namespace
+    );
 
     const aggs = response.aggregations;
     return {
@@ -131,7 +148,8 @@ export class AlertsService {
    */
   async getAlertContext(
     alertId: string,
-    alert: SecurityAlert
+    alert: SecurityAlert,
+    namespace?: string
   ): Promise<AlertContext> {
     const src = alert._source;
     const center = new Date(src["@timestamp"]).getTime();
@@ -145,7 +163,7 @@ export class AlertsService {
     const [processEvents, networkEvents, relatedAlerts] = await Promise.all([
       this.getProcessEvents(hostName, timeRange),
       this.getNetworkEvents(hostName, timeRange),
-      this.getRelatedAlerts(alertId, hostName, agentId, timeRange),
+      this.getRelatedAlerts(alertId, hostName, agentId, timeRange, namespace),
     ]);
 
     return { processEvents, networkEvents, relatedAlerts };
@@ -153,11 +171,11 @@ export class AlertsService {
 
   /**
    * Mark a single alert as `acknowledged`. Delegates to the bulk path because
-   * the single-document `_update` API does not accept wildcard index patterns
-   * (`.alerts-security.alerts-*`), but `_update_by_query` does.
+   * `_update_by_query` is what we use to scope the write to a single
+   * namespace's alerts index.
    */
-  async acknowledgeAlert(alertId: string): Promise<void> {
-    await this.acknowledgeAlerts([alertId]);
+  async acknowledgeAlert(alertId: string, namespace?: string): Promise<void> {
+    await this.acknowledgeAlerts([alertId], namespace);
   }
 
   /**
@@ -166,9 +184,10 @@ export class AlertsService {
    * @returns number of documents actually updated, as reported by Elasticsearch
    */
   async acknowledgeAlerts(
-    alertIds: readonly string[]
+    alertIds: readonly string[],
+    namespace?: string
   ): Promise<{ updated: number }> {
-    return this.setAlertWorkflowStatus(alertIds, "acknowledged");
+    return this.setAlertWorkflowStatus(alertIds, "acknowledged", namespace);
   }
 
   /**
@@ -178,17 +197,21 @@ export class AlertsService {
    */
   async setAlertWorkflowStatus(
     alertIds: readonly string[],
-    status: "open" | "acknowledged" | "closed"
+    status: "open" | "acknowledged" | "closed",
+    namespace?: string
   ): Promise<{ updated: number }> {
     if (alertIds.length === 0) return { updated: 0 };
-    const result = await this.options.alertsClient.updateAlertsByQuery({
-      query: { ids: { values: alertIds } },
-      script: {
-        source: 'ctx._source["kibana.alert.workflow_status"] = params.status',
-        lang: "painless",
-        params: { status },
+    const result = await this.options.alertsClient.updateAlertsByQuery(
+      {
+        query: { ids: { values: alertIds } },
+        script: {
+          source: 'ctx._source["kibana.alert.workflow_status"] = params.status',
+          lang: "painless",
+          params: { status },
+        },
       },
-    });
+      namespace
+    );
     return { updated: result.updated };
   }
 
@@ -218,7 +241,8 @@ export class AlertsService {
     alertId: string,
     hostName: string | undefined,
     agentId: string | undefined,
-    timeRange: TimeRange
+    timeRange: TimeRange,
+    namespace?: string
   ): Promise<SecurityAlert[]> {
     const should: QueryClause[] = [
       ...(hostName ? [{ term: { "host.name": hostName } }] : []),
@@ -226,18 +250,21 @@ export class AlertsService {
     ];
     if (should.length === 0) return [];
 
-    const response = await this.options.alertsClient.searchAlerts({
-      size: 20,
-      sort: [{ "@timestamp": "asc" }],
-      query: {
-        bool: {
-          must: [{ range: { "@timestamp": timeRange } }],
-          should,
-          minimum_should_match: 1,
-          must_not: [{ term: { _id: alertId } }],
+    const response = await this.options.alertsClient.searchAlerts(
+      {
+        size: 20,
+        sort: [{ "@timestamp": "asc" }],
+        query: {
+          bool: {
+            must: [{ range: { "@timestamp": timeRange } }],
+            should,
+            minimum_should_match: 1,
+            must_not: [{ term: { _id: alertId } }],
+          },
         },
       },
-    });
+      namespace
+    );
     return [...response.hits.hits];
   }
 }

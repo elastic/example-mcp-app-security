@@ -12,6 +12,11 @@ interface EntityDetailServiceOptions {
   readonly entityDetailClient: EntityDetailClient;
 }
 
+const DEFAULT_NAMESPACE = "default";
+function alertsIndex(namespace?: string): string {
+  return `.alerts-security.alerts-${namespace || DEFAULT_NAMESPACE}`;
+}
+
 /**
  * Business logic for the entity-detail card.
  *
@@ -24,14 +29,18 @@ interface EntityDetailServiceOptions {
 export class EntityDetailService {
   constructor(private readonly options: EntityDetailServiceOptions) {}
 
-  async getEntityDetail(type: string, value: string): Promise<EntityDetail> {
+  async getEntityDetail(
+    type: string,
+    value: string,
+    namespace?: string
+  ): Promise<EntityDetail> {
     switch (type) {
       case "alert":
-        return this.getAlertDetail(value);
+        return this.getAlertDetail(value, namespace);
       case "host":
-        return this.getHostDetail(value);
+        return this.getHostDetail(value, namespace);
       case "user":
-        return this.getUserDetail(value);
+        return this.getUserDetail(value, namespace);
       case "process":
         return this.getProcessDetail(value);
       case "ip":
@@ -41,10 +50,13 @@ export class EntityDetailService {
     }
   }
 
-  private async getAlertDetail(ruleName: string): Promise<EntityDetail> {
+  private async getAlertDetail(
+    ruleName: string,
+    namespace?: string
+  ): Promise<EntityDetail> {
     const r = await this.options.entityDetailClient.searchByTerms<{
       _source: Record<string, unknown>;
-    }>(".alerts-security.alerts-*", {
+    }>(alertsIndex(namespace), {
       size: 1,
       sort: [{ "@timestamp": "desc" }],
       query: {
@@ -142,7 +154,10 @@ export class EntityDetailService {
     };
   }
 
-  private async getHostDetail(hostName: string): Promise<EntityDetail> {
+  private async getHostDetail(
+    hostName: string,
+    namespace?: string
+  ): Promise<EntityDetail> {
     const [procR, netR, alertR] = await Promise.all([
       this.safeSearch(
         "logs-endpoint.events.process-*",
@@ -169,7 +184,7 @@ export class EntityDetailService {
         ]
       ),
       this.safeSearch(
-        ".alerts-security.alerts-*",
+        alertsIndex(namespace),
         { "host.name": hostName },
         3,
         ["@timestamp", "kibana.alert.rule.name", "kibana.alert.severity"]
@@ -236,7 +251,10 @@ export class EntityDetailService {
     return { type: "host", value: hostName, fields, events };
   }
 
-  private async getUserDetail(userName: string): Promise<EntityDetail> {
+  private async getUserDetail(
+    userName: string,
+    namespace?: string
+  ): Promise<EntityDetail> {
     const [procR, alertR] = await Promise.all([
       this.safeSearch(
         "logs-endpoint.events.process-*",
@@ -245,7 +263,7 @@ export class EntityDetailService {
         ["@timestamp", "host.name", "process.name", "process.command_line"]
       ),
       this.safeSearch(
-        ".alerts-security.alerts-*",
+        alertsIndex(namespace),
         { "user.name": userName },
         3,
         [

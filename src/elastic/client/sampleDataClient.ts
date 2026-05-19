@@ -10,6 +10,13 @@ import type { EsClient } from "../es-client/index.js";
 /** Per-call timeout for `_bulk` requests — bulk indexing is slow. */
 const BULK_TIMEOUT_MS = 120_000;
 
+const DEFAULT_NAMESPACE = "default";
+const ALERTS_INDEX_PREFIX = ".alerts-security.alerts-";
+
+function alertsIndex(namespace?: string): string {
+  return `${ALERTS_INDEX_PREFIX}${namespace || DEFAULT_NAMESPACE}`;
+}
+
 /** Opaque body — shaped by the service. */
 export type EsRequestBody = Record<string, unknown>;
 
@@ -112,14 +119,16 @@ export class SampleDataClient {
   }
 
   /**
-   * POST `/.alerts-security.alerts-*\/_search` — used by `checkExistingData`
-   * to count tag-matching alerts and bucket them by rule name.
+   * POST `/.alerts-security.alerts-<namespace>/_search` — used by
+   * `checkExistingData` to count tag-matching alerts and bucket them by
+   * rule name. Defaults to the `default` namespace.
    */
   async searchAlertsAggregation(
-    body: EsRequestBody
+    body: EsRequestBody,
+    namespace?: string
   ): Promise<AlertCheckResponse> {
     const { data } = await this.options.esClient.post<AlertCheckResponse>(
-      "/.alerts-security.alerts-*/_search",
+      `/${alertsIndex(namespace)}/_search`,
       body
     );
     return data;

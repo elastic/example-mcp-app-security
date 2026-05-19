@@ -350,4 +350,74 @@ describe("AlertsService", () => {
       expect(alertsClient.updateAlertsByQuery).not.toHaveBeenCalled();
     });
   });
+
+  describe("namespace forwarding", () => {
+    it("getAlerts passes namespace through to searchAlerts", async () => {
+      const alertsClient = createMockAlertsClient();
+      vi.mocked(alertsClient.searchAlerts).mockResolvedValueOnce(
+        emptyAlertsResponse
+      );
+
+      const service = new AlertsService({ alertsClient });
+      await service.getAlerts({ namespace: "soc" });
+
+      expect(alertsClient.searchAlerts).toHaveBeenCalledWith(
+        expect.any(Object),
+        "soc"
+      );
+    });
+
+    it("acknowledgeAlerts passes namespace through to updateAlertsByQuery", async () => {
+      const alertsClient = createMockAlertsClient();
+      vi.mocked(alertsClient.updateAlertsByQuery).mockResolvedValueOnce({
+        updated: 1,
+      });
+
+      const service = new AlertsService({ alertsClient });
+      await service.acknowledgeAlerts(["a"], "soc");
+
+      expect(alertsClient.updateAlertsByQuery).toHaveBeenCalledWith(
+        expect.any(Object),
+        "soc"
+      );
+    });
+
+    it("getAlertContext passes namespace to the related-alerts search", async () => {
+      const alertsClient = createMockAlertsClient();
+      vi.mocked(alertsClient.searchProcessEvents).mockResolvedValue({
+        hits: { total: { value: 0 }, hits: [] },
+      });
+      vi.mocked(alertsClient.searchNetworkEvents).mockResolvedValue({
+        hits: { total: { value: 0 }, hits: [] },
+      });
+      vi.mocked(alertsClient.searchAlerts).mockResolvedValue({
+        hits: { total: { value: 0 }, hits: [] },
+      });
+
+      const alert = {
+        _id: "a1",
+        _index: ".alerts-security.alerts-soc",
+        _source: {
+          "@timestamp": "2024-01-01T00:00:00Z",
+          "kibana.alert.uuid": "u",
+          "kibana.alert.rule.name": "R",
+          "kibana.alert.rule.uuid": "r",
+          "kibana.alert.severity": "high",
+          "kibana.alert.risk_score": 75,
+          "kibana.alert.workflow_status": "open",
+          "kibana.alert.reason": "x",
+          host: { name: "h1" },
+          agent: { id: "agent-1" },
+        },
+      } as SecurityAlert;
+
+      const service = new AlertsService({ alertsClient });
+      await service.getAlertContext("a1", alert, "soc");
+
+      expect(alertsClient.searchAlerts).toHaveBeenCalledWith(
+        expect.any(Object),
+        "soc"
+      );
+    });
+  });
 });

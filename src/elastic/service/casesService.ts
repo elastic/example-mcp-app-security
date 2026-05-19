@@ -29,6 +29,8 @@ interface ListCasesOptions {
   readonly perPage?: number;
   readonly sortField?: string;
   readonly sortOrder?: string;
+  /** Kibana space ID to scope the lookup to. Defaults to `default`. */
+  readonly namespace?: string;
 }
 
 interface CreateCaseInput {
@@ -36,6 +38,11 @@ interface CreateCaseInput {
   readonly description: string;
   readonly tags?: string[];
   readonly severity?: string;
+  /**
+   * Kibana space ID the case lives in. Defaults to `default`. Also used as
+   * the Security alerts index namespace when resolving `alertIds` via mget.
+   */
+  readonly namespace?: string;
 }
 
 interface UpdateCaseInput {
@@ -88,41 +95,50 @@ export class CasesService {
     if (options.search) params.search = options.search;
     if (options.tags?.length) params.tags = options.tags.join(",");
 
-    return this.options.casesClient.findCases(params);
+    return this.options.casesClient.findCases(params, options.namespace);
   }
 
-  getCase(caseId: string): Promise<KibanaCase> {
-    return this.options.casesClient.getCase(caseId);
+  getCase(caseId: string, namespace?: string): Promise<KibanaCase> {
+    return this.options.casesClient.getCase(caseId, namespace);
   }
 
   createCase(data: CreateCaseInput): Promise<KibanaCase> {
-    return this.options.casesClient.createCase({
-      title: data.title,
-      description: data.description,
-      tags: data.tags || [],
-      severity: data.severity || "low",
-      owner: "securitySolution",
-      connector: { id: "none", name: "none", type: ".none", fields: null },
-      settings: { syncAlerts: true },
-    });
+    return this.options.casesClient.createCase(
+      {
+        title: data.title,
+        description: data.description,
+        tags: data.tags || [],
+        severity: data.severity || "low",
+        owner: "securitySolution",
+        connector: { id: "none", name: "none", type: ".none", fields: null },
+        settings: { syncAlerts: true },
+      },
+      data.namespace
+    );
   }
 
   updateCase(
     caseId: string,
     version: string,
-    updates: UpdateCaseInput
+    updates: UpdateCaseInput,
+    namespace?: string
   ): Promise<KibanaCase[]> {
-    return this.options.casesClient.updateCases({
-      cases: [{ id: caseId, version, ...updates }],
-    });
+    return this.options.casesClient.updateCases(
+      { cases: [{ id: caseId, version, ...updates }] },
+      namespace
+    );
   }
 
-  addComment(caseId: string, comment: string): Promise<unknown> {
-    return this.options.casesClient.addComment(caseId, {
-      type: "user",
-      comment,
-      owner: "securitySolution",
-    });
+  addComment(
+    caseId: string,
+    comment: string,
+    namespace?: string
+  ): Promise<unknown> {
+    return this.options.casesClient.addComment(
+      caseId,
+      { type: "user", comment, owner: "securitySolution" },
+      namespace
+    );
   }
 
   attachAlert(
@@ -130,15 +146,20 @@ export class CasesService {
     alertId: string,
     alertIndex: string,
     ruleId: string,
-    ruleName: string
+    ruleName: string,
+    namespace?: string
   ): Promise<unknown> {
-    return this.options.casesClient.addComment(caseId, {
-      type: "alert",
-      alertId,
-      index: alertIndex,
-      rule: { id: ruleId, name: ruleName },
-      owner: "securitySolution",
-    });
+    return this.options.casesClient.addComment(
+      caseId,
+      {
+        type: "alert",
+        alertId,
+        index: alertIndex,
+        rule: { id: ruleId, name: ruleName },
+        owner: "securitySolution",
+      },
+      namespace
+    );
   }
 
   /**
@@ -152,19 +173,30 @@ export class CasesService {
    */
   async attachAlertsByIds(
     caseId: string,
-    alertIds: readonly string[]
+    alertIds: readonly string[],
+    namespace?: string
   ): Promise<number> {
     if (alertIds.length === 0) return 0;
     let attached = 0;
     try {
-      const { docs } = await this.options.casesClient.mgetAlerts(alertIds);
+      const { docs } = await this.options.casesClient.mgetAlerts(
+        alertIds,
+        namespace
+      );
       for (const doc of docs) {
         if (!doc.found || !doc._source) continue;
         try {
           const ruleId = (doc._source["kibana.alert.rule.uuid"] as string) || "";
           const ruleName =
             (doc._source["kibana.alert.rule.name"] as string) || "Unknown Rule";
-          await this.attachAlert(caseId, doc._id, doc._index, ruleId, ruleName);
+          await this.attachAlert(
+            caseId,
+            doc._id,
+            doc._index,
+            ruleId,
+            ruleName,
+            namespace
+          );
           attached++;
         } catch {
           // skip individual alert attachment failures
@@ -177,16 +209,21 @@ export class CasesService {
   }
 
   getCasesForAlert(
-    alertId: string
+    alertId: string,
+    namespace?: string
   ): Promise<{ id: string; title: string }[]> {
-    return this.options.casesClient.getCasesForAlert(alertId);
+    return this.options.casesClient.getCasesForAlert(alertId, namespace);
   }
 
-  getComments(caseId: string): Promise<FindCommentsResponse> {
-    return this.options.casesClient.getCommentsFind(caseId, {
-      perPage: "100",
-      sortOrder: "asc",
-    });
+  getComments(
+    caseId: string,
+    namespace?: string
+  ): Promise<FindCommentsResponse> {
+    return this.options.casesClient.getCommentsFind(
+      caseId,
+      { perPage: "100", sortOrder: "asc" },
+      namespace
+    );
   }
 
   async getUserProfile(): Promise<{ username: string; avatar: UserAvatar }> {
@@ -205,8 +242,14 @@ export class CasesService {
    * to the bare `{ id, index, attached_at }` record so a single missing
    * source document does not fail the entire request.
    */
-  async getCaseAlerts(caseId: string): Promise<CaseAlertAttachment[]> {
-    const attachments = await this.options.casesClient.getCaseAlerts(caseId);
+  async getCaseAlerts(
+    caseId: string,
+    namespace?: string
+  ): Promise<CaseAlertAttachment[]> {
+    const attachments = await this.options.casesClient.getCaseAlerts(
+      caseId,
+      namespace
+    );
 
     const enriched: CaseAlertAttachment[] = [];
     for (const a of attachments.slice(0, ATTACHMENT_ENRICHMENT_LIMIT)) {

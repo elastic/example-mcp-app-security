@@ -18,6 +18,13 @@ import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://manage-rules/mcp-app.html";
 
+const namespaceSchema = z
+  .string()
+  .optional()
+  .describe(
+    "Kibana space ID whose detection rules to act on (default: 'default'). Detection rules are space-scoped — a rule created in one space is invisible from others. Use `list-namespaces` to discover available spaces."
+  );
+
 /** Services the detection-rules tools depend on (default cluster only, for now). */
 export interface DetectionRuleToolDeps {
   readonly rulesService: RulesService;
@@ -39,11 +46,17 @@ export function registerDetectionRuleTools(
         filter: z.string().optional().describe("KQL filter for rules"),
         page: z.number().optional(),
         perPage: z.number().optional(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ filter, page, perPage }) => {
-      const result = await rulesService.findRules({ filter, page, perPage });
+    async ({ filter, page, perPage, namespace }) => {
+      const result = await rulesService.findRules({
+        filter,
+        page,
+        perPage,
+        namespace,
+      });
       const compact = {
         total: result.total,
         rules: result.data.slice(0, 20).map((r) => ({
@@ -58,7 +71,7 @@ export function registerDetectionRuleTools(
             techniques: t.technique?.map((tech: any) => tech.id + ' ' + tech.name) || [],
           })),
         })),
-        params: { filter, page, perPage },
+        params: { filter, page, perPage, namespace },
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(compact) }],
@@ -78,6 +91,7 @@ export function registerDetectionRuleTools(
         perPage: z.number().optional(),
         sortField: z.string().optional(),
         sortOrder: z.string().optional(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
@@ -93,11 +107,11 @@ export function registerDetectionRuleTools(
     {
       title: "Get Rule",
       description: "Get a specific detection rule",
-      inputSchema: { id: z.string() },
+      inputSchema: { id: z.string(), namespace: namespaceSchema },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ id }) => {
-      const result = await rulesService.getRule(id);
+    async ({ id, namespace }) => {
+      const result = await rulesService.getRule(id, namespace);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -110,12 +124,13 @@ export function registerDetectionRuleTools(
       description: "Create a new detection rule from JSON configuration",
       inputSchema: {
         rule: z.string().describe("JSON-encoded rule configuration"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ rule: ruleJson }) => {
+    async ({ rule: ruleJson, namespace }) => {
       const ruleConfig = JSON.parse(ruleJson) as Record<string, unknown>;
-      const result = await rulesService.createRule(ruleConfig);
+      const result = await rulesService.createRule(ruleConfig, namespace);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -129,13 +144,15 @@ export function registerDetectionRuleTools(
       inputSchema: {
         id: z.string(),
         updates: z.string().describe("JSON-encoded field updates"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ id, updates }) => {
+    async ({ id, updates, namespace }) => {
       const result = await rulesService.patchRule(
         id,
-        JSON.parse(updates) as Record<string, unknown>
+        JSON.parse(updates) as Record<string, unknown>,
+        namespace
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
@@ -150,11 +167,12 @@ export function registerDetectionRuleTools(
       inputSchema: {
         id: z.string(),
         enabled: z.boolean(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ id, enabled }) => {
-      const result = await rulesService.toggleRule(id, enabled);
+    async ({ id, enabled, namespace }) => {
+      const result = await rulesService.toggleRule(id, enabled, namespace);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -168,11 +186,16 @@ export function registerDetectionRuleTools(
       inputSchema: {
         query: z.string(),
         language: z.enum(["kuery", "eql", "esql"]),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ query, language }) => {
-      const result = await rulesService.validateQuery(query, language);
+    async ({ query, language, namespace }) => {
+      const result = await rulesService.validateQuery(
+        query,
+        language,
+        namespace
+      );
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -186,11 +209,12 @@ export function registerDetectionRuleTools(
       inputSchema: {
         days: z.number().optional(),
         limit: z.number().optional(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ days, limit }) => {
-      const result = await rulesService.noisyRules({ days, limit });
+    async ({ days, limit, namespace }) => {
+      const result = await rulesService.noisyRules({ days, limit, namespace });
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -206,12 +230,13 @@ export function registerDetectionRuleTools(
         ruleId: z.string().optional().describe("Rule ID (for add)"),
         listId: z.string().describe("Exception list ID"),
         exception: z.string().optional().describe("JSON-encoded exception (for add)"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ action, ruleId, listId, exception: exceptionJson }) => {
+    async ({ action, ruleId, listId, exception: exceptionJson, namespace }) => {
       if (action === "list") {
-        const result = await rulesService.listExceptions(listId);
+        const result = await rulesService.listExceptions(listId, namespace);
         return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
       }
       if (!ruleId || !exceptionJson) {
@@ -220,7 +245,8 @@ export function registerDetectionRuleTools(
       const result = await rulesService.addException(
         ruleId,
         listId,
-        JSON.parse(exceptionJson)
+        JSON.parse(exceptionJson),
+        namespace
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }

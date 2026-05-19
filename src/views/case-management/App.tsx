@@ -84,6 +84,12 @@ type ViewMode = "browse" | "create";
 interface CaseListParams {
   status?: string;
   search?: string;
+  /**
+   * Kibana space ID echoed from the model's `manage-cases` tool result.
+   * Forwarded on every follow-up `app.callServerTool(...)` so the UI's
+   * subsequent reads / writes target the same space the model picked.
+   */
+  namespace?: string;
 }
 
 function normalizeCase(raw: unknown): KibanaCase | null {
@@ -157,13 +163,14 @@ function AppContent() {
         paramsRef.current = { ...paramsRef.current, ...override };
         if (override.status !== undefined) setStatusFilter(override.status as StatusFilterKey);
       }
-      const { status, search } = paramsRef.current;
+      const { status, search, namespace } = paramsRef.current;
       const result = await mcpApp.callServerTool({
         name: "list-cases",
         arguments: {
           status: status === "all" ? undefined : status,
           search: search?.trim() || undefined,
           perPage: 50,
+          namespace,
         },
       });
       const text = extractCallResult(result);
@@ -187,7 +194,7 @@ function AppContent() {
       try {
         const text = extractToolText(result);
         if (text) {
-          const data = JSON.parse(text) as { params?: { status?: string; search?: string } };
+          const data = JSON.parse(text) as { params?: { status?: string; search?: string; namespace?: string } };
           if (data.params) {
             const next: Partial<CaseListParams> = {};
             if (data.params.status) next.status = data.params.status;
@@ -195,6 +202,7 @@ function AppContent() {
               next.search = data.params.search || undefined;
               if (data.params.search) setSearchInput(data.params.search);
             }
+            if (data.params.namespace !== undefined) next.namespace = data.params.namespace;
             paramsRef.current = { ...paramsRef.current, ...next };
             if (next.status) setStatusFilter(next.status as StatusKey);
           }
@@ -221,9 +229,10 @@ function AppContent() {
     setContextLoading(true);
     setCaseContext(null);
     try {
+      const ns = paramsRef.current.namespace;
       const result = await app.callServerTool({
         name: "get-case",
-        arguments: { caseId },
+        arguments: { caseId, namespace: ns },
       });
       const text = extractCallResult(result);
       if (text) {
@@ -235,8 +244,8 @@ function AppContent() {
       }
       try {
         const [alertsR, commentsR] = await Promise.all([
-          app.callServerTool({ name: "get-case-alerts", arguments: { caseId } }),
-          app.callServerTool({ name: "get-case-comments", arguments: { caseId } }),
+          app.callServerTool({ name: "get-case-alerts", arguments: { caseId, namespace: ns } }),
+          app.callServerTool({ name: "get-case-comments", arguments: { caseId, namespace: ns } }),
         ]);
         const alertsText = extractCallResult(alertsR);
         const commentsText = extractCallResult(commentsR);
@@ -258,7 +267,10 @@ function AppContent() {
     const app = getApp();
     if (!app) return;
     try {
-      await app.callServerTool({ name: "create-case", arguments: data });
+      await app.callServerTool({
+        name: "create-case",
+        arguments: { ...data, namespace: paramsRef.current.namespace },
+      });
       setViewMode("browse");
       setSelectedCase(null);
       loadCases();
@@ -278,7 +290,12 @@ function AppContent() {
     try {
       await app.callServerTool({
         name: "update-case",
-        arguments: { caseId, version, status },
+        arguments: {
+          caseId,
+          version,
+          status,
+          namespace: paramsRef.current.namespace,
+        },
       });
       loadCases();
       if (selectedCase?.id === caseId) await openCase(caseId);

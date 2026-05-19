@@ -23,6 +23,13 @@ import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://threat-hunt/mcp-app.html";
 
+const namespaceSchema = z
+  .string()
+  .optional()
+  .describe(
+    "Kibana space ID for entity-detail / investigate lookups against `.alerts-security.alerts-<ns>` (default: 'default'). ES|QL queries and index listings are space-agnostic and ignore this."
+  );
+
 /** Services the threat-hunt tools depend on (default cluster only, for now). */
 export interface ThreatHuntToolDeps {
   readonly esqlService: EsqlService;
@@ -50,10 +57,11 @@ export function registerThreatHuntTools(
           type: z.enum(["user", "host", "ip", "process"]),
           value: z.string(),
         }).optional().describe("Start investigation centered on this entity. The UI renders an interactive graph showing related users, hosts, processes, IPs, and alerts."),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async ({ query, description, entity }) => {
+    async ({ query, description, entity, namespace }) => {
       const indices = await indicesService.listIndices();
       const compact: Record<string, unknown> = {
         indexCount: indices.length,
@@ -80,12 +88,17 @@ export function registerThreatHuntTools(
       if (description) compact.description = description;
       if (entity) {
         try {
-          const graph = await investigateService.investigateEntity(entity.type, entity.value);
+          const graph = await investigateService.investigateEntity(
+            entity.type,
+            entity.value,
+            undefined,
+            namespace
+          );
           compact.entity = entity;
           compact.graph = { nodeCount: graph.nodes.length, edgeCount: graph.edges.length };
         } catch { /* ignore */ }
       }
-      compact.params = { query, description, entity };
+      compact.params = { query, description, entity, namespace };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(compact) }],
       };
@@ -154,11 +167,16 @@ export function registerThreatHuntTools(
       inputSchema: {
         entityType: z.enum(["user", "host", "ip", "process", "alert"]),
         entityValue: z.string(),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ entityType, entityValue }) => {
-      const result = await entityDetailService.getEntityDetail(entityType, entityValue);
+    async ({ entityType, entityValue, namespace }) => {
+      const result = await entityDetailService.getEntityDetail(
+        entityType,
+        entityValue,
+        namespace
+      );
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );
@@ -173,11 +191,17 @@ export function registerThreatHuntTools(
         entityType: z.enum(["user", "host", "ip", "process"]),
         entityValue: z.string(),
         timeRange: z.string().optional().describe("Time range (default: now-7d)"),
+        namespace: namespaceSchema,
       },
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ entityType, entityValue, timeRange }) => {
-      const result = await investigateService.investigateEntity(entityType, entityValue, timeRange);
+    async ({ entityType, entityValue, timeRange, namespace }) => {
+      const result = await investigateService.investigateEntity(
+        entityType,
+        entityValue,
+        timeRange,
+        namespace
+      );
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],
       };

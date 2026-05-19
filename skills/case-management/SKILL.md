@@ -27,16 +27,39 @@ Do not try to answer from memory or describe cases without calling the tool firs
 | "show case 42" | `manage-cases` (user can click it in the dashboard) |
 | "create a case" | `create-case` with title, description, tags, severity |
 | "create a case for this alert" | `create-case` with alert details, then `attach-alert-to-case` |
+| "cases in the SOC space" / "in the prod space" | any case tool with `namespace: "soc"` / `"prod"` |
+| "all open cases in the deployment" / "across all spaces" | `list-namespaces`, then `manage-cases` once per returned `id` with `status: "open"` |
 
 ## Tools
 
 | Tool | Purpose |
 |------|---------|
 | `manage-cases` | Opens interactive case dashboard. Params: `status`, `severity`, `search` |
-| `create-case` | Creates a new case. Params: `title`, `description`, `tags` (comma-separated), `severity` |
+| `create-case` | Creates a new case. Params: `title`, `description`, `tags` (comma-separated), `severity`, `alertIds` |
 | `attach-alert-to-case` | Attaches an alert to a case. Params: `caseId`, `alertId`, `alertIndex`, `ruleId`, `ruleName` |
 | `update-case` | Updates case status/severity. Params: `caseId`, `version`, `status`, `severity` |
 | `add-case-comment` | Adds investigation notes. Params: `caseId`, `comment` |
+| `list-namespaces` | Lists Kibana spaces the API key can see. No params. Returns `[{ id, name, description? }]`. |
+
+Every case tool also accepts an optional `namespace` — see [Spaces / namespaces](#spaces--namespaces) below.
+
+## Spaces / namespaces
+
+Cases live in Kibana spaces. By default everything operates in the `default` space — omit `namespace` and the tool hits the default-space path.
+
+Pass `namespace: "<spaceId>"` only when the user **explicitly** names a non-default space (e.g. "cases in the SOC space", "in the prod space", "switch to the dev space"). The same value must be used for every follow-up call on that case — `create-case` in space `soc` and then `update-case`/`add-case-comment` without `namespace: "soc"` will 404 because the case id won't resolve in the default space.
+
+For `create-case` with `alertIds`, `namespace` also determines which Security alerts index is searched (`.alerts-security.alerts-<namespace>`), so it must match where the alerts live.
+
+### Deployment-wide queries
+
+When the user wants a view that spans the whole deployment ("all open cases in the deployment", "any critical cases anywhere", "across all spaces"), don't guess space ids:
+
+1. Call `list-namespaces` (no params) to enumerate the spaces the API key can see.
+2. For each returned `id`, call the appropriate case tool with `namespace: "<id>"`.
+3. Aggregate the results in your response. Mention the space each case came from so the user can act on them.
+
+If `list-namespaces` fails (e.g. the API key lacks Spaces read), fall back to a single call against the default space and note the limitation to the user.
 
 ## Creating Cases
 

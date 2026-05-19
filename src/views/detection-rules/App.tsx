@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
 import type { DetectionRule } from "../../shared/types";
@@ -88,13 +88,24 @@ export function App() {
   const [sortBy, setSortBy] = useState<SortKey>("severity");
   const [groupBy, setGroupBy] = useState<GroupKey>("none");
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  /**
+   * Kibana space ID echoed from the model's `manage-rules` tool result.
+   * Detection rules are space-scoped — every follow-up tool call needs to
+   * use the same namespace, or the UI will look at a different space's
+   * rules than the model did.
+   */
+  const namespaceRef = useRef<string | undefined>(undefined);
 
   const loadRulesImpl = useCallback(async (app: McpApp, filter?: string) => {
     setListLoading(true);
     try {
       const result = await app.callServerTool({
         name: "find-rules",
-        arguments: { filter: filter || undefined, perPage: 50 },
+        arguments: {
+          filter: filter || undefined,
+          perPage: 50,
+          namespace: namespaceRef.current,
+        },
       });
       const text = extractCallResult(result);
       if (text) {
@@ -121,6 +132,9 @@ export function App() {
             setSearchInput(data.params.filter);
             setActiveFilter(data.params.filter);
           }
+          if (typeof data.params?.namespace === "string" || data.params?.namespace === undefined) {
+            namespaceRef.current = data.params.namespace;
+          }
         }
       } catch { /* ignore */ }
       loadRulesImpl(app);
@@ -141,7 +155,7 @@ export function App() {
     const app = getApp();
     if (!app) return;
     try {
-      const result = await app.callServerTool({ name: "get-rule", arguments: { id } });
+      const result = await app.callServerTool({ name: "get-rule", arguments: { id, namespace: namespaceRef.current } });
       const text = extractCallResult(result);
       if (text) {
         setSelectedRule(JSON.parse(text));
@@ -154,10 +168,10 @@ export function App() {
     const app = getApp();
     if (!app) return;
     try {
-      await app.callServerTool({ name: "toggle-rule", arguments: { id, enabled } });
+      await app.callServerTool({ name: "toggle-rule", arguments: { id, enabled, namespace: namespaceRef.current } });
       await loadRulesImpl(app, activeFilter || undefined);
       if (selectedRule?.id === id) {
-        const result = await app.callServerTool({ name: "get-rule", arguments: { id } });
+        const result = await app.callServerTool({ name: "get-rule", arguments: { id, namespace: namespaceRef.current } });
         const text = extractCallResult(result);
         if (text) setSelectedRule(JSON.parse(text));
       }
@@ -168,7 +182,7 @@ export function App() {
     const app = getApp();
     if (!app) return { valid: false, error: "Not connected" };
     try {
-      const result = await app.callServerTool({ name: "validate-query", arguments: { query, language } });
+      const result = await app.callServerTool({ name: "validate-query", arguments: { query, language, namespace: namespaceRef.current } });
       const text = extractCallResult(result);
       if (text) return JSON.parse(text);
       return { valid: false, error: "No response" };
@@ -185,7 +199,7 @@ export function App() {
     setNoisyLoading(true);
     setNoisyRules([]);
     try {
-      const result = await app.callServerTool({ name: "noisy-rules", arguments: { days: 7, limit: 20 } });
+      const result = await app.callServerTool({ name: "noisy-rules", arguments: { days: 7, limit: 20, namespace: namespaceRef.current } });
       const text = extractCallResult(result);
       if (text) setNoisyRules(JSON.parse(text));
     } catch (e) { console.error("Failed to load noisy rules:", e); }

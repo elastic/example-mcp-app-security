@@ -39,6 +39,12 @@ interface FilterParams {
   severity?: string;
   limit: number;
   query?: string;
+  /**
+   * Kibana space ID the model picked when it called `triage-alerts`. Echoed
+   * through every subsequent `app.callServerTool(...)` call so the UI's
+   * follow-up polls / acknowledges target the same space the model queried.
+   */
+  namespace?: string;
 }
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -129,6 +135,7 @@ function AppContent() {
               severity: data.params.severity,
               limit: incomingLimit,
               query: data.params.query,
+              namespace: data.params.namespace,
             };
             if (data.params.query) setSearchInput(data.params.query);
             const limKey = String(incomingLimit);
@@ -219,7 +226,11 @@ function AppContent() {
     try {
       const result = await app.callServerTool({
         name: "get-alert-context",
-        arguments: { alertId: alert._id, alert: JSON.stringify(alert) },
+        arguments: {
+          alertId: alert._id,
+          alert: JSON.stringify(alert),
+          namespace: paramsRef.current.namespace,
+        },
       });
       const text = extractCallResult(result);
       if (text) setAlertContext(JSON.parse(text));
@@ -240,7 +251,10 @@ function AppContent() {
     const wasSelected = selectedAlert?._id === alertId;
 
     try {
-      await app.callServerTool({ name: "acknowledge-alert", arguments: { alertId } });
+      await app.callServerTool({
+        name: "acknowledge-alert",
+        arguments: { alertId, namespace: paramsRef.current.namespace },
+      });
       setSummary((prev) => prev ? { ...prev, total: prev.total - 1, alerts: prev.alerts.filter((a) => a._id !== alertId) } : prev);
       if (wasSelected) setSelectedAlert(null);
 
@@ -252,7 +266,10 @@ function AppContent() {
           const liveApp = getApp();
           if (!liveApp) return;
           try {
-            await liveApp.callServerTool({ name: "unacknowledge-alert", arguments: { alertId } });
+            await liveApp.callServerTool({
+              name: "unacknowledge-alert",
+              arguments: { alertId, namespace: paramsRef.current.namespace },
+            });
             setSummary((prev) => {
               if (!prev) return prev;
               const next = [...prev.alerts];
@@ -330,6 +347,7 @@ function AppContent() {
           severity: sev,
           tags: ["alert-triage", `mitre:${tactic}`].filter((t) => !t.endsWith(":—")).join(","),
           alertIds: [alert._id],
+          namespace: paramsRef.current.namespace,
         },
       });
       toast.show({

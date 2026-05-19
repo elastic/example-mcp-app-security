@@ -13,6 +13,8 @@ interface ThreatClassifierProps {
   alert: SecurityAlert;
   onAcknowledge: () => void;
   app: McpApp;
+  /** Kibana space ID forwarded on case create / alert attach. */
+  namespace?: string;
 }
 
 type Classification = "benign" | "suspicious" | "malicious";
@@ -34,7 +36,7 @@ const VERDICT_CONFIG: Record<Classification, {
   },
 };
 
-export function ThreatClassifier({ alert, onAcknowledge, app }: ThreatClassifierProps) {
+export function ThreatClassifier({ alert, onAcknowledge, app, namespace }: ThreatClassifierProps) {
   const [classification, setClassification] = useState<Classification | null>(null);
   const [creating, setCreating] = useState(false);
   const [caseCreated, setCaseCreated] = useState(false);
@@ -82,6 +84,7 @@ export function ThreatClassifier({ alert, onAcknowledge, app }: ThreatClassifier
           ].join("\n"),
           tags: tags.join(","),
           severity,
+          namespace,
         },
       });
 
@@ -103,6 +106,7 @@ export function ThreatClassifier({ alert, onAcknowledge, app }: ThreatClassifier
                 alertIndex: alert._index,
                 ruleId: String(ruleId),
                 ruleName: String(ruleName),
+                namespace,
               },
             });
           }

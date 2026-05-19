@@ -252,17 +252,18 @@ function AppContent() {
   const [sortBy, setSortBy] = useState<SortKey>("risk");
   const [groupBy, setGroupBy] = useState<GroupKey>("none");
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
-  const paramsRef = useRef<{ days: number; limit: number }>({ days: 1, limit: 50 });
+  const paramsRef = useRef<{ days: number; limit: number; namespace?: string }>({ days: 1, limit: 50 });
 
   const checkGenerationStatusImpl = useCallback(async (mcpApp: McpApp) => {
     try {
-      const result = await mcpApp.callServerTool({ name: "get-generation-status", arguments: { size: 5, start: "now-1h" } });
+      const ns = paramsRef.current.namespace;
+      const result = await mcpApp.callServerTool({ name: "get-generation-status", arguments: { size: 5, start: "now-1h", namespace: ns } });
       const text = extractCallResult(result);
       if (text) {
         const data = JSON.parse(text) as { generations?: Array<{ status: string; connector_id: string; discoveries: number; start: string; end?: string; loading_message?: string; execution_uuid: string; reason?: string }> };
         const gens = (data.generations || []).map((g) => ({ ...g, connectorName: undefined as string | undefined }));
         try {
-          const connResult = await mcpApp.callServerTool({ name: "list-ai-connectors", arguments: {} });
+          const connResult = await mcpApp.callServerTool({ name: "list-ai-connectors", arguments: { namespace: ns } });
           const connText = extractCallResult(connResult);
           if (connText) {
             const connectors = JSON.parse(connText) as Array<{ id: string; name: string }>;
@@ -281,7 +282,10 @@ function AppContent() {
     try {
       const result = await app.callServerTool({
         name: "assess-discovery-confidence",
-        arguments: { discoveries: JSON.stringify(discs) },
+        arguments: {
+          discoveries: JSON.stringify(discs),
+          namespace: paramsRef.current.namespace,
+        },
       });
       const text = extractCallResult(result);
       if (text) {
@@ -327,7 +331,11 @@ function AppContent() {
         if (text) {
           const data = JSON.parse(text);
           if (data.params) {
-            paramsRef.current = { days: data.params.days || 1, limit: data.params.limit || 50 };
+            paramsRef.current = {
+              days: data.params.days || 1,
+              limit: data.params.limit || 50,
+              namespace: data.params.namespace,
+            };
           }
           if (Array.isArray(data.discoveries)) {
             setDiscoveries(data.discoveries.map((d: Record<string, unknown>) => ({
@@ -365,7 +373,10 @@ function AppContent() {
     try {
       const result = await mcpApp.callServerTool({
         name: "enrich-discovery",
-        arguments: { discovery: JSON.stringify(discovery) },
+        arguments: {
+          discovery: JSON.stringify(discovery),
+          namespace: paramsRef.current.namespace,
+        },
       });
       const text = extractCallResult(result);
       if (text) {
@@ -387,7 +398,7 @@ function AppContent() {
     try {
       const result = await mcpApp.callServerTool({
         name: "approve-discoveries",
-        arguments: { findings },
+        arguments: { findings, namespace: paramsRef.current.namespace },
       });
       const text = extractCallResult(result);
       const data = text ? JSON.parse(text) : { created: findings.length };
@@ -417,7 +428,7 @@ function AppContent() {
     try {
       const result = await mcpApp.callServerTool({
         name: "acknowledge-discoveries",
-        arguments: { discoveryIds: ids },
+        arguments: { discoveryIds: ids, namespace: paramsRef.current.namespace },
       });
       const text = extractCallResult(result);
       if (text) {
@@ -438,7 +449,7 @@ function AppContent() {
     try {
       const result = await mcpApp.callServerTool({
         name: "acknowledge-discoveries",
-        arguments: { discoveryIds: [id] },
+        arguments: { discoveryIds: [id], namespace: paramsRef.current.namespace },
       });
       const text = extractCallResult(result);
       if (text) {
@@ -460,7 +471,7 @@ function AppContent() {
     try {
       await mcpApp.callServerTool({
         name: "approve-discoveries",
-        arguments: { findings: [finding] },
+        arguments: { findings: [finding], namespace: paramsRef.current.namespace },
       });
       const title = finding.title || "Attack Discovery";
       toast.show({

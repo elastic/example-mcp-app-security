@@ -46,6 +46,52 @@ describe("CasesClient", () => {
     });
   });
 
+  it("findCases / getCase / updateCases / getCaseAlerts / getCommentsFind / getCasesForAlert all prefix the path with /s/<namespace>", async () => {
+    const esClient = createMockEsClient();
+    const kibanaClient = createMockKibanaClient();
+    kibanaClient.get.mockResolvedValue(dataEnvelope({}));
+    kibanaClient.patch.mockResolvedValue(dataEnvelope([]));
+
+    const client = new CasesClient({ esClient, kibanaClient });
+
+    await client.findCases({ status: "open" }, "soc");
+    expect(kibanaClient.get).toHaveBeenLastCalledWith(
+      `/s/soc${CASES_API}/_find`,
+      { params: { status: "open" }, headers: KIBANA_HEADERS }
+    );
+
+    await client.getCase("c1", "soc");
+    expect(kibanaClient.get).toHaveBeenLastCalledWith(
+      `/s/soc${CASES_API}/c1`,
+      { headers: KIBANA_HEADERS }
+    );
+
+    await client.updateCases({ cases: [] }, "soc");
+    expect(kibanaClient.patch).toHaveBeenLastCalledWith(
+      `/s/soc${CASES_API}`,
+      { cases: [] },
+      { headers: KIBANA_HEADERS }
+    );
+
+    await client.getCaseAlerts("c1", "soc");
+    expect(kibanaClient.get).toHaveBeenLastCalledWith(
+      `/s/soc${CASES_API}/c1/alerts`,
+      { headers: KIBANA_HEADERS }
+    );
+
+    await client.getCommentsFind("c1", { perPage: "100" }, "soc");
+    expect(kibanaClient.get).toHaveBeenLastCalledWith(
+      `/s/soc${CASES_API}/c1/comments/_find`,
+      { params: { perPage: "100" }, headers: KIBANA_HEADERS }
+    );
+
+    await client.getCasesForAlert("a1", "soc");
+    expect(kibanaClient.get).toHaveBeenLastCalledWith(
+      `/s/soc${CASES_API}/alerts/a1`,
+      { headers: KIBANA_HEADERS }
+    );
+  });
+
   it("createCase POSTs the body to /api/cases", async () => {
     const esClient = createMockEsClient();
     const kibanaClient = createMockKibanaClient();
@@ -53,6 +99,36 @@ describe("CasesClient", () => {
 
     const client = new CasesClient({ esClient, kibanaClient });
     await client.createCase({ title: "t" });
+
+    expect(kibanaClient.post).toHaveBeenCalledWith(
+      CASES_API,
+      { title: "t" },
+      { headers: KIBANA_HEADERS }
+    );
+  });
+
+  it("createCase prefixes the path with /s/<namespace> for a non-default space", async () => {
+    const esClient = createMockEsClient();
+    const kibanaClient = createMockKibanaClient();
+    kibanaClient.post.mockResolvedValueOnce(dataEnvelope({ id: "new" }));
+
+    const client = new CasesClient({ esClient, kibanaClient });
+    await client.createCase({ title: "t" }, "soc");
+
+    expect(kibanaClient.post).toHaveBeenCalledWith(
+      `/s/soc${CASES_API}`,
+      { title: "t" },
+      { headers: KIBANA_HEADERS }
+    );
+  });
+
+  it("createCase treats 'default' as the un-prefixed path", async () => {
+    const esClient = createMockEsClient();
+    const kibanaClient = createMockKibanaClient();
+    kibanaClient.post.mockResolvedValueOnce(dataEnvelope({ id: "new" }));
+
+    const client = new CasesClient({ esClient, kibanaClient });
+    await client.createCase({ title: "t" }, "default");
 
     expect(kibanaClient.post).toHaveBeenCalledWith(
       CASES_API,
@@ -86,6 +162,21 @@ describe("CasesClient", () => {
 
     expect(kibanaClient.post).toHaveBeenCalledWith(
       `${CASES_API}/c1/comments`,
+      { type: "user", comment: "hi" },
+      { headers: KIBANA_HEADERS }
+    );
+  });
+
+  it("addComment prefixes the path with /s/<namespace> for a non-default space", async () => {
+    const esClient = createMockEsClient();
+    const kibanaClient = createMockKibanaClient();
+    kibanaClient.post.mockResolvedValueOnce(dataEnvelope({ ok: true }));
+
+    const client = new CasesClient({ esClient, kibanaClient });
+    await client.addComment("c1", { type: "user", comment: "hi" }, "soc");
+
+    expect(kibanaClient.post).toHaveBeenCalledWith(
+      `/s/soc${CASES_API}/c1/comments`,
       { type: "user", comment: "hi" },
       { headers: KIBANA_HEADERS }
     );
@@ -173,6 +264,20 @@ describe("CasesClient", () => {
     expect(esClient.post).toHaveBeenCalledWith(
       "/.alerts-security.alerts-default/_mget",
       { ids: ["a", "b"] }
+    );
+  });
+
+  it("mgetAlerts substitutes the namespace into the alerts index name", async () => {
+    const esClient = createMockEsClient();
+    const kibanaClient = createMockKibanaClient();
+    esClient.post.mockResolvedValueOnce(dataEnvelope({ docs: [] }));
+
+    const client = new CasesClient({ esClient, kibanaClient });
+    await client.mgetAlerts(["a"], "soc");
+
+    expect(esClient.post).toHaveBeenCalledWith(
+      "/.alerts-security.alerts-soc/_mget",
+      { ids: ["a"] }
     );
   });
 });

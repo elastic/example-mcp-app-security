@@ -164,7 +164,9 @@ describe("registerThreatHuntTools", () => {
 
       expect(investigateService.investigateEntity).toHaveBeenCalledWith(
         "host",
-        "host-1"
+        "host-1",
+        undefined,
+        undefined
       );
       const body = parseToolText<{
         entity: { type: string; value: string };
@@ -273,9 +275,28 @@ describe("registerThreatHuntTools", () => {
 
       expect(entityDetailService.getEntityDetail).toHaveBeenCalledWith(
         "user",
-        "alice"
+        "alice",
+        undefined
       );
       expect(parseToolText(out)).toEqual(detail);
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(entityDetailService.getEntityDetail).mockResolvedValueOnce({
+        type: "user",
+        value: "alice",
+        fields: [],
+      });
+      await server.tool("get-entity-detail").callback({
+        entityType: "user",
+        entityValue: "alice",
+        namespace: "soc",
+      });
+      expect(entityDetailService.getEntityDetail).toHaveBeenCalledWith(
+        "user",
+        "alice",
+        "soc"
+      );
     });
   });
 
@@ -295,9 +316,28 @@ describe("registerThreatHuntTools", () => {
       expect(investigateService.investigateEntity).toHaveBeenCalledWith(
         "host",
         "host-1",
-        "now-3d"
+        "now-3d",
+        undefined
       );
       expect(parseToolText(out)).toEqual(graph);
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(investigateService.investigateEntity).mockResolvedValueOnce({
+        nodes: [],
+        edges: [],
+      });
+      await server.tool("investigate-entity").callback({
+        entityType: "host",
+        entityValue: "host-1",
+        namespace: "soc",
+      });
+      expect(investigateService.investigateEntity).toHaveBeenCalledWith(
+        "host",
+        "host-1",
+        undefined,
+        "soc"
+      );
     });
   });
 

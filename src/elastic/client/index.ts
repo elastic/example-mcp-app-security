@@ -74,3 +74,6 @@ export type {
   DeleteByQueryResponse,
 } from "./sampleDataClient.js";
 export { SampleDataClient } from "./sampleDataClient.js";
+
+export type { KibanaSpace } from "./spacesClient.js";
+export { SpacesClient } from "./spacesClient.js";

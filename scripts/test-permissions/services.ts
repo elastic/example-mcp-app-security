@@ -13,6 +13,7 @@ import {
   IndicesClient,
   RulesClient,
   SampleDataClient,
+  SpacesClient,
 } from "../../src/elastic/client/index.js";
 import type { ClusterCredentials } from "../../src/elastic/credential-client/index.js";
 import {
@@ -31,6 +32,7 @@ import {
   IndicesService,
   RulesService,
   SampleDataService,
+  SpacesService,
 } from "../../src/elastic/service/index.js";
 
 /**
@@ -51,6 +53,7 @@ export interface Services {
   readonly esqlService: EsqlService;
   readonly indicesService: IndicesService;
   readonly sampleDataService: SampleDataService;
+  readonly spacesService: SpacesService;
 }
 
 export function buildServices(creds: ClusterCredentials): Services {
@@ -79,6 +82,9 @@ export function buildServices(creds: ClusterCredentials): Services {
     sampleDataClient: new SampleDataClient({ esClient }),
     rulesService,
   });
+  const spacesService = new SpacesService({
+    spacesClient: new SpacesClient({ kibanaClient }),
+  });
 
   return {
     esClient,
@@ -90,5 +96,6 @@ export function buildServices(creds: ClusterCredentials): Services {
     esqlService,
     indicesService,
     sampleDataService,
+    spacesService,
   };
 }

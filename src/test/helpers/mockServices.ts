@@ -15,6 +15,7 @@ import type { IndicesService } from "../../elastic/service/indicesService.js";
 import type { InvestigateService } from "../../elastic/service/investigateService.js";
 import type { RulesService } from "../../elastic/service/rulesService.js";
 import type { SampleDataService } from "../../elastic/service/sampleDataService.js";
+import type { SpacesService } from "../../elastic/service/spacesService.js";
 
 /**
  * Build a mocked service where every named method is a `vi.fn()`. The
@@ -107,4 +108,8 @@ export function createMockSampleDataService(): SampleDataService {
     "createRulesForScenario",
     "setRuleIdMap",
   ]);
+}
+
+export function createMockSpacesService(): SpacesService {
+  return mockService<SpacesService>(["listSpaces"]);
 }

@@ -15,6 +15,7 @@ import type { IndicesClient } from "../../elastic/client/indicesClient.js";
 import type { InvestigateClient } from "../../elastic/client/investigateClient.js";
 import type { RulesClient } from "../../elastic/client/rulesClient.js";
 import type { SampleDataClient } from "../../elastic/client/sampleDataClient.js";
+import type { SpacesClient } from "../../elastic/client/spacesClient.js";
 import type { RulesService } from "../../elastic/service/rulesService.js";
 
 /**
@@ -106,6 +107,10 @@ export function createMockSampleDataClient(): SampleDataClient {
     "count",
     "searchAlertsAggregation",
   ]);
+}
+
+export function createMockSpacesClient(): SpacesClient {
+  return mockClient<SpacesClient>(["listSpaces"]);
 }
 
 export function createMockRulesService(): RulesService {

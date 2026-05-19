@@ -15,8 +15,14 @@ import {
   parseToolText,
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
-import { createMockCasesService } from "../test/helpers/mockServices.js";
-import type { CasesService } from "../elastic/service/index.js";
+import {
+  createMockCasesService,
+  createMockSpacesService,
+} from "../test/helpers/mockServices.js";
+import type {
+  CasesService,
+  SpacesService,
+} from "../elastic/service/index.js";
 import type { KibanaCase } from "../shared/types.js";
 
 const RESOURCE_URI = "ui://manage-cases/mcp-app.html";
@@ -44,14 +50,17 @@ function makeCase(overrides: Partial<KibanaCase> = {}): KibanaCase {
 describe("registerCaseManagementTools", () => {
   let server: MockMcpServer;
   let casesService: CasesService;
+  let spacesService: SpacesService;
 
   beforeEach(() => {
     server = createMockMcpServer();
     casesService = createMockCasesService();
+    spacesService = createMockSpacesService();
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
     vi.spyOn(fs, "readFileSync").mockReturnValue("<html>cases</html>");
     registerCaseManagementTools(server as unknown as McpServer, {
       casesService,
+      spacesService,
     });
   });
 
@@ -68,6 +77,7 @@ describe("registerCaseManagementTools", () => {
         "get-case-alerts",
         "get-case-comments",
         "get-user-profile",
+        "list-namespaces",
       ].sort()
     );
     expect([...server.resources.keys()]).toEqual([RESOURCE_URI]);
@@ -95,6 +105,7 @@ describe("registerCaseManagementTools", () => {
         status: "open",
         severity: "high",
         search: "ransomware",
+        namespace: undefined,
       });
 
       const body = parseToolText<{
@@ -110,7 +121,27 @@ describe("registerCaseManagementTools", () => {
         status: "open",
         severity: "high",
         search: "ransomware",
+        namespace: undefined,
       });
+    });
+
+    it("forwards and echoes namespace when supplied", async () => {
+      vi.mocked(casesService.listCases).mockResolvedValueOnce({
+        total: 0,
+        cases: [],
+        page: 1,
+        perPage: 20,
+      });
+
+      const out = await server.tool("manage-cases").callback({
+        namespace: "soc",
+      });
+
+      expect(casesService.listCases).toHaveBeenCalledWith(
+        expect.objectContaining({ namespace: "soc" })
+      );
+      const body = parseToolText<{ params: Record<string, unknown> }>(out);
+      expect(body.params.namespace).toBe("soc");
     });
 
     it("defaults missing description and tags gracefully", async () => {
@@ -159,7 +190,23 @@ describe("registerCaseManagementTools", () => {
         tags: ["alpha", "beta", "gamma"],
         page: 2,
         perPage: 50,
+        namespace: undefined,
       });
+    });
+
+    it("forwards namespace to the service", async () => {
+      vi.mocked(casesService.listCases).mockResolvedValueOnce({
+        total: 0,
+        cases: [],
+        page: 1,
+        perPage: 20,
+      });
+
+      await server.tool("list-cases").callback({ namespace: "soc" });
+
+      expect(casesService.listCases).toHaveBeenCalledWith(
+        expect.objectContaining({ namespace: "soc" })
+      );
     });
 
     it("passes undefined tags when none are provided", async () => {
@@ -183,8 +230,16 @@ describe("registerCaseManagementTools", () => {
       const c = makeCase();
       vi.mocked(casesService.getCase).mockResolvedValueOnce(c);
       const out = await server.tool("get-case").callback({ caseId: "case-1" });
-      expect(casesService.getCase).toHaveBeenCalledWith("case-1");
+      expect(casesService.getCase).toHaveBeenCalledWith("case-1", undefined);
       expect(parseToolText(out)).toEqual(c);
+    });
+
+    it("forwards namespace to the service", async () => {
+      vi.mocked(casesService.getCase).mockResolvedValueOnce(makeCase());
+      await server
+        .tool("get-case")
+        .callback({ caseId: "case-1", namespace: "soc" });
+      expect(casesService.getCase).toHaveBeenCalledWith("case-1", "soc");
     });
   });
 
@@ -207,11 +262,13 @@ describe("registerCaseManagementTools", () => {
         description: "details",
         tags: ["ransomware", "investigation"],
         severity: "high",
+        namespace: undefined,
       });
-      expect(casesService.attachAlertsByIds).toHaveBeenCalledWith("new-case", [
-        "a1",
-        "a2",
-      ]);
+      expect(casesService.attachAlertsByIds).toHaveBeenCalledWith(
+        "new-case",
+        ["a1", "a2"],
+        undefined
+      );
 
       const body = parseToolText<{ id: string; alertsAttached: number }>(out);
       expect(body.id).toBe("new-case");
@@ -234,8 +291,36 @@ describe("registerCaseManagementTools", () => {
         description: "d",
         tags: undefined,
         severity: undefined,
+        namespace: undefined,
       });
-      expect(casesService.attachAlertsByIds).toHaveBeenCalledWith("c-x", []);
+      expect(casesService.attachAlertsByIds).toHaveBeenCalledWith(
+        "c-x",
+        [],
+        undefined
+      );
+    });
+
+    it("forwards namespace to the service for both the create and the alert attachment", async () => {
+      vi.mocked(casesService.createCase).mockResolvedValueOnce(
+        makeCase({ id: "c-ns" })
+      );
+      vi.mocked(casesService.attachAlertsByIds).mockResolvedValueOnce(1);
+
+      await server.tool("create-case").callback({
+        title: "t",
+        description: "d",
+        alertIds: ["a1"],
+        namespace: "soc",
+      });
+
+      expect(casesService.createCase).toHaveBeenCalledWith(
+        expect.objectContaining({ namespace: "soc" })
+      );
+      expect(casesService.attachAlertsByIds).toHaveBeenCalledWith(
+        "c-ns",
+        ["a1"],
+        "soc"
+      );
     });
   });
 
@@ -253,11 +338,16 @@ describe("registerCaseManagementTools", () => {
         tags: "a,b",
       });
 
-      expect(casesService.updateCase).toHaveBeenCalledWith("c-1", "v2", {
-        status: "in-progress",
-        severity: "critical",
-        tags: ["a", "b"],
-      });
+      expect(casesService.updateCase).toHaveBeenCalledWith(
+        "c-1",
+        "v2",
+        {
+          status: "in-progress",
+          severity: "critical",
+          tags: ["a", "b"],
+        },
+        undefined
+      );
     });
 
     it("passes undefined tags through unchanged when omitted", async () => {
@@ -270,11 +360,31 @@ describe("registerCaseManagementTools", () => {
         version: "v1",
       });
 
-      expect(casesService.updateCase).toHaveBeenCalledWith("c-1", "v1", {
-        status: undefined,
-        severity: undefined,
-        tags: undefined,
+      expect(casesService.updateCase).toHaveBeenCalledWith(
+        "c-1",
+        "v1",
+        {
+          status: undefined,
+          severity: undefined,
+          tags: undefined,
+        },
+        undefined
+      );
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(casesService.updateCase).mockResolvedValueOnce([makeCase()]);
+      await server.tool("update-case").callback({
+        caseId: "c-1",
+        version: "v1",
+        namespace: "soc",
       });
+      expect(casesService.updateCase).toHaveBeenCalledWith(
+        "c-1",
+        "v1",
+        expect.any(Object),
+        "soc"
+      );
     });
   });
 
@@ -285,8 +395,22 @@ describe("registerCaseManagementTools", () => {
         .tool("add-case-comment")
         .callback({ caseId: "c-1", comment: "investigated" });
 
-      expect(casesService.addComment).toHaveBeenCalledWith("c-1", "investigated");
+      expect(casesService.addComment).toHaveBeenCalledWith(
+        "c-1",
+        "investigated",
+        undefined
+      );
       expect(parseToolText(out)).toEqual({ id: "x" });
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(casesService.addComment).mockResolvedValueOnce({});
+      await server.tool("add-case-comment").callback({
+        caseId: "c-1",
+        comment: "hi",
+        namespace: "soc",
+      });
+      expect(casesService.addComment).toHaveBeenCalledWith("c-1", "hi", "soc");
     });
   });
 
@@ -307,7 +431,28 @@ describe("registerCaseManagementTools", () => {
         "a-1",
         ".alerts-security",
         "r-1",
-        "Suspicious"
+        "Suspicious",
+        undefined
+      );
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(casesService.attachAlert).mockResolvedValueOnce({});
+      await server.tool("attach-alert-to-case").callback({
+        caseId: "c-1",
+        alertId: "a-1",
+        alertIndex: ".alerts-security",
+        ruleId: "r-1",
+        ruleName: "Suspicious",
+        namespace: "soc",
+      });
+      expect(casesService.attachAlert).toHaveBeenCalledWith(
+        "c-1",
+        "a-1",
+        ".alerts-security",
+        "r-1",
+        "Suspicious",
+        "soc"
       );
     });
   });
@@ -327,7 +472,7 @@ describe("registerCaseManagementTools", () => {
         .tool("get-case-alerts")
         .callback({ caseId: "c-1" });
 
-      expect(casesService.getCaseAlerts).toHaveBeenCalledWith("c-1");
+      expect(casesService.getCaseAlerts).toHaveBeenCalledWith("c-1", undefined);
       expect(parseToolText(out)).toEqual(attachments);
     });
 
@@ -342,6 +487,14 @@ describe("registerCaseManagementTools", () => {
 
       expect(parseToolText(out)).toEqual([]);
     });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(casesService.getCaseAlerts).mockResolvedValueOnce([]);
+      await server
+        .tool("get-case-alerts")
+        .callback({ caseId: "c-1", namespace: "soc" });
+      expect(casesService.getCaseAlerts).toHaveBeenCalledWith("c-1", "soc");
+    });
   });
 
   describe("get-case-comments", () => {
@@ -352,7 +505,18 @@ describe("registerCaseManagementTools", () => {
       });
 
       await server.tool("get-case-comments").callback({ caseId: "c-1" });
-      expect(casesService.getComments).toHaveBeenCalledWith("c-1");
+      expect(casesService.getComments).toHaveBeenCalledWith("c-1", undefined);
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(casesService.getComments).mockResolvedValueOnce({
+        comments: [],
+        total: 0,
+      });
+      await server
+        .tool("get-case-comments")
+        .callback({ caseId: "c-1", namespace: "soc" });
+      expect(casesService.getComments).toHaveBeenCalledWith("c-1", "soc");
     });
   });
 
@@ -377,6 +541,21 @@ describe("registerCaseManagementTools", () => {
 
       const out = await server.tool("get-user-profile").callback({});
       expect(parseToolText(out)).toEqual({ username: "", avatar: {} });
+    });
+  });
+
+  describe("list-namespaces", () => {
+    it("returns the space summaries from SpacesService", async () => {
+      const summaries = [
+        { id: "default", name: "Default" },
+        { id: "soc", name: "SOC", description: "Security ops space" },
+      ];
+      vi.mocked(spacesService.listSpaces).mockResolvedValueOnce(summaries);
+
+      const out = await server.tool("list-namespaces").callback({});
+
+      expect(spacesService.listSpaces).toHaveBeenCalledWith();
+      expect(parseToolText(out)).toEqual(summaries);
     });
   });
 

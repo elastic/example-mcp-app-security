@@ -20,12 +20,15 @@ describe("RulesService", () => {
       const service = new RulesService({ rulesClient });
       await service.findRules({});
 
-      expect(rulesClient.findRules).toHaveBeenCalledWith({
-        page: "1",
-        per_page: "20",
-        sort_field: "updated_at",
-        sort_order: "desc",
-      });
+      expect(rulesClient.findRules).toHaveBeenCalledWith(
+        {
+          page: "1",
+          per_page: "20",
+          sort_field: "updated_at",
+          sort_order: "desc",
+        },
+        undefined
+      );
     });
 
     it("forwards a filter when provided and stringifies pagination", async () => {
@@ -39,13 +42,29 @@ describe("RulesService", () => {
         perPage: 50,
       });
 
-      expect(rulesClient.findRules).toHaveBeenCalledWith({
-        page: "3",
-        per_page: "50",
-        sort_field: "updated_at",
-        sort_order: "desc",
-        filter: 'alert.attributes.tags:"x"',
-      });
+      expect(rulesClient.findRules).toHaveBeenCalledWith(
+        {
+          page: "3",
+          per_page: "50",
+          sort_field: "updated_at",
+          sort_order: "desc",
+          filter: 'alert.attributes.tags:"x"',
+        },
+        undefined
+      );
+    });
+
+    it("forwards namespace to the client when supplied", async () => {
+      const rulesClient = createMockRulesClient();
+      vi.mocked(rulesClient.findRules).mockResolvedValueOnce(emptyFind);
+
+      const service = new RulesService({ rulesClient });
+      await service.findRules({ namespace: "soc" });
+
+      expect(rulesClient.findRules).toHaveBeenCalledWith(
+        expect.any(Object),
+        "soc"
+      );
     });
   });
 
@@ -60,9 +79,9 @@ describe("RulesService", () => {
     await service.createRule({ name: "n" });
     await service.deleteRule("r1");
 
-    expect(rulesClient.getRule).toHaveBeenCalledWith("r1");
-    expect(rulesClient.createRule).toHaveBeenCalledWith({ name: "n" });
-    expect(rulesClient.deleteRule).toHaveBeenCalledWith("r1");
+    expect(rulesClient.getRule).toHaveBeenCalledWith("r1", undefined);
+    expect(rulesClient.createRule).toHaveBeenCalledWith({ name: "n" }, undefined);
+    expect(rulesClient.deleteRule).toHaveBeenCalledWith("r1", undefined);
   });
 
   it("patchRule injects the id into the patch body", async () => {
@@ -72,10 +91,10 @@ describe("RulesService", () => {
     const service = new RulesService({ rulesClient });
     await service.patchRule("r1", { enabled: true });
 
-    expect(rulesClient.patchRule).toHaveBeenCalledWith({
-      id: "r1",
-      enabled: true,
-    });
+    expect(rulesClient.patchRule).toHaveBeenCalledWith(
+      { id: "r1", enabled: true },
+      undefined
+    );
   });
 
   it("toggleRule patches `enabled` only", async () => {
@@ -85,10 +104,10 @@ describe("RulesService", () => {
     const service = new RulesService({ rulesClient });
     await service.toggleRule("r1", false);
 
-    expect(rulesClient.patchRule).toHaveBeenCalledWith({
-      id: "r1",
-      enabled: false,
-    });
+    expect(rulesClient.patchRule).toHaveBeenCalledWith(
+      { id: "r1", enabled: false },
+      undefined
+    );
   });
 
   it("bulkAction wraps the action + ids", async () => {
@@ -98,10 +117,10 @@ describe("RulesService", () => {
     const service = new RulesService({ rulesClient });
     await service.bulkAction("disable", ["a", "b"]);
 
-    expect(rulesClient.bulkAction).toHaveBeenCalledWith({
-      action: "disable",
-      ids: ["a", "b"],
-    });
+    expect(rulesClient.bulkAction).toHaveBeenCalledWith(
+      { action: "disable", ids: ["a", "b"] },
+      undefined
+    );
   });
 
   it("addException wraps the exception in the items envelope with namespace + type defaults", async () => {
@@ -117,25 +136,29 @@ describe("RulesService", () => {
       ],
     });
 
-    expect(rulesClient.addException).toHaveBeenCalledWith("r1", {
-      items: [
-        {
-          name: "Block this",
-          description: "noise",
-          entries: [
-            {
-              field: "host.name",
-              operator: "included",
-              type: "match",
-              value: "h1",
-            },
-          ],
-          list_id: "L",
-          namespace_type: "single",
-          type: "simple",
-        },
-      ],
-    });
+    expect(rulesClient.addException).toHaveBeenCalledWith(
+      "r1",
+      {
+        items: [
+          {
+            name: "Block this",
+            description: "noise",
+            entries: [
+              {
+                field: "host.name",
+                operator: "included",
+                type: "match",
+                value: "h1",
+              },
+            ],
+            list_id: "L",
+            namespace_type: "single",
+            type: "simple",
+          },
+        ],
+      },
+      undefined
+    );
   });
 
   it("listExceptions adds list_id + namespace_type=single", async () => {
@@ -145,10 +168,10 @@ describe("RulesService", () => {
     const service = new RulesService({ rulesClient });
     await service.listExceptions("L");
 
-    expect(rulesClient.listExceptions).toHaveBeenCalledWith({
-      list_id: "L",
-      namespace_type: "single",
-    });
+    expect(rulesClient.listExceptions).toHaveBeenCalledWith(
+      { list_id: "L", namespace_type: "single" },
+      undefined
+    );
   });
 
   describe("validateQuery", () => {
@@ -183,9 +206,10 @@ describe("RulesService", () => {
       const service = new RulesService({ rulesClient });
       await service.validateQuery("process where true", "eql");
 
-      expect(rulesClient.validateKqlOrEql).toHaveBeenCalledWith({
-        query: { eql: { query: "process where true" } },
-      });
+      expect(rulesClient.validateKqlOrEql).toHaveBeenCalledWith(
+        { query: { eql: { query: "process where true" } } },
+        undefined
+      );
     });
 
     it("wraps a KQL query in `{ query_string: { query } }`", async () => {
@@ -195,9 +219,10 @@ describe("RulesService", () => {
       const service = new RulesService({ rulesClient });
       await service.validateQuery("foo:bar", "kuery");
 
-      expect(rulesClient.validateKqlOrEql).toHaveBeenCalledWith({
-        query: { query_string: { query: "foo:bar" } },
-      });
+      expect(rulesClient.validateKqlOrEql).toHaveBeenCalledWith(
+        { query: { query_string: { query: "foo:bar" } } },
+        undefined
+      );
     });
   });
 

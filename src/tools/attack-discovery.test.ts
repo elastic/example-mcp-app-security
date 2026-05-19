@@ -122,9 +122,11 @@ describe("registerAttackDiscoveryTools", () => {
       expect(attackDiscoveryService.getDiscoveries).toHaveBeenCalledWith({
         days: 2,
         limit: 10,
+        namespace: undefined,
       });
       expect(attackDiscoveryService.assessConfidence).toHaveBeenCalledWith(
-        discoveries
+        discoveries,
+        undefined
       );
 
       const body = parseToolText<{
@@ -133,7 +135,7 @@ describe("registerAttackDiscoveryTools", () => {
         discoveries: { id: string; confidence?: string; hosts?: string[] }[];
       }>(out);
       expect(body.total).toBe(1);
-      expect(body.params).toEqual({ days: 2, limit: 10 });
+      expect(body.params).toEqual({ days: 2, limit: 10, namespace: undefined });
       expect(body.discoveries[0]).toMatchObject({
         id: "d-1",
         confidence: "high",
@@ -218,8 +220,20 @@ describe("registerAttackDiscoveryTools", () => {
       expect(attackDiscoveryService.getDiscoveries).toHaveBeenCalledWith({
         days: 7,
         limit: undefined,
+        namespace: undefined,
       });
       expect(parseToolText(out)).toEqual(summary);
+    });
+
+    it("forwards namespace to the service when supplied", async () => {
+      vi.mocked(attackDiscoveryService.getDiscoveries).mockResolvedValueOnce({
+        total: 0,
+        discoveries: [],
+      });
+      await server.tool("poll-discoveries").callback({ namespace: "soc" });
+      expect(attackDiscoveryService.getDiscoveries).toHaveBeenCalledWith(
+        expect.objectContaining({ namespace: "soc" })
+      );
     });
   });
 
@@ -249,7 +263,8 @@ describe("registerAttackDiscoveryTools", () => {
       });
 
       expect(attackDiscoveryService.assessConfidence).toHaveBeenCalledWith(
-        discoveries
+        discoveries,
+        undefined
       );
       expect(parseToolText(out)).toEqual(triaged);
     });
@@ -274,7 +289,8 @@ describe("registerAttackDiscoveryTools", () => {
       });
 
       expect(attackDiscoveryService.getDiscoveryDetail).toHaveBeenCalledWith(
-        discovery
+        discovery,
+        undefined
       );
       expect(parseToolText(out)).toEqual(detail);
     });
@@ -325,15 +341,18 @@ describe("registerAttackDiscoveryTools", () => {
 
       expect(casesService.addComment).toHaveBeenCalledWith(
         "case-[Attack Discovery] Hot finding",
-        expect.stringContaining("## Attack chain")
+        expect.stringContaining("## Attack chain"),
+        undefined
       );
       expect(casesService.addComment).toHaveBeenCalledWith(
         "case-[Attack Discovery] Hot finding",
-        expect.stringContaining("long details")
+        expect.stringContaining("long details"),
+        undefined
       );
       expect(casesService.attachAlertsByIds).toHaveBeenCalledWith(
         "case-[Attack Discovery] Hot finding",
-        ["a1", "a2"]
+        ["a1", "a2"],
+        undefined
       );
 
       const body = parseToolText<{
@@ -470,7 +489,7 @@ describe("registerAttackDiscoveryTools", () => {
 
       expect(
         attackDiscoveryService.acknowledgeDiscoveries
-      ).toHaveBeenCalledWith(["d-1", "d-2", "d-3"]);
+      ).toHaveBeenCalledWith(["d-1", "d-2", "d-3"], undefined);
       expect(parseToolText(out)).toEqual({ updated: 3 });
     });
   });
@@ -503,6 +522,7 @@ describe("registerAttackDiscoveryTools", () => {
         start: "now-1d",
         end: "now",
         filter: { match_all: {} },
+        namespace: undefined,
       });
 
       const body = parseToolText<{

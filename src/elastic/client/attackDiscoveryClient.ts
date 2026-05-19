@@ -10,10 +10,20 @@ import type { EsClient } from "../es-client/index.js";
 import type { KibanaClient } from "../kibana-client/index.js";
 
 const KIBANA_API_VERSION = "2023-10-31";
+const DEFAULT_NAMESPACE = "default";
 
 const KIBANA_HEADERS = {
   "elastic-api-version": KIBANA_API_VERSION,
 } as const;
+
+/**
+ * Prefix Kibana paths with `/s/<namespace>` when the namespace is set to
+ * anything other than the default space. Mirrors `casesBasePath` in
+ * `casesClient.ts`.
+ */
+function spacePrefix(namespace?: string): string {
+  return namespace && namespace !== DEFAULT_NAMESPACE ? `/s/${namespace}` : "";
+}
 
 /** Opaque body — shaped by the service. */
 export type EsRequestBody = Record<string, unknown>;
@@ -135,45 +145,56 @@ export class AttackDiscoveryClient {
     return data;
   }
 
-  /** POST `/api/attack_discovery/_generate` on `kibanaClient`. */
-  async generate(body: EsRequestBody): Promise<GenerationResult> {
+  /** POST `/api/attack_discovery/_generate` on `kibanaClient` (optionally space-scoped). */
+  async generate(
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<GenerationResult> {
     const { data } = await this.options.kibanaClient.post<GenerationResult>(
-      "/api/attack_discovery/_generate",
+      `${spacePrefix(namespace)}/api/attack_discovery/_generate`,
       body,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** GET `/api/actions/connectors` on `kibanaClient`. */
-  async listConnectors(): Promise<RawConnector[]> {
+  /** GET `/api/actions/connectors` on `kibanaClient` (optionally space-scoped). */
+  async listConnectors(namespace?: string): Promise<RawConnector[]> {
     const { data } = await this.options.kibanaClient.get<RawConnector[]>(
-      "/api/actions/connectors",
+      `${spacePrefix(namespace)}/api/actions/connectors`,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** GET `/api/security_ai_assistant/anonymization_fields/_find`. */
-  async findAnonymizationFields(): Promise<{ data: AnonymizationField[] }> {
+  /** GET `/api/security_ai_assistant/anonymization_fields/_find` (optionally space-scoped). */
+  async findAnonymizationFields(
+    namespace?: string
+  ): Promise<{ data: AnonymizationField[] }> {
     const { data } = await this.options.kibanaClient.get<{
       data: AnonymizationField[];
-    }>("/api/security_ai_assistant/anonymization_fields/_find", {
-      params: { perPage: "500" },
-      headers: KIBANA_HEADERS,
-    });
+    }>(
+      `${spacePrefix(namespace)}/api/security_ai_assistant/anonymization_fields/_find`,
+      {
+        params: { perPage: "500" },
+        headers: KIBANA_HEADERS,
+      }
+    );
     return data;
   }
 
   /**
-   * GET `/api/attack_discovery/generations` on `kibanaClient`.
+   * GET `/api/attack_discovery/generations` on `kibanaClient` (optionally space-scoped).
    *
    * Returns the raw envelope shape so callers can read whichever fields the
    * UI expects — the Kibana surface here is intentionally not narrowed.
    */
-  async getGenerations(params: Record<string, string>): Promise<unknown> {
+  async getGenerations(
+    params: Record<string, string>,
+    namespace?: string
+  ): Promise<unknown> {
     const { data } = await this.options.kibanaClient.get(
-      "/api/attack_discovery/generations",
+      `${spacePrefix(namespace)}/api/attack_discovery/generations`,
       { params, headers: KIBANA_HEADERS }
     );
     return data;

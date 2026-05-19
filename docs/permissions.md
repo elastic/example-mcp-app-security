@@ -483,6 +483,7 @@ Use this appendix to build custom roles that enable only specific tools.
 | Create/update cases | — | — | Security (All), Cases (All) |
 | Add comments | — | — | Security (All), Cases (All) |
 | Attach alerts | — | — | Security (All), Cases (All) |
+| List namespaces (`list-namespaces`) | — | — | Any application privilege on the target space — `GET /api/spaces/space` filters its response by spaces the key can access. See [Multi-space visibility](#multi-space-visibility-for-list-namespaces) below to enumerate more than one space. |
 
 ### Detection Rules
 
@@ -517,6 +518,17 @@ Use this appendix to build custom roles that enable only specific tools.
 ---
 
 ## Notes
+
+### Multi-space visibility for `list-namespaces`
+
+The `list-namespaces` tool calls Kibana's `GET /api/spaces/space`. That endpoint **filters its response** to spaces the API key has *any* application privilege on. None of the roles in this guide need extra cluster, index, or feature privileges to use it — the endpoint just returns the slice of spaces the role is already scoped to.
+
+Consequence: with the default `resources: ["space:<space-id>"]` scoping in the role JSON above, `list-namespaces` returns exactly that one space. To use the tool's intended workflow ("fan case tools out across the deployment"), you have two options:
+
+1. **Scope the role to multiple spaces** — replace `resources: ["space:<space-id>"]` with the specific space ids the key should see, e.g. `resources: ["space:default", "space:soc", "space:prod"]`. The role must hold the feature privileges on each space; the index privileges above are global to the role and don't need duplication.
+2. **Scope to all spaces** — use `resources: ["space:*"]`. Grants the same feature privileges in every existing and future space. Don't combine with the Quickstart's `editor`/`viewer` built-ins (those already span all spaces by default).
+
+For the index-pattern segment of the alert/attack-discovery indices (`.alerts-security.alerts-<space-id>`, etc.), each additional space requires its own pattern entry — the role's `indices.names` does not auto-expand the `<space-id>` segment. Either add one entry per space, or substitute a glob (`.alerts-security.alerts-*`) if you're comfortable with the broader read/write surface.
 
 ### Legacy `.siem-signals-<space-id>` index
 

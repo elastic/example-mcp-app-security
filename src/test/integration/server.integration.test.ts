@@ -32,7 +32,7 @@ const CLUSTERS_JSON = JSON.stringify([
   },
 ]);
 
-const ALERTS_PATH = "/.alerts-security.alerts-*/_search";
+const ALERTS_PATH = "/.alerts-security.alerts-default/_search";
 const RULES_FIND_PATH = "/api/detection_engine/rules/_find";
 const CAT_INDICES_PATH = "/_cat/indices/logs-*,.alerts-security*";
 const ESQL_PATH = "/_query";
@@ -106,6 +106,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "get-case-alerts",
           "get-case-comments",
           "get-user-profile",
+          "list-namespaces",
           // detection-rules
           "manage-rules",
           "find-rules",

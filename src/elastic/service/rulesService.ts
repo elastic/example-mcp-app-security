@@ -18,6 +18,8 @@ interface FindRulesOptions {
   readonly perPage?: number;
   readonly sortField?: string;
   readonly sortOrder?: string;
+  /** Kibana space ID to scope the lookup to. Defaults to `default`. */
+  readonly namespace?: string;
 }
 
 interface AddExceptionInput {
@@ -52,79 +54,98 @@ export class RulesService {
     };
     if (options.filter) params.filter = options.filter;
 
-    return this.options.rulesClient.findRules(params);
+    return this.options.rulesClient.findRules(params, options.namespace);
   }
 
-  getRule(id: string): Promise<DetectionRule> {
-    return this.options.rulesClient.getRule(id);
+  getRule(id: string, namespace?: string): Promise<DetectionRule> {
+    return this.options.rulesClient.getRule(id, namespace);
   }
 
-  createRule(rule: Record<string, unknown>): Promise<DetectionRule> {
-    return this.options.rulesClient.createRule(rule);
+  createRule(
+    rule: Record<string, unknown>,
+    namespace?: string
+  ): Promise<DetectionRule> {
+    return this.options.rulesClient.createRule(rule, namespace);
   }
 
   patchRule(
     id: string,
-    updates: Record<string, unknown>
+    updates: Record<string, unknown>,
+    namespace?: string
   ): Promise<DetectionRule> {
-    return this.options.rulesClient.patchRule({ id, ...updates });
+    return this.options.rulesClient.patchRule({ id, ...updates }, namespace);
   }
 
-  deleteRule(id: string): Promise<void> {
-    return this.options.rulesClient.deleteRule(id);
+  deleteRule(id: string, namespace?: string): Promise<void> {
+    return this.options.rulesClient.deleteRule(id, namespace);
   }
 
-  toggleRule(id: string, enabled: boolean): Promise<DetectionRule> {
-    return this.patchRule(id, { enabled });
+  toggleRule(
+    id: string,
+    enabled: boolean,
+    namespace?: string
+  ): Promise<DetectionRule> {
+    return this.patchRule(id, { enabled }, namespace);
   }
 
   bulkAction(
     action: "enable" | "disable" | "delete" | "duplicate",
-    ids: string[]
+    ids: string[],
+    namespace?: string
   ): Promise<unknown> {
-    return this.options.rulesClient.bulkAction({ action, ids });
+    return this.options.rulesClient.bulkAction({ action, ids }, namespace);
   }
 
   addException(
     ruleId: string,
     listId: string,
-    exception: AddExceptionInput
+    exception: AddExceptionInput,
+    namespace?: string
   ): Promise<unknown> {
-    return this.options.rulesClient.addException(ruleId, {
-      items: [
-        {
-          ...exception,
-          list_id: listId,
-          namespace_type: "single",
-          type: "simple",
-        },
-      ],
-    });
+    return this.options.rulesClient.addException(
+      ruleId,
+      {
+        items: [
+          {
+            ...exception,
+            list_id: listId,
+            namespace_type: "single",
+            type: "simple",
+          },
+        ],
+      },
+      namespace
+    );
   }
 
   listExceptions(
-    listId: string
+    listId: string,
+    namespace?: string
   ): Promise<{ data: RuleException[]; total: number }> {
-    return this.options.rulesClient.listExceptions({
-      list_id: listId,
-      namespace_type: "single",
-    });
+    return this.options.rulesClient.listExceptions(
+      { list_id: listId, namespace_type: "single" },
+      namespace
+    );
   }
 
   async validateQuery(
     query: string,
-    language: string
+    language: string,
+    namespace?: string
   ): Promise<{ valid: boolean; error?: string }> {
     try {
       if (language === "esql") {
         await this.options.rulesClient.validateEsql(query);
       } else {
-        await this.options.rulesClient.validateKqlOrEql({
-          query:
-            language === "eql"
-              ? { eql: { query } }
-              : { query_string: { query } },
-        });
+        await this.options.rulesClient.validateKqlOrEql(
+          {
+            query:
+              language === "eql"
+                ? { eql: { query } }
+                : { query_string: { query } },
+          },
+          namespace
+        );
       }
       return { valid: true };
     } catch (e) {
@@ -135,24 +156,28 @@ export class RulesService {
   async noisyRules(options: {
     days?: number;
     limit?: number;
+    namespace?: string;
   }): Promise<{ ruleName: string; ruleId: string; alertCount: number }[]> {
-    const { days = 7, limit = 20 } = options;
-    const result = await this.options.rulesClient.searchAlertsAggregation({
-      size: 0,
-      query: { range: { "@timestamp": { gte: `now-${days}d` } } },
-      aggs: {
-        by_rule: {
-          terms: {
-            field: "kibana.alert.rule.name",
-            size: limit,
-            order: { _count: "desc" },
-          },
-          aggs: {
-            rule_id: { terms: { field: "kibana.alert.rule.uuid", size: 1 } },
+    const { days = 7, limit = 20, namespace } = options;
+    const result = await this.options.rulesClient.searchAlertsAggregation(
+      {
+        size: 0,
+        query: { range: { "@timestamp": { gte: `now-${days}d` } } },
+        aggs: {
+          by_rule: {
+            terms: {
+              field: "kibana.alert.rule.name",
+              size: limit,
+              order: { _count: "desc" },
+            },
+            aggs: {
+              rule_id: { terms: { field: "kibana.alert.rule.uuid", size: 1 } },
+            },
           },
         },
       },
-    });
+      namespace
+    );
 
     return result.aggregations.by_rule.buckets.map((b) => ({
       ruleName: b.key,

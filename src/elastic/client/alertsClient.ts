@@ -12,14 +12,24 @@ import type {
 } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
 
-/** Wildcard alias matching every Security Solution alerts index. */
-const ALERTS_INDEX = ".alerts-security.alerts-*";
+const DEFAULT_NAMESPACE = "default";
+const ALERTS_INDEX_PREFIX = ".alerts-security.alerts-";
 
 /** Endpoint integration process-event indices. */
 const PROCESS_EVENTS_INDEX = "logs-endpoint.events.process-*";
 
 /** Endpoint integration network-event indices. */
 const NETWORK_EVENTS_INDEX = "logs-endpoint.events.network-*";
+
+/**
+ * Build the Security alerts index name for a namespace. Defaults to
+ * `default` so unspecified callers see the same single space the Kibana
+ * UI shows by default. For deployment-wide queries, callers enumerate
+ * spaces via `list-namespaces` and pass each id explicitly.
+ */
+function alertsIndex(namespace?: string): string {
+  return `${ALERTS_INDEX_PREFIX}${namespace || DEFAULT_NAMESPACE}`;
+}
 
 /**
  * Opaque Elasticsearch request body. The client does not introspect or
@@ -74,9 +84,12 @@ interface AlertsClientOptions {
 export class AlertsClient {
   constructor(private readonly options: AlertsClientOptions) {}
 
-  /** POST `/.alerts-security.alerts-*\/_search` */
-  searchAlerts(body: EsRequestBody): Promise<AlertSearchResponse> {
-    return this.post(`/${ALERTS_INDEX}/_search`, body);
+  /** POST `/.alerts-security.alerts-<namespace>/_search` (defaults to `default`). */
+  searchAlerts(
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<AlertSearchResponse> {
+    return this.post(`/${alertsIndex(namespace)}/_search`, body);
   }
 
   /** POST `/logs-endpoint.events.process-*\/_search` */
@@ -94,18 +107,25 @@ export class AlertsClient {
   }
 
   /**
-   * POST `/.alerts-security.alerts-*\/_update/{id}`.
+   * POST `/.alerts-security.alerts-<namespace>/_update/{id}` (defaults to `default`).
    *
    * Wraps the body in the required `{ doc }` envelope so callers only pass
    * the partial fields they want to merge into the alert.
    */
-  async updateAlert(alertId: string, doc: EsRequestBody): Promise<void> {
-    await this.post(`/${ALERTS_INDEX}/_update/${alertId}`, { doc });
+  async updateAlert(
+    alertId: string,
+    doc: EsRequestBody,
+    namespace?: string
+  ): Promise<void> {
+    await this.post(`/${alertsIndex(namespace)}/_update/${alertId}`, { doc });
   }
 
-  /** POST `/.alerts-security.alerts-*\/_update_by_query` */
-  updateAlertsByQuery(body: EsRequestBody): Promise<UpdateByQueryResponse> {
-    return this.post(`/${ALERTS_INDEX}/_update_by_query`, body);
+  /** POST `/.alerts-security.alerts-<namespace>/_update_by_query` (defaults to `default`). */
+  updateAlertsByQuery(
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<UpdateByQueryResponse> {
+    return this.post(`/${alertsIndex(namespace)}/_update_by_query`, body);
   }
 
   private async post<T>(path: string, body: EsRequestBody): Promise<T> {

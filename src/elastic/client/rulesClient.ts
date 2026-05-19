@@ -11,13 +11,35 @@ import type { KibanaClient } from "../kibana-client/index.js";
 
 const RULES_API = "/api/detection_engine/rules";
 const EXCEPTIONS_API = "/api/exception_lists/items/_find";
-const ALERTS_INDEX = ".alerts-security.alerts-*";
+const DEFAULT_NAMESPACE = "default";
+const ALERTS_INDEX_PREFIX = ".alerts-security.alerts-";
 const KIBANA_API_VERSION = "2023-10-31";
 
 /** Headers required on every Kibana detection-engine call. */
 const KIBANA_HEADERS = {
   "elastic-api-version": KIBANA_API_VERSION,
 } as const;
+
+/**
+ * Prefix Kibana paths with `/s/<namespace>` for non-default spaces.
+ * Detection rules and exception lists are space-scoped — a rule created
+ * in space `soc` is only visible/editable via `/s/soc/api/detection_engine/...`.
+ */
+function spacePrefix(namespace?: string): string {
+  return namespace && namespace !== DEFAULT_NAMESPACE ? `/s/${namespace}` : "";
+}
+
+function rulesPath(namespace?: string): string {
+  return `${spacePrefix(namespace)}${RULES_API}`;
+}
+
+function exceptionsPath(namespace?: string): string {
+  return `${spacePrefix(namespace)}${EXCEPTIONS_API}`;
+}
+
+function alertsIndex(namespace?: string): string {
+  return `${ALERTS_INDEX_PREFIX}${namespace || DEFAULT_NAMESPACE}`;
+}
 
 /** Opaque request body — shaped by the service. */
 export type EsRequestBody = Record<string, unknown>;
@@ -61,80 +83,95 @@ interface RulesClientOptions {
 export class RulesClient {
   constructor(private readonly options: RulesClientOptions) {}
 
-  /** GET `/api/detection_engine/rules/_find`. */
+  /** GET `/api/detection_engine/rules/_find` (optionally space-scoped). */
   async findRules(
-    params: Record<string, string>
+    params: Record<string, string>,
+    namespace?: string
   ): Promise<FindResponse<DetectionRule>> {
     const { data } = await this.options.kibanaClient.get<
       FindResponse<DetectionRule>
-    >(`${RULES_API}/_find`, { params, headers: KIBANA_HEADERS });
+    >(`${rulesPath(namespace)}/_find`, { params, headers: KIBANA_HEADERS });
     return data;
   }
 
-  /** GET `/api/detection_engine/rules?id=<id>`. */
-  async getRule(id: string): Promise<DetectionRule> {
+  /** GET `/api/detection_engine/rules?id=<id>` (optionally space-scoped). */
+  async getRule(id: string, namespace?: string): Promise<DetectionRule> {
     const { data } = await this.options.kibanaClient.get<DetectionRule>(
-      RULES_API,
+      rulesPath(namespace),
       { params: { id }, headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** POST `/api/detection_engine/rules`. */
-  async createRule(body: EsRequestBody): Promise<DetectionRule> {
+  /** POST `/api/detection_engine/rules` (optionally space-scoped). */
+  async createRule(
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<DetectionRule> {
     const { data } = await this.options.kibanaClient.post<DetectionRule>(
-      RULES_API,
+      rulesPath(namespace),
       body,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** PATCH `/api/detection_engine/rules`. */
-  async patchRule(body: EsRequestBody): Promise<DetectionRule> {
+  /** PATCH `/api/detection_engine/rules` (optionally space-scoped). */
+  async patchRule(
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<DetectionRule> {
     const { data } = await this.options.kibanaClient.patch<DetectionRule>(
-      RULES_API,
+      rulesPath(namespace),
       body,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** DELETE `/api/detection_engine/rules?id=<id>`. */
-  async deleteRule(id: string): Promise<void> {
-    await this.options.kibanaClient.delete(RULES_API, {
+  /** DELETE `/api/detection_engine/rules?id=<id>` (optionally space-scoped). */
+  async deleteRule(id: string, namespace?: string): Promise<void> {
+    await this.options.kibanaClient.delete(rulesPath(namespace), {
       params: { id },
       headers: KIBANA_HEADERS,
     });
   }
 
-  /** POST `/api/detection_engine/rules/_bulk_action`. */
-  async bulkAction(body: EsRequestBody): Promise<unknown> {
+  /** POST `/api/detection_engine/rules/_bulk_action` (optionally space-scoped). */
+  async bulkAction(
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<unknown> {
     const { data } = await this.options.kibanaClient.post(
-      `${RULES_API}/_bulk_action`,
+      `${rulesPath(namespace)}/_bulk_action`,
       body,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** POST `/api/detection_engine/rules/{ruleId}/exceptions`. */
-  async addException(ruleId: string, body: EsRequestBody): Promise<unknown> {
+  /** POST `/api/detection_engine/rules/{ruleId}/exceptions` (optionally space-scoped). */
+  async addException(
+    ruleId: string,
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<unknown> {
     const { data } = await this.options.kibanaClient.post(
-      `${RULES_API}/${ruleId}/exceptions`,
+      `${rulesPath(namespace)}/${ruleId}/exceptions`,
       body,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** GET `/api/exception_lists/items/_find`. */
+  /** GET `/api/exception_lists/items/_find` (optionally space-scoped). */
   async listExceptions(
-    params: Record<string, string>
+    params: Record<string, string>,
+    namespace?: string
   ): Promise<FindResponse<RuleException>> {
     const { data } = await this.options.kibanaClient.get<
       FindResponse<RuleException>
-    >(EXCEPTIONS_API, { params, headers: KIBANA_HEADERS });
+    >(exceptionsPath(namespace), { params, headers: KIBANA_HEADERS });
     return data;
   }
 
@@ -147,21 +184,25 @@ export class RulesClient {
     return data;
   }
 
-  /** POST `/.alerts-security.alerts-*\/_validate/query` on `esClient`. */
-  async validateKqlOrEql(body: EsRequestBody): Promise<unknown> {
+  /** POST `/.alerts-security.alerts-<namespace>/_validate/query` on `esClient`. */
+  async validateKqlOrEql(
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<unknown> {
     const { data } = await this.options.esClient.post(
-      `/${ALERTS_INDEX}/_validate/query`,
+      `/${alertsIndex(namespace)}/_validate/query`,
       body
     );
     return data;
   }
 
-  /** POST `/.alerts-security.alerts-*\/_search` on `esClient` for noisy-rules. */
+  /** POST `/.alerts-security.alerts-<namespace>/_search` on `esClient` for noisy-rules. */
   async searchAlertsAggregation(
-    body: EsRequestBody
+    body: EsRequestBody,
+    namespace?: string
   ): Promise<NoisyRulesAggResponse> {
     const { data } = await this.options.esClient.post<NoisyRulesAggResponse>(
-      `/${ALERTS_INDEX}/_search`,
+      `/${alertsIndex(namespace)}/_search`,
       body
     );
     return data;

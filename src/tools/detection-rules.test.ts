@@ -101,6 +101,7 @@ describe("registerDetectionRuleTools", () => {
         filter: "type:query",
         page: 1,
         perPage: 20,
+        namespace: undefined,
       });
 
       const body = parseToolText<{
@@ -129,6 +130,7 @@ describe("registerDetectionRuleTools", () => {
         filter: "type:query",
         page: 1,
         perPage: 20,
+        namespace: undefined,
       });
     });
 
@@ -212,6 +214,7 @@ describe("registerDetectionRuleTools", () => {
         perPage: 50,
         sortField: "name",
         sortOrder: "asc",
+        namespace: undefined,
       });
     });
   });
@@ -221,7 +224,7 @@ describe("registerDetectionRuleTools", () => {
       const rule = makeRule();
       vi.mocked(rulesService.getRule).mockResolvedValueOnce(rule);
       const out = await server.tool("get-rule").callback({ id: "r-1" });
-      expect(rulesService.getRule).toHaveBeenCalledWith("r-1");
+      expect(rulesService.getRule).toHaveBeenCalledWith("r-1", undefined);
       expect(parseToolText(out)).toEqual(rule);
     });
   });
@@ -235,10 +238,10 @@ describe("registerDetectionRuleTools", () => {
         rule: JSON.stringify({ name: "x", type: "query" }),
       });
 
-      expect(rulesService.createRule).toHaveBeenCalledWith({
-        name: "x",
-        type: "query",
-      });
+      expect(rulesService.createRule).toHaveBeenCalledWith(
+        { name: "x", type: "query" },
+        undefined
+      );
       expect(parseToolText(out)).toEqual(rule);
     });
   });
@@ -252,10 +255,11 @@ describe("registerDetectionRuleTools", () => {
         updates: JSON.stringify({ name: "renamed", risk_score: 99 }),
       });
 
-      expect(rulesService.patchRule).toHaveBeenCalledWith("r-1", {
-        name: "renamed",
-        risk_score: 99,
-      });
+      expect(rulesService.patchRule).toHaveBeenCalledWith(
+        "r-1",
+        { name: "renamed", risk_score: 99 },
+        undefined
+      );
     });
   });
 
@@ -269,7 +273,11 @@ describe("registerDetectionRuleTools", () => {
         .tool("toggle-rule")
         .callback({ id: "r-1", enabled: false });
 
-      expect(rulesService.toggleRule).toHaveBeenCalledWith("r-1", false);
+      expect(rulesService.toggleRule).toHaveBeenCalledWith(
+        "r-1",
+        false,
+        undefined
+      );
     });
   });
 
@@ -287,7 +295,8 @@ describe("registerDetectionRuleTools", () => {
 
         expect(rulesService.validateQuery).toHaveBeenCalledWith(
           "host:foo",
-          language
+          language,
+          undefined
         );
         expect(parseToolText(out)).toEqual({ valid: true });
       }
@@ -306,6 +315,7 @@ describe("registerDetectionRuleTools", () => {
       expect(rulesService.noisyRules).toHaveBeenCalledWith({
         days: 14,
         limit: 5,
+        namespace: undefined,
       });
       expect(parseToolText(out)).toEqual(noisy);
     });
@@ -324,7 +334,8 @@ describe("registerDetectionRuleTools", () => {
       });
 
       expect(rulesService.listExceptions).toHaveBeenCalledWith(
-        "exception-list-1"
+        "exception-list-1",
+        undefined
       );
       expect(rulesService.addException).not.toHaveBeenCalled();
       expect(parseToolText(out)).toEqual({ data: [], total: 0 });
@@ -361,7 +372,8 @@ describe("registerDetectionRuleTools", () => {
       expect(rulesService.addException).toHaveBeenCalledWith(
         "r-1",
         "list-1",
-        exception
+        exception,
+        undefined
       );
       expect(parseToolText(out)).toEqual({ id: "ex-1" });
     });

@@ -171,7 +171,8 @@ describe("registerSampleDataTools", () => {
         .callback({ scenario: "ransomware-kill-chain" });
 
       expect(sampleDataService.createRulesForScenario).toHaveBeenCalledWith(
-        "ransomware-kill-chain"
+        "ransomware-kill-chain",
+        undefined
       );
       const body = parseToolText<{
         created: number;

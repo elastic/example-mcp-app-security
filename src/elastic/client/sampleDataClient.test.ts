@@ -68,7 +68,7 @@ describe("SampleDataClient", () => {
     expect(out).toEqual({ count: 17 });
   });
 
-  it("searchAlertsAggregation POSTs to the alerts wildcard search index", async () => {
+  it("searchAlertsAggregation POSTs to the default alerts index when no namespace is given", async () => {
     const esClient = createMockEsClient();
     const response = {
       hits: { total: { value: 0 } },
@@ -80,9 +80,27 @@ describe("SampleDataClient", () => {
     const out = await client.searchAlertsAggregation({ size: 0 });
 
     expect(esClient.post).toHaveBeenCalledWith(
-      "/.alerts-security.alerts-*/_search",
+      "/.alerts-security.alerts-default/_search",
       { size: 0 }
     );
     expect(out).toEqual(response);
+  });
+
+  it("searchAlertsAggregation substitutes the namespace into the alerts index name", async () => {
+    const esClient = createMockEsClient();
+    esClient.post.mockResolvedValueOnce(
+      dataEnvelope({
+        hits: { total: { value: 0 } },
+        aggregations: { by_rule: { buckets: [] } },
+      })
+    );
+    const client = new SampleDataClient({ esClient });
+
+    await client.searchAlertsAggregation({ size: 0 }, "soc");
+
+    expect(esClient.post).toHaveBeenCalledWith(
+      "/.alerts-security.alerts-soc/_search",
+      { size: 0 }
+    );
   });
 });

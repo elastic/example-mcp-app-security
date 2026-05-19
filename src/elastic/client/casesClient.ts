@@ -10,11 +10,33 @@ import type { EsClient } from "../es-client/index.js";
 import type { KibanaClient } from "../kibana-client/index.js";
 
 const CASES_API = "/api/cases";
+const DEFAULT_NAMESPACE = "default";
+const ALERTS_INDEX_PREFIX = ".alerts-security.alerts-";
 const KIBANA_API_VERSION = "2023-10-31";
 
 const KIBANA_HEADERS = {
   "elastic-api-version": KIBANA_API_VERSION,
 } as const;
+
+/**
+ * Build the cases base path, scoped to a Kibana space when `namespace` is set
+ * to anything other than the default. The default space uses the un-prefixed
+ * path; non-default spaces use the `/s/<spaceId>/...` form.
+ */
+function casesBasePath(namespace?: string): string {
+  return namespace && namespace !== DEFAULT_NAMESPACE
+    ? `/s/${namespace}${CASES_API}`
+    : CASES_API;
+}
+
+/**
+ * The Security alerts index for a given namespace. By default in Security
+ * Solution this tracks the Kibana space ID, so callers can pass the same
+ * value they use to scope the cases path.
+ */
+function alertsIndex(namespace?: string): string {
+  return `${ALERTS_INDEX_PREFIX}${namespace || DEFAULT_NAMESPACE}`;
+}
 
 /** Opaque body — shaped by the service. */
 export type EsRequestBody = Record<string, unknown>;
@@ -97,82 +119,109 @@ interface CasesClientOptions {
 export class CasesClient {
   constructor(private readonly options: CasesClientOptions) {}
 
-  /** GET `/api/cases/_find`. */
-  async findCases(params: Record<string, string>): Promise<FindCasesResponse> {
+  /** GET `/api/cases/_find` (optionally space-scoped). */
+  async findCases(
+    params: Record<string, string>,
+    namespace?: string
+  ): Promise<FindCasesResponse> {
     const { data } = await this.options.kibanaClient.get<FindCasesResponse>(
-      `${CASES_API}/_find`,
+      `${casesBasePath(namespace)}/_find`,
       { params, headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** GET `/api/cases/{caseId}`. */
-  async getCase(caseId: string): Promise<KibanaCase> {
+  /** GET `/api/cases/{caseId}` (optionally space-scoped). */
+  async getCase(caseId: string, namespace?: string): Promise<KibanaCase> {
     const { data } = await this.options.kibanaClient.get<KibanaCase>(
-      `${CASES_API}/${caseId}`,
+      `${casesBasePath(namespace)}/${caseId}`,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** POST `/api/cases`. */
-  async createCase(body: EsRequestBody): Promise<KibanaCase> {
+  /**
+   * POST `/api/cases` (or `/s/<namespace>/api/cases` for a non-default
+   * Kibana space).
+   */
+  async createCase(
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<KibanaCase> {
     const { data } = await this.options.kibanaClient.post<KibanaCase>(
-      CASES_API,
+      casesBasePath(namespace),
       body,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** PATCH `/api/cases` (bulk patch envelope). */
-  async updateCases(body: EsRequestBody): Promise<KibanaCase[]> {
+  /** PATCH `/api/cases` (bulk patch envelope, optionally space-scoped). */
+  async updateCases(
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<KibanaCase[]> {
     const { data } = await this.options.kibanaClient.patch<KibanaCase[]>(
-      CASES_API,
+      casesBasePath(namespace),
       body,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** POST `/api/cases/{caseId}/comments`. */
-  async addComment(caseId: string, body: EsRequestBody): Promise<unknown> {
+  /**
+   * POST `/api/cases/{caseId}/comments` (or the space-scoped equivalent for
+   * a non-default namespace — must match the namespace the case was created
+   * in or the case id won't resolve).
+   */
+  async addComment(
+    caseId: string,
+    body: EsRequestBody,
+    namespace?: string
+  ): Promise<unknown> {
     const { data } = await this.options.kibanaClient.post(
-      `${CASES_API}/${caseId}/comments`,
+      `${casesBasePath(namespace)}/${caseId}/comments`,
       body,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** GET `/api/cases/{caseId}/alerts` — raw, pre-enrichment. */
-  async getCaseAlerts(caseId: string): Promise<RawCaseAlert[]> {
+  /** GET `/api/cases/{caseId}/alerts` — raw, pre-enrichment (optionally space-scoped). */
+  async getCaseAlerts(
+    caseId: string,
+    namespace?: string
+  ): Promise<RawCaseAlert[]> {
     const { data } = await this.options.kibanaClient.get<RawCaseAlert[]>(
-      `${CASES_API}/${caseId}/alerts`,
+      `${casesBasePath(namespace)}/${caseId}/alerts`,
       { headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** GET `/api/cases/{caseId}/comments/_find`. */
+  /** GET `/api/cases/{caseId}/comments/_find` (optionally space-scoped). */
   async getCommentsFind(
     caseId: string,
-    params: Record<string, string>
+    params: Record<string, string>,
+    namespace?: string
   ): Promise<FindCommentsResponse> {
     const { data } = await this.options.kibanaClient.get<FindCommentsResponse>(
-      `${CASES_API}/${caseId}/comments/_find`,
+      `${casesBasePath(namespace)}/${caseId}/comments/_find`,
       { params, headers: KIBANA_HEADERS }
     );
     return data;
   }
 
-  /** GET `/api/cases/alerts/{alertId}`. */
+  /** GET `/api/cases/alerts/{alertId}` (optionally space-scoped). */
   async getCasesForAlert(
-    alertId: string
+    alertId: string,
+    namespace?: string
   ): Promise<{ id: string; title: string }[]> {
     const { data } = await this.options.kibanaClient.get<
       { id: string; title: string }[]
-    >(`${CASES_API}/alerts/${alertId}`, { headers: KIBANA_HEADERS });
+    >(`${casesBasePath(namespace)}/alerts/${alertId}`, {
+      headers: KIBANA_HEADERS,
+    });
     return data;
   }
 
@@ -204,12 +253,16 @@ export class CasesClient {
   }
 
   /**
-   * POST `/.alerts-security.alerts-default/_mget` on Elasticsearch — bulk
-   * fetch alert documents by id when attaching alerts to a case.
+   * POST `/.alerts-security.alerts-<namespace>/_mget` on Elasticsearch —
+   * bulk fetch alert documents by id when attaching alerts to a case.
+   * Defaults to the `default` namespace.
    */
-  async mgetAlerts(alertIds: readonly string[]): Promise<MgetAlertsResponse> {
+  async mgetAlerts(
+    alertIds: readonly string[],
+    namespace?: string
+  ): Promise<MgetAlertsResponse> {
     const { data } = await this.options.esClient.post<MgetAlertsResponse>(
-      "/.alerts-security.alerts-default/_mget",
+      `/${alertsIndex(namespace)}/_mget`,
       { ids: alertIds }
     );
     return data;
