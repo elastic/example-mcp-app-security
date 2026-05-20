@@ -11,13 +11,15 @@ export type {
   LicenseContext,
 } from "./analytics-client.js";
 export type {
-  McpToolCalledEvent,
-  ViewRenderedEvent,
+  McpToolCalledEbtPayload,
+  ViewRenderedEbtPayload,
 } from "./events.js";
 export { EVENT_TYPES, VIEW_IDS, type ViewId } from "./events.js";
 export {
   createAnalyticsClient,
+  resolveTelemetrySendTo,
   type CreateAnalyticsClientOptions,
+  type TelemetrySendTo,
 } from "./create-analytics-client.js";
 export {
   createContextLoader,

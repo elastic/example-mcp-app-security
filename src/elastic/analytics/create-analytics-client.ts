@@ -8,6 +8,7 @@
 import { createAnalytics } from "@elastic/ebt/client/index.js";
 import type { AnalyticsClientInitContext } from "@elastic/ebt/client/index.js";
 import { ElasticV3ServerShipper } from "@elastic/ebt/shippers/elastic_v3/server/index.js";
+import { createStderrLogger, type Logger } from "../../shared/logger.js";
 
 /**
  * EBT exports `AnalyticsClientInitContext` but not the `Logger` type
@@ -21,25 +22,89 @@ import {
   EVENT_TYPES,
   mcpToolCalledEventDef,
   viewRenderedEventDef,
-  type McpToolCalledEvent,
-  type ViewRenderedEvent,
+  type McpToolCalledEbtPayload,
+  type ViewRenderedEbtPayload,
 } from "./events.js";
 
-const CHANNEL_NAME = "elastic-mcp-app";
+const CHANNEL_NAME = "elastic-security-mcp-app";
+const noop = (): void => undefined;
+export type TelemetrySendTo = "production" | "staging";
+type TelemetryEventPayload = McpToolCalledEbtPayload | ViewRenderedEbtPayload;
+
+interface BufferedTelemetryEvent {
+  readonly eventType: string;
+  readonly payload: TelemetryEventPayload;
+}
+
+const defaultLogger = createStderrLogger(["telemetry"]);
+const defaultLoggerBase: Pick<Logger, "info" | "warn" | "error" | "debug"> = {
+  debug: noop,
+  info: (msg) => defaultLogger.info(msg),
+  warn: (msg) => defaultLogger.warn(msg),
+  error: (msg) => defaultLogger.error(msg),
+};
 
 /**
  * The base URL of the V3 telemetry endpoint, selected from
  * `MCP_APP_TELEMETRY_ENV`. Defaults to production for end-user
  * installs (`.mcpb` ships without the env var set).
  */
-function resolveSendTo(env: string | undefined): "production" | "staging" {
+export function resolveTelemetrySendTo(env: string | undefined): TelemetrySendTo {
   return env === "staging" ? "staging" : "production";
 }
 
-function baseUrlFor(sendTo: "production" | "staging"): string {
+function baseUrlFor(sendTo: TelemetrySendTo): string {
   return sendTo === "production"
     ? "https://telemetry.elastic.co"
     : "https://telemetry-staging.elastic.co";
+}
+
+function logReportedEvent(
+  logger: Pick<EbtLogger, "info">,
+  sendTo: TelemetrySendTo,
+  eventType: string,
+  event: TelemetryEventPayload,
+): void {
+  logger.info(
+    `reported event: send_to=${sendTo} type=${eventType} payload=${JSON.stringify(event)}`,
+  );
+}
+
+function formatBufferedTelemetryEvent(event: BufferedTelemetryEvent): string {
+  return `type=${event.eventType} payload=${JSON.stringify(event.payload)}`;
+}
+
+function parseEbtBatchLogCount(message: string, state: "Reporting" | "Reported"): number | undefined {
+  const match = message.match(new RegExp(`^${state} (\\d+) events`));
+  if (!match) return undefined;
+  return Number(match[1]);
+}
+
+function appendBufferedEvents(
+  message: string,
+  bufferedEvents: BufferedTelemetryEvent[],
+  eventCount: number,
+): string {
+  const events = bufferedEvents.slice(0, eventCount).map(formatBufferedTelemetryEvent);
+  if (events.length === 0) return message;
+  return `${message} events=[${events.join("; ")}]`;
+}
+
+function enrichEbtInfoMessage(
+  message: string,
+  bufferedEvents: BufferedTelemetryEvent[],
+): string {
+  const reportingCount = parseEbtBatchLogCount(message, "Reporting");
+  if (reportingCount !== undefined) {
+    return appendBufferedEvents(message, bufferedEvents, reportingCount);
+  }
+
+  const reportedCount = parseEbtBatchLogCount(message, "Reported");
+  if (reportedCount === undefined) return message;
+
+  const enrichedMessage = appendBufferedEvents(message, bufferedEvents, reportedCount);
+  bufferedEvents.splice(0, reportedCount);
+  return enrichedMessage;
 }
 
 /**
@@ -49,11 +114,13 @@ function baseUrlFor(sendTo: "production" | "staging"): string {
  * shipper internals during local dev, so a no-op child is fine.
  */
 function adaptLogger(
-  base: Pick<Console, "info" | "warn" | "error" | "debug">,
+  base: Pick<Logger, "info" | "warn" | "error" | "debug">,
+  bufferedEvents: BufferedTelemetryEvent[],
 ): EbtLogger {
   const logger: EbtLogger = {
     debug: (msg) => base.debug(typeof msg === "function" ? msg() : msg),
-    info: (msg) => base.info(typeof msg === "function" ? msg() : msg),
+    info: (msg) =>
+      base.info(enrichEbtInfoMessage(typeof msg === "function" ? msg() : msg, bufferedEvents)),
     warn: (msg) => {
       if (msg instanceof Error) base.warn(msg);
       else base.warn(typeof msg === "function" ? msg() : msg);
@@ -68,15 +135,9 @@ function adaptLogger(
 }
 
 export interface CreateAnalyticsClientOptions {
-  /** MCP App version, surfaced as a telemetry context field. */
   readonly mcpAppVersion: string;
-  /**
-   * Where the shipper should POST events. Defaults to `production`;
-   * set `MCP_APP_TELEMETRY_ENV=staging` to point at staging instead.
-   */
-  readonly sendTo?: "production" | "staging";
-  /** Optional logger; defaults to `console`. */
-  readonly logger?: Pick<Console, "info" | "warn" | "error" | "debug">;
+  readonly sendTo?: TelemetrySendTo;
+  readonly logger?: Pick<Logger, "info" | "warn" | "error" | "debug">;
 }
 
 /**
@@ -92,9 +153,10 @@ export interface CreateAnalyticsClientOptions {
 export function createAnalyticsClient(
   opts: CreateAnalyticsClientOptions,
 ): AnalyticsClient {
-  const sendTo = opts.sendTo ?? resolveSendTo(process.env.MCP_APP_TELEMETRY_ENV);
+  const sendTo = opts.sendTo ?? resolveTelemetrySendTo(process.env.MCP_APP_TELEMETRY_ENV);
   const baseUrl = baseUrlFor(sendTo);
-  const logger = adaptLogger(opts.logger ?? console);
+  const bufferedEvents: BufferedTelemetryEvent[] = [];
+  const logger = adaptLogger(opts.logger ?? defaultLoggerBase, bufferedEvents);
 
   // `.mcpb` installs launch the MCP child without setting `NODE_ENV`, so
   // we opt **into** dev mode only when it's set explicitly to
@@ -165,7 +227,6 @@ export function createAnalyticsClient(
     },
   });
 
-  // App-level context is known at construction time; emit it once.
   const mcpApp$ = new BehaviorSubject<{ mcp_app_version: string }>({
     mcp_app_version: opts.mcpAppVersion,
   });
@@ -181,11 +242,15 @@ export function createAnalyticsClient(
   });
 
   return {
-    trackToolCalled(event: McpToolCalledEvent): void {
+    trackToolCalled(event: McpToolCalledEbtPayload): void {
       ebt.reportEvent(EVENT_TYPES.mcpToolCalled, event);
+      bufferedEvents.push({ eventType: EVENT_TYPES.mcpToolCalled, payload: event });
+      logReportedEvent(logger, sendTo, EVENT_TYPES.mcpToolCalled, event);
     },
-    trackViewRendered(event: ViewRenderedEvent): void {
+    trackViewRendered(event: ViewRenderedEbtPayload): void {
       ebt.reportEvent(EVENT_TYPES.viewRendered, event);
+      bufferedEvents.push({ eventType: EVENT_TYPES.viewRendered, payload: event });
+      logReportedEvent(logger, sendTo, EVENT_TYPES.viewRendered, event);
     },
     setOptIn(enabled: boolean): void {
       ebt.optIn({ global: { enabled } });

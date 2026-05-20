@@ -33,49 +33,82 @@ function buildConfig(overrides: Partial<TelemetryConfig> = {}): TelemetryConfig 
 describe("TelemetryService.applyOptIn", () => {
   it("enables shipping when Kibana reports optIn === true", async () => {
     const analytics = createMockAnalyticsClient();
+    const logger = { info: vi.fn(), warn: vi.fn() };
     const service = new TelemetryService({
       telemetryConfigClient: fakeConfigClient(async () => buildConfig({ optIn: true })),
       analytics,
+      logger,
     });
 
     await service.applyOptIn();
 
     expect(analytics.setOptIn).toHaveBeenCalledWith(true);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Kibana telemetry opt-in resolved: enabled=true raw=true send_to=production",
+    );
   });
 
   it("disables shipping when Kibana reports optIn === false", async () => {
     const analytics = createMockAnalyticsClient();
+    const logger = { info: vi.fn(), warn: vi.fn() };
     const service = new TelemetryService({
       telemetryConfigClient: fakeConfigClient(async () => buildConfig({ optIn: false })),
       analytics,
+      logger,
     });
 
     await service.applyOptIn();
 
     expect(analytics.setOptIn).toHaveBeenCalledWith(false);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Kibana telemetry opt-in resolved: enabled=false raw=false send_to=production",
+    );
   });
 
   it("treats optIn === null as opted-out (user not prompted yet)", async () => {
     const analytics = createMockAnalyticsClient();
+    const logger = { info: vi.fn(), warn: vi.fn() };
     const service = new TelemetryService({
       telemetryConfigClient: fakeConfigClient(async () => buildConfig({ optIn: null })),
       analytics,
+      logger,
     });
 
     await service.applyOptIn();
 
     expect(analytics.setOptIn).toHaveBeenCalledWith(false);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Kibana telemetry opt-in resolved: enabled=false raw=null send_to=production",
+    );
+  });
+
+  it("includes the configured telemetry destination in the opt-in log", async () => {
+    const analytics = createMockAnalyticsClient();
+    const logger = { info: vi.fn(), warn: vi.fn() };
+    const service = new TelemetryService({
+      telemetryConfigClient: fakeConfigClient(async () => buildConfig({ optIn: true })),
+      analytics,
+      sendTo: "staging",
+      logger,
+    });
+
+    await service.applyOptIn();
+
+    expect(logger.info).toHaveBeenCalledWith(
+      "Kibana telemetry opt-in resolved: enabled=true raw=true send_to=staging",
+    );
   });
 
   it("falls back to opted-out and logs when the config fetch throws", async () => {
     const analytics = createMockAnalyticsClient();
     const warn = vi.fn();
+    const info = vi.fn();
     const service = new TelemetryService({
       telemetryConfigClient: fakeConfigClient(async () => {
         throw new Error("network down");
       }),
       analytics,
-      logger: { warn },
+      logger: { info, warn },
     });
 
     await service.applyOptIn();
@@ -83,6 +116,9 @@ describe("TelemetryService.applyOptIn", () => {
     expect(analytics.setOptIn).toHaveBeenCalledWith(false);
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining("network down"),
+    );
+    expect(info).toHaveBeenCalledWith(
+      "Kibana telemetry opt-in resolved: enabled=false raw=unavailable send_to=production",
     );
   });
 });

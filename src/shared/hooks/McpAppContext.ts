@@ -7,12 +7,12 @@
 
 import { createContext } from "react";
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
+import type { McpAppBootstrapState } from "../mcp-app-bootstrap.js";
 
 /** Argument shape pushed to `app.ontoolresult`. */
 export type ToolResultParams = Parameters<NonNullable<McpApp["ontoolresult"]>>[0];
 
 export type OnToolResult = (params: ToolResultParams, app: McpApp) => void;
-export type OnConnect = (app: McpApp, gotResult: boolean) => void;
 
 /** Unsubscribe function returned by every `subscribe*` call. */
 export type Unsubscribe = () => void;
@@ -31,10 +31,10 @@ export type Unsubscribe = () => void;
  * **Replay semantics:**
  *  - `subscribeToToolResult` — no replay. New subscribers see events
  *    that arrive after they subscribe, never before.
- *  - `subscribeToConnect` — replays the most recent firing (if any)
- *    synchronously into the new listener. The connect event fires at
- *    most once per provider lifetime, so a late subscriber would
- *    otherwise miss it forever.
+ *  - `bootstrapState` — persisted in React state. Late subscribers read
+ *    the current bootstrap state synchronously from context, so they
+ *    never miss the host-owned initial hydration payload once it has
+ *    arrived.
  */
 export interface McpAppContextValue {
   /** The underlying MCP app instance, or null until React mounts. */
@@ -43,19 +43,13 @@ export interface McpAppContextValue {
   readonly getApp: () => McpApp | null;
   /** True once `app.connect()` resolves. */
   readonly connected: boolean;
+  /** Host-owned initial hydration state for this app view. */
+  readonly bootstrapState: McpAppBootstrapState;
   /**
    * Subscribe to every `ontoolresult` push from the host. Returns an
    * {@link Unsubscribe} that removes the listener.
    */
   readonly subscribeToToolResult: (listener: OnToolResult) => Unsubscribe;
-  /**
-   * Subscribe to the one-shot post-connect event (1.5 s after
-   * `app.connect()` resolves). If the event has already fired by the
-   * time `subscribeToConnect` is called, the listener is invoked
-   * synchronously with the cached firing — late subscribers don't miss
-   * it. Returns an {@link Unsubscribe} that removes the listener.
-   */
-  readonly subscribeToConnect: (listener: OnConnect) => Unsubscribe;
 }
 
 export const McpAppContext = createContext<McpAppContextValue | null>(null);

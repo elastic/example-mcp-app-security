@@ -14,7 +14,7 @@ import {
   type McpAppContextValue,
 } from "./McpAppContext.js";
 import { useAnalytics } from "./useAnalytics.js";
-import type { ViewId } from "../analytics-events.js";
+import type { AnalyticsEvent, ViewId } from "../analytics-events.js";
 
 interface FakeApp {
   callServerTool: ReturnType<typeof vi.fn>;
@@ -35,8 +35,8 @@ function makeContext({
     app: app as unknown as McpApp | null,
     getApp: () => app as unknown as McpApp | null,
     connected,
+    bootstrapState: { status: "idle" },
     subscribeToToolResult: () => () => {},
-    subscribeToConnect: () => () => {},
   };
 }
 
@@ -50,11 +50,11 @@ function Wrapper({
   return <McpAppContext.Provider value={value}>{children}</McpAppContext.Provider>;
 }
 
-function ProbeOnMount({ viewId }: { viewId: "alert-triage" | "threat-hunt" }) {
-  const { trackViewRendered } = useAnalytics();
+function ProbeOnMount({ viewId }: { viewId: ViewId }) {
+  const { trackEvent } = useAnalytics();
   useEffect(() => {
-    trackViewRendered(viewId);
-  }, [trackViewRendered, viewId]);
+    trackEvent({ eventType: "view_rendered", viewId });
+  }, [trackEvent, viewId]);
   return null;
 }
 
@@ -85,7 +85,6 @@ describe("useAnalytics", () => {
       </Wrapper>,
     );
 
-    // Effect ran but the hook saw connected=false → buffered, nothing shipped.
     expect(callServerTool).not.toHaveBeenCalled();
 
     // ProbeOnMount's `useRef` state must survive the rerender, so we have to
@@ -104,23 +103,19 @@ describe("useAnalytics", () => {
   });
 
   it("forwards every call — the hook does NOT dedupe, the consumer owns that", async () => {
-    // The hook is a thin wrapper that returns `trackViewRendered`; it
-    // intentionally doesn't carry hidden per-viewId dedupe state.
-    // Consumers that need single-fire-per-mount semantics wrap the
-    // call in their own effect with a `useRef` guard.
     const callServerTool = vi.fn().mockResolvedValue(undefined);
     const ctx = makeContext({ app: { callServerTool }, connected: true });
 
     function DoubleFire() {
-      const { trackViewRendered } = useAnalytics();
+      const { trackEvent } = useAnalytics();
       const ran = useRef(false);
       useEffect(() => {
         if (!ran.current) {
           ran.current = true;
-          trackViewRendered("threat-hunt");
-          trackViewRendered("threat-hunt");
+          trackEvent({ eventType: "view_rendered", viewId: "threat-hunt" });
+          trackEvent({ eventType: "view_rendered", viewId: "threat-hunt" });
         }
-      }, [trackViewRendered]);
+      }, [trackEvent]);
       return null;
     }
 
@@ -141,20 +136,14 @@ describe("useAnalytics", () => {
     });
   });
 
-  it("keeps a stable trackViewRendered identity across context churn", async () => {
-    // Consumers wire `trackViewRendered` into a useEffect dep list.
-    // The hook reads `connected` / `getApp` through refs so the
-    // function identity doesn't change when the provider rebuilds
-    // its context value (e.g. when `connected` flips true) — otherwise
-    // a mount-effect would re-fire and we'd get duplicate emissions
-    // *despite* the consumer only intending one.
+  it("keeps a stable trackEvent identity across context churn", async () => {
     const callServerTool = vi.fn().mockResolvedValue(undefined);
 
-    const identities: Array<(viewId: ViewId) => void> = [];
+    const identities: Array<(event: AnalyticsEvent) => void> = [];
 
     function Probe() {
-      const { trackViewRendered } = useAnalytics();
-      identities.push(trackViewRendered);
+      const { trackEvent } = useAnalytics();
+      identities.push(trackEvent);
       return null;
     }
 
@@ -171,7 +160,6 @@ describe("useAnalytics", () => {
     );
 
     expect(identities.length).toBeGreaterThanOrEqual(2);
-    // Same identity across the connected=false → connected=true transition.
     expect(identities[0]).toBe(identities[identities.length - 1]);
   });
 
@@ -188,7 +176,6 @@ describe("useAnalytics", () => {
     );
 
     await act(async () => {
-      // Let the rejected promise settle before we assert.
       await Promise.resolve();
       await Promise.resolve();
     });

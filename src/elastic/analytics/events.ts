@@ -20,15 +20,28 @@ export const EVENT_TYPES = {
   viewRendered: "view_rendered",
 } as const;
 
-/** Payload reported when a model-facing or app-only MCP tool returns. */
-export interface McpToolCalledEvent {
+/**
+ * EBT payload reported when a model-facing or app-only MCP tool returns.
+ *
+ * Server-side shape used by the EBT shipper — distinct from the
+ * client→server wire format types in `src/shared/analytics-events.ts`.
+ * Field names are snake_case to match the Kibana telemetry schema.
+ */
+export interface McpToolCalledEbtPayload {
   readonly tool_id: string;
   readonly duration_ms: number;
   readonly success: boolean;
 }
 
-/** Payload reported when a React view mounts. */
-export interface ViewRenderedEvent {
+/**
+ * EBT payload reported when a React view mounts.
+ *
+ * Distinct from the wire-format {@link ViewRenderedEvent} in
+ * `src/shared/analytics-events.ts`: that one is what the React hook
+ * sends through the MCP tool (camelCase + `eventType` discriminator),
+ * this one is what the server ships onward to EBT.
+ */
+export interface ViewRenderedEbtPayload {
   readonly view_id: ViewId;
 }
 
@@ -36,7 +49,7 @@ export interface ViewRenderedEvent {
  * EBT schema for `mcp_tool_called`. Kept alongside the TS type so adding
  * a field can't drift the two apart.
  */
-export const mcpToolCalledEventDef: EventTypeOpts<McpToolCalledEvent> = {
+export const mcpToolCalledEventDef: EventTypeOpts<McpToolCalledEbtPayload> = {
   eventType: EVENT_TYPES.mcpToolCalled,
   schema: {
     tool_id: {
@@ -56,8 +69,7 @@ export const mcpToolCalledEventDef: EventTypeOpts<McpToolCalledEvent> = {
   },
 };
 
-/** EBT schema for `view_rendered`. */
-export const viewRenderedEventDef: EventTypeOpts<ViewRenderedEvent> = {
+export const viewRenderedEventDef: EventTypeOpts<ViewRenderedEbtPayload> = {
   eventType: EVENT_TYPES.viewRendered,
   schema: {
     view_id: {

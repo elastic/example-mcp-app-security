@@ -12,6 +12,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerDetectionRuleTools } from "./detection-rules.js";
 import {
   createMockMcpServer,
+  parseBootstrapToolText,
   parseToolText,
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
@@ -84,7 +85,7 @@ describe("registerDetectionRuleTools", () => {
   });
 
   describe("manage-rules", () => {
-    it("forwards filter/page/perPage and shapes a compact response", async () => {
+    it("forwards filter/page/perPage and emits a bootstrap payload", async () => {
       const rules = Array.from({ length: 25 }, (_, i) =>
         makeRule({ id: `r-${i}` })
       );
@@ -107,23 +108,13 @@ describe("registerDetectionRuleTools", () => {
         perPage: 20,
       });
 
-      const body = parseToolText<{
-        total: number;
-        rules: {
-          id: string;
-          description: string;
-          query: string;
-          tags: string[];
-          threat: { tactic: string; techniques: string[] }[];
-        }[];
-        params: Record<string, unknown>;
-      }>(out);
+      const body = parseBootstrapToolText(out, "detection-rules");
       expect(body.total).toBe(25);
       expect(body.rules).toHaveLength(20);
-      expect(body.rules[0].description.length).toBe(200);
-      expect(body.rules[0].query.length).toBe(300);
-      expect(body.rules[0].tags).toHaveLength(10);
-      expect(body.rules[0].threat).toEqual([
+      expect(body.rules[0]?.description?.length).toBe(200);
+      expect(body.rules[0]?.query?.length).toBe(300);
+      expect(body.rules[0]?.tags).toHaveLength(10);
+      expect(body.rules[0]?.threat).toEqual([
         {
           tactic: "Initial Access",
           techniques: ["T1059 Command and Scripting"],
@@ -154,11 +145,12 @@ describe("registerDetectionRuleTools", () => {
       });
 
       const out = await server.tool("manage-rules").callback({});
-      const body = parseToolText<{
-        rules: { threat: { tactic: string; techniques: string[] }[] }[];
-      }>(out);
-      expect(body.rules[0].threat).toEqual([
-        { tactic: "Initial Access", techniques: [] },
+      const body = parseBootstrapToolText(out, "detection-rules");
+      expect(body.rules[0]?.threat).toEqual([
+        {
+          tactic: "Initial Access",
+          techniques: [],
+        },
       ]);
     });
 
@@ -178,18 +170,11 @@ describe("registerDetectionRuleTools", () => {
       });
 
       const out = await server.tool("manage-rules").callback({});
-      const body = parseToolText<{
-        rules: {
-          description?: string;
-          query?: string;
-          tags?: string[];
-          threat?: unknown;
-        }[];
-      }>(out);
-      expect(body.rules[0].description).toBeUndefined();
-      expect(body.rules[0].query).toBeUndefined();
-      expect(body.rules[0].tags).toBeUndefined();
-      expect(body.rules[0].threat).toBeUndefined();
+      const body = parseBootstrapToolText(out, "detection-rules");
+      expect(body.rules[0]?.description).toBeUndefined();
+      expect(body.rules[0]?.query).toBeUndefined();
+      expect(body.rules[0]?.tags).toBeUndefined();
+      expect(body.rules[0]?.threat).toBeUndefined();
     });
   });
 

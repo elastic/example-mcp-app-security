@@ -12,6 +12,7 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
+import { createMcpAppBootstrap } from "../shared/mcp-app-bootstrap.js";
 import type { AttackDiscovery } from "../elastic/client/index.js";
 import type {
   AttackDiscoveryService,
@@ -79,7 +80,6 @@ function splitDiscoveryDetails(detailsMarkdown: string | undefined): {
   };
 }
 
-/** Services the attack-discovery tools depend on (default cluster only, for now). */
 export interface AttackDiscoveryToolDeps {
   readonly attackDiscoveryService: AttackDiscoveryService;
   readonly casesService: CasesService;
@@ -117,36 +117,20 @@ export function registerAttackDiscoveryTools(
         }
       }
 
-      const compact = {
-        total: summary.total,
-        params: { days: days || 1, limit: limit || 50 },
-        discoveries: (triaged || summary.discoveries).slice(0, 20).map((d) => {
-          const base: Record<string, unknown> = {
-            id: d.id,
-            title: d.title,
-            summaryMarkdown: d.summaryMarkdown,
-            detailsMarkdown: d.detailsMarkdown,
-            mitreTactics: d.mitreTactics,
-            alertIds: d.alertIds,
-            alertCount: d.alertIds.length,
-            alertsContextCount: d.alertsContextCount,
-            riskScore: d.riskScore,
-            timestamp: d.timestamp,
-          };
-          const td = d as unknown as Record<string, unknown>;
-          if (td.confidence !== undefined) {
-            base.confidence = td.confidence;
-            base.hosts = td.hosts;
-            base.users = td.users;
-            base.ruleNames = td.ruleNames;
-            base.signals = td.signals;
-          }
-          return base;
-        }),
-      };
-
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(compact) }],
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(
+            createMcpAppBootstrap("attack-discovery", {
+              total: summary.total,
+              params: { days: days || 1, limit: limit || 50 },
+              discoveries: (triaged || summary.discoveries).slice(0, 20).map((d) => ({
+                ...d,
+                alertCount: d.alertIds.length,
+              })),
+            }),
+          ),
+        }],
       };
     }
   );
@@ -243,7 +227,6 @@ export function registerAttackDiscoveryTools(
       for (const finding of findings) {
         const { immediateActions, attackChain } = splitDiscoveryDetails(finding.detailsMarkdown);
 
-        // Description: short, predictable structure — summary + risk metadata + Immediate actions.
         const descriptionLines: string[] = [
           `## Attack Discovery Finding`,
           ``,
@@ -266,8 +249,6 @@ export function registerAttackDiscoveryTools(
           severity: finding.riskScore >= 80 ? "critical" : finding.riskScore >= 60 ? "high" : finding.riskScore >= 40 ? "medium" : "low",
         });
 
-        // First comment: the full attack chain narrative (everything except
-        // the Immediate Actions section, which is already in the description).
         if (attackChain) {
           try {
             await casesService.addComment(
@@ -275,7 +256,6 @@ export function registerAttackDiscoveryTools(
               [`## Attack chain`, ``, attackChain].join("\n")
             );
           } catch {
-            // comment failed — case still created
           }
         }
 
@@ -312,8 +292,6 @@ export function registerAttackDiscoveryTools(
       };
     }
   );
-
-  // ─── On-Demand Generation ───
 
   registerTrackedAppTool(
     analytics,

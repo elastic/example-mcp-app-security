@@ -13,21 +13,32 @@ import {
   type AnalyticsClient,
 } from "../elastic/analytics/index.js";
 
-/** Services the analytics bridge tool depends on. */
 export interface AnalyticsToolDeps {
   readonly analytics: Pick<AnalyticsClient, "trackViewRendered">;
 }
 
 /**
+ * Wire schema for the app-only `report-analytics-event` MCP tool.
+ *
+ * Mirrors the {@link AnalyticsEvent} TypeScript discriminated union on
+ * the React side — both ends must stay aligned. Adding an event type
+ * means adding a `z.object` here, a variant to `AnalyticsEvent`, and a
+ * case to the handler's `switch (eventType)` below.
+ *
+ * Kept as a closed discriminated union (not `z.object({...}).passthrough()`
+ * or similar) so a malicious or buggy view can't smuggle free-form text
+ * into the telemetry pipeline.
+ */
+const analyticsEventSchema = z.discriminatedUnion("eventType", [
+  z.object({
+    eventType: z.literal("view_rendered"),
+    viewId: z.enum(VIEW_IDS),
+  }),
+]);
+
+/**
  * Register the app-only `report-analytics-event` MCP tool used by the
  * frontend `useAnalytics()` hook.
- *
- * The tool's input schema is intentionally restrictive — `eventType` is
- * a single literal and `viewId` is a closed enum — so a malicious or
- * buggy view can't smuggle free-form text into the telemetry pipeline.
- * Adding a future event type means adding a literal to the union and
- * a new `track*` method on the analytics client; both ends remain
- * fully typed.
  *
  * The handler is intentionally not wrapped with `registerTrackedAppTool`:
  * tracking the report-event call itself would produce noisy
@@ -45,17 +56,21 @@ export function registerAnalyticsTools(
     {
       title: "Report Analytics Event",
       description: "Internal: report a UI analytics event",
-      inputSchema: {
-        eventType: z.literal("view_rendered"),
-        viewId: z.enum(VIEW_IDS),
-      },
+      inputSchema: analyticsEventSchema,
       _meta: { ui: { visibility: ["app"] } },
     },
-    async ({ viewId }) => {
+    async (event) => {
       try {
-        analytics.trackViewRendered({ view_id: viewId });
+        switch (event.eventType) {
+          case "view_rendered":
+            analytics.trackViewRendered({ view_id: event.viewId });
+            break;
+          default: {
+            const _exhaustive: never = event.eventType;
+            void _exhaustive;
+          }
+        }
       } catch {
-        // Telemetry must never break the view; swallow.
       }
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ ok: true }) }],

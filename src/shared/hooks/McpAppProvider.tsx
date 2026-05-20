@@ -16,9 +16,12 @@ import {
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { applyTheme } from "../theme";
 import {
+  type McpAppBootstrapState,
+  inspectMcpAppBootstrapResult,
+} from "../mcp-app-bootstrap";
+import {
   McpAppContext,
   type McpAppContextValue,
-  type OnConnect,
   type OnToolResult,
   type Unsubscribe,
 } from "./McpAppContext";
@@ -40,11 +43,13 @@ export interface McpAppProviderProps {
  * `useMcpAppEvents`) can share a single instance instead of each
  * constructing their own.
  *
- * Lifecycle events (`ontoolresult` from the host, plus a synthetic
- * `onConnect` 1.5 s after the transport binds) are fanned out to all
- * registered listeners via the `subscribeTo*` functions on the context
- * value. The provider holds listeners in `Set` refs so adding /
- * removing subscribers never re-triggers the connect effect.
+ * Lifecycle events (`ontoolresult` from the host) are fanned out to all
+ * registered listeners via the `subscribeToToolResult` function on the
+ * context value. The provider also persists the host-owned bootstrap
+ * state in React state so late subscribers can synchronously read the
+ * initial hydration payload after it arrives. Listener registries live
+ * in `Set` refs so adding / removing subscribers never re-triggers the
+ * connect effect.
  */
 export function McpAppProvider({
   name,
@@ -53,31 +58,26 @@ export function McpAppProvider({
 }: McpAppProviderProps): ReactNode {
   const appRef = useRef<McpApp | null>(null);
   const [connected, setConnected] = useState(false);
+  const [bootstrapState, setBootstrapState] = useState<McpAppBootstrapState>({
+    status: "idle",
+  });
 
   // Pub/sub registries. Refs (not state) so adding subscribers never
   // re-runs the connect effect. `Set` semantics make subscribe/
   // unsubscribe O(1) and naturally support multiple subscribers per
   // event.
   const toolResultListeners = useRef<Set<OnToolResult>>(new Set());
-  const connectListeners = useRef<Set<OnConnect>>(new Set());
-
-  // Cached last firing of the one-shot `onConnect` event. Used to
-  // replay synchronously into late subscribers — without this, a
-  // component that mounts after the 1.5 s grace window would miss
-  // the event forever.
-  const lastConnectFiring = useRef<{ gotResult: boolean } | null>(null);
 
   useEffect(() => {
     const app = new McpApp({ name, version });
     appRef.current = app;
+    setConnected(false);
+    setBootstrapState({ status: "idle" });
     applyTheme(app);
 
-    let gotResult = false;
     let cancelled = false;
-    let graceTimer: ReturnType<typeof setTimeout> | null = null;
 
     app.ontoolresult = (params) => {
-      gotResult = true;
       // Snapshot the listener set so a subscriber that unsubscribes
       // during its own callback doesn't perturb the iteration order.
       for (const listener of [...toolResultListeners.current]) {
@@ -87,28 +87,35 @@ export function McpAppProvider({
           console.error("onToolResult listener failed:", e);
         }
       }
+
+      const bootstrapResult = inspectMcpAppBootstrapResult(params);
+      if (bootstrapResult.status === "not_bootstrap") {
+        return;
+      }
+      if (bootstrapResult.status === "error") {
+        setBootstrapState((current) =>
+          current.status === "ready" ? current : bootstrapResult,
+        );
+        return;
+      }
+      setBootstrapState((current) => {
+        if (current.status === "ready") {
+          return current;
+        }
+        if (bootstrapResult.envelope.viewId !== name) {
+          return {
+            status: "error",
+            reason: `Received bootstrap for ${bootstrapResult.envelope.viewId} inside ${name}.`,
+          };
+        }
+        return bootstrapResult;
+      });
     };
 
     app.connect()
       .then(() => {
         if (cancelled) return;
         setConnected(true);
-        // 1.5s grace period before falling back to the view's own
-        // initial-load behaviour — preserves the legacy semantics.
-        graceTimer = setTimeout(() => {
-          graceTimer = null;
-          if (cancelled) return;
-          // Cache *before* notifying so any subscriber added during
-          // the fan-out (rare but possible) sees the firing.
-          lastConnectFiring.current = { gotResult };
-          for (const listener of [...connectListeners.current]) {
-            try {
-              listener(app, gotResult);
-            } catch (e) {
-              console.error("onConnect listener failed:", e);
-            }
-          }
-        }, 1500);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -117,13 +124,8 @@ export function McpAppProvider({
 
     return () => {
       cancelled = true;
-      if (graceTimer !== null) {
-        clearTimeout(graceTimer);
-        graceTimer = null;
-      }
       app.close();
       appRef.current = null;
-      lastConnectFiring.current = null;
     };
   }, [name, version]);
 
@@ -137,39 +139,15 @@ export function McpAppProvider({
     [],
   );
 
-  const subscribeToConnect = useCallback(
-    (listener: OnConnect): Unsubscribe => {
-      connectListeners.current.add(listener);
-      // Replay the cached firing synchronously so late subscribers
-      // (mounted after the grace window) still see it. App is
-      // guaranteed to be non-null here because `lastConnectFiring`
-      // only flips non-null inside the connect effect, which sets
-      // `appRef.current` first.
-      const fired = lastConnectFiring.current;
-      const app = appRef.current;
-      if (fired && app) {
-        try {
-          listener(app, fired.gotResult);
-        } catch (e) {
-          console.error("onConnect replay failed:", e);
-        }
-      }
-      return () => {
-        connectListeners.current.delete(listener);
-      };
-    },
-    [],
-  );
-
   const value = useMemo<McpAppContextValue>(
     () => ({
       app: appRef.current,
       getApp: () => appRef.current,
       connected,
+      bootstrapState,
       subscribeToToolResult,
-      subscribeToConnect,
     }),
-    [connected, subscribeToToolResult, subscribeToConnect],
+    [bootstrapState, connected, subscribeToToolResult],
   );
 
   return <McpAppContext.Provider value={value}>{children}</McpAppContext.Provider>;

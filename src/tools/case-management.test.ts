@@ -12,6 +12,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerCaseManagementTools } from "./case-management.js";
 import {
   createMockMcpServer,
+  parseBootstrapToolText,
   parseToolText,
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
@@ -76,7 +77,7 @@ describe("registerCaseManagementTools", () => {
   });
 
   describe("manage-cases", () => {
-    it("forwards filter params and emits a compact response (truncated description, sliced tags, max 20 cases)", async () => {
+    it("forwards filter params and emits a bootstrap payload for the initial list", async () => {
       const cases = Array.from({ length: 25 }, (_, i) =>
         makeCase({ id: `case-${i}` })
       );
@@ -99,15 +100,11 @@ describe("registerCaseManagementTools", () => {
         search: "ransomware",
       });
 
-      const body = parseToolText<{
-        total: number;
-        cases: { id: string; description: string; tags: string[] }[];
-        params: Record<string, unknown>;
-      }>(out);
+      const body = parseBootstrapToolText(out, "case-management");
       expect(body.total).toBe(25);
       expect(body.cases).toHaveLength(20);
-      expect(body.cases[0].description.length).toBe(300);
-      expect(body.cases[0].tags).toHaveLength(10);
+      expect(body.cases[0]?.description?.length).toBe(300);
+      expect(body.cases[0]?.tags).toHaveLength(10);
       expect(body.params).toEqual({
         status: "open",
         severity: "high",
@@ -130,12 +127,10 @@ describe("registerCaseManagementTools", () => {
       });
 
       const out = await server.tool("manage-cases").callback({});
-      const body = parseToolText<{
-        cases: { description?: string; tags?: string[]; created_by?: string }[];
-      }>(out);
-      expect(body.cases[0].description).toBeUndefined();
-      expect(body.cases[0].tags).toBeUndefined();
-      expect(body.cases[0].created_by).toBe("alice");
+      const body = parseBootstrapToolText(out, "case-management");
+      expect(body.cases[0]?.description).toBeUndefined();
+      expect(body.cases[0]?.tags).toBeUndefined();
+      expect(body.cases[0]?.created_by).toBe("alice");
     });
   });
 

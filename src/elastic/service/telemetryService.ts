@@ -5,45 +5,48 @@
  * 2.0.
  */
 
-import type { AnalyticsClient } from "../analytics/index.js";
+import type { AnalyticsClient, TelemetrySendTo } from "../analytics/index.js";
+import { resolveTelemetrySendTo } from "../analytics/index.js";
 import type { TelemetryConfigClient } from "../client/telemetryConfigClient.js";
+import { createStderrLogger, type Logger } from "../../shared/logger.js";
 
 interface TelemetryServiceOptions {
   readonly telemetryConfigClient: TelemetryConfigClient;
   readonly analytics: Pick<AnalyticsClient, "setOptIn">;
-  readonly logger?: Pick<Console, "warn">;
+  readonly sendTo?: TelemetrySendTo;
+  readonly logger?: Pick<Logger, "info" | "warn">;
 }
 
-/**
- * Mirrors the user's Kibana telemetry opt-in onto the local
- * {@link AnalyticsClient}. The MCP App never holds its own opt-in
- * state — Kibana is the single source of truth.
- *
- * **Fail-closed semantics.** Only `optIn === true` enables shipping.
- * Every other outcome (`false`, `null`, fetch error, malformed body)
- * resolves to `setOptIn(false)`. The analytics client also starts
- * opted-out at construction, so the gap between server start and the
- * first `applyOptIn()` call is safe.
- *
- * Currently a one-shot call on MCP server start; polling can be added
- * later without changing this surface.
- */
 export class TelemetryService {
   constructor(private readonly options: TelemetryServiceOptions) {}
 
   async applyOptIn(): Promise<void> {
-    const { telemetryConfigClient, analytics, logger = console } = this.options;
+    const {
+      telemetryConfigClient,
+      analytics,
+      sendTo = resolveTelemetrySendTo(process.env.MCP_APP_TELEMETRY_ENV),
+      logger = createStderrLogger(["telemetry"]),
+    } = this.options;
 
     try {
       const config = await telemetryConfigClient.fetchConfig();
-      analytics.setOptIn(config.optIn === true);
+      const enabled = config.optIn === true;
+      analytics.setOptIn(enabled);
+      logger.info(
+        `Kibana telemetry opt-in resolved: enabled=${enabled} raw=${String(
+          config.optIn,
+        )} send_to=${sendTo}`,
+      );
     } catch (err) {
       logger.warn(
-        `[telemetry] failed to read Kibana telemetry config; staying opted-out: ${
+        `failed to read Kibana telemetry config; staying opted-out: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
       analytics.setOptIn(false);
+      logger.info(
+        `Kibana telemetry opt-in resolved: enabled=false raw=unavailable send_to=${sendTo}`,
+      );
     }
   }
 }

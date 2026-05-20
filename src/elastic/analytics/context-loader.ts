@@ -7,6 +7,7 @@
 
 import type { EsClient } from "../es-client/index.js";
 import type { AnalyticsClient } from "./analytics-client.js";
+import { createStderrLogger, type Logger } from "../../shared/logger.js";
 
 /**
  * Minimal shape of `GET /` on Elasticsearch — we only consume the two
@@ -48,7 +49,7 @@ export interface CreateContextLoaderDeps {
     AnalyticsClient,
     "setClusterContext" | "setLicenseContext"
   >;
-  readonly logger?: Pick<Console, "warn">;
+  readonly logger?: Pick<Logger, "warn">;
 }
 
 /**
@@ -61,7 +62,11 @@ export interface CreateContextLoaderDeps {
 export function createContextLoader(
   deps: CreateContextLoaderDeps,
 ): ContextLoader {
-  const { esClient, analytics, logger = console } = deps;
+  const {
+    esClient,
+    analytics,
+    logger = createStderrLogger(["telemetry"]),
+  } = deps;
 
   return {
     async loadAndApply(): Promise<void> {
@@ -72,7 +77,7 @@ export function createContextLoader(
           const { data } = await esClient.get<EsRootResponse>("/");
           if (!data.cluster_uuid || !data.version?.number) {
             logger.warn(
-              "[telemetry] elasticsearch root response missing required cluster fields; skipping cluster context",
+              "elasticsearch root response missing required cluster fields; skipping cluster context",
             );
             return;
           }
@@ -82,7 +87,7 @@ export function createContextLoader(
           });
         } catch (err) {
           logger.warn(
-            `[telemetry] failed to load cluster context: ${
+            `failed to load cluster context: ${
               err instanceof Error ? err.message : String(err)
             }`,
           );
@@ -100,7 +105,7 @@ export function createContextLoader(
           });
         } catch (err) {
           logger.warn(
-            `[telemetry] failed to load license context: ${
+            `failed to load license context: ${
               err instanceof Error ? err.message : String(err)
             }`,
           );

@@ -20,9 +20,6 @@ describe("createContextLoader().loadAndApply", () => {
       if (path === "/") {
         return dataEnvelope({
           cluster_uuid: "uuid-1",
-          // `cluster_name` is deliberately present in the ES response
-          // but must NOT be forwarded to the analytics client — it's
-          // user-controlled and excluded from the anonymised feed.
           cluster_name: "primary",
           version: { number: "8.99.0" },
         });

@@ -12,6 +12,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAttackDiscoveryTools } from "./attack-discovery.js";
 import {
   createMockMcpServer,
+  parseBootstrapToolText,
   parseToolText,
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
@@ -19,7 +20,8 @@ import {
   createMockAttackDiscoveryService,
   createMockCasesService,
 } from "../test/helpers/mockServices.js";
-import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
+import { createMockAnalyticsClient } from "../test/helpers/mockAnalytics.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
 import type {
   AttackDiscovery,
   TriagedDiscovery,
@@ -32,11 +34,6 @@ import type { KibanaCase } from "../shared/types.js";
 
 const RESOURCE_URI = "ui://triage-attack-discoveries/mcp-app.html";
 
-/**
- * Build a `KibanaCase` stub for tests that only care about a couple of
- * fields. Using `Partial<KibanaCase>` + a single `as unknown as` cast keeps
- * the test bodies focused on the fields under assertion.
- */
 function caseStub(overrides: Partial<KibanaCase>): KibanaCase {
   return overrides as unknown as KibanaCase;
 }
@@ -61,17 +58,19 @@ describe("registerAttackDiscoveryTools", () => {
   let server: MockMcpServer;
   let attackDiscoveryService: AttackDiscoveryService;
   let casesService: CasesService;
+  let analytics: AnalyticsClient;
 
   beforeEach(() => {
     server = createMockMcpServer();
     attackDiscoveryService = createMockAttackDiscoveryService();
     casesService = createMockCasesService();
+    analytics = createMockAnalyticsClient();
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
     vi.spyOn(fs, "readFileSync").mockReturnValue("<html>ad</html>");
     registerAttackDiscoveryTools(server as unknown as McpServer, {
       attackDiscoveryService,
       casesService,
-      analytics: noopAnalyticsClient,
+      analytics,
     });
   });
 
@@ -93,6 +92,21 @@ describe("registerAttackDiscoveryTools", () => {
   });
 
   describe("triage-attack-discoveries", () => {
+    it("emits successful telemetry for the registered tool callback", async () => {
+      vi.mocked(attackDiscoveryService.getDiscoveries).mockResolvedValueOnce({
+        total: 0,
+        discoveries: [],
+      });
+
+      await server.tool("triage-attack-discoveries").callback({ days: 2, limit: 10 });
+
+      expect(analytics.trackToolCalled).toHaveBeenCalledExactlyOnceWith({
+        tool_id: "triage-attack-discoveries",
+        duration_ms: expect.any(Number),
+        success: true,
+      });
+    });
+
     it("calls assessConfidence and returns triaged discoveries with confidence fields", async () => {
       const discoveries = [makeDiscovery()];
       vi.mocked(attackDiscoveryService.getDiscoveries).mockResolvedValueOnce({
@@ -129,11 +143,7 @@ describe("registerAttackDiscoveryTools", () => {
         discoveries
       );
 
-      const body = parseToolText<{
-        total: number;
-        params: Record<string, unknown>;
-        discoveries: { id: string; confidence?: string; hosts?: string[] }[];
-      }>(out);
+      const body = parseBootstrapToolText(out, "attack-discovery");
       expect(body.total).toBe(1);
       expect(body.params).toEqual({ days: 2, limit: 10 });
       expect(body.discoveries[0]).toMatchObject({
@@ -159,10 +169,7 @@ describe("registerAttackDiscoveryTools", () => {
         .tool("triage-attack-discoveries")
         .callback({});
 
-      const body = parseToolText<{
-        params: { days: number; limit: number };
-        discoveries: { id: string; confidence?: string }[];
-      }>(out);
+      const body = parseBootstrapToolText(out, "attack-discovery");
       expect(body.params).toEqual({ days: 1, limit: 50 });
       expect(body.discoveries[0].confidence).toBeUndefined();
     });
@@ -176,7 +183,7 @@ describe("registerAttackDiscoveryTools", () => {
       const out = await server.tool("triage-attack-discoveries").callback({});
 
       expect(attackDiscoveryService.assessConfidence).not.toHaveBeenCalled();
-      const body = parseToolText<{ discoveries: unknown[] }>(out);
+      const body = parseBootstrapToolText(out, "attack-discovery");
       expect(body.discoveries).toEqual([]);
     });
 
@@ -204,12 +211,25 @@ describe("registerAttackDiscoveryTools", () => {
       );
 
       const out = await server.tool("triage-attack-discoveries").callback({});
-      const body = parseToolText<{ discoveries: { id: string }[] }>(out);
+      const body = parseBootstrapToolText(out, "attack-discovery");
       expect(body.discoveries).toHaveLength(20);
     });
   });
 
   describe("poll-discoveries", () => {
+    it("emits failed telemetry when the tool callback rejects", async () => {
+      const boom = new Error("service unavailable");
+      vi.mocked(attackDiscoveryService.getDiscoveries).mockRejectedValueOnce(boom);
+
+      await expect(server.tool("poll-discoveries").callback({})).rejects.toBe(boom);
+
+      expect(analytics.trackToolCalled).toHaveBeenCalledExactlyOnceWith({
+        tool_id: "poll-discoveries",
+        duration_ms: expect.any(Number),
+        success: false,
+      });
+    });
+
     it("returns the raw discovery summary as JSON", async () => {
       const summary = { total: 1, discoveries: [makeDiscovery()] };
       vi.mocked(attackDiscoveryService.getDiscoveries).mockResolvedValueOnce(

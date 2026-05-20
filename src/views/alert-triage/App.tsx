@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
+import { inspectMcpAppBootstrapResult } from "../../shared/mcp-app-bootstrap";
 import type { SecurityAlert, AlertSummary, AlertContext } from "../../shared/types";
 import { AlertCard } from "./components/AlertCard";
 import { DetailView } from "./components/DetailView";
@@ -29,7 +30,7 @@ import {
   useToast,
 } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppBootstrap, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
 import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
 import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import { useAlertSort } from "./hooks/useAlertSort";
@@ -119,8 +120,12 @@ function AppContent() {
   }, []);
 
   const { connected, getApp } = useMcpApp();
+  const bootstrap = useMcpAppBootstrap("alert-triage");
   useMcpAppEvents({
     onToolResult: (result, app) => {
+      if (inspectMcpAppBootstrapResult(result).status !== "not_bootstrap") {
+        return;
+      }
       try {
         const text = extractToolText(result);
         if (text) {
@@ -142,15 +147,77 @@ function AppContent() {
       } catch { /* ignore */ }
       loadAlertsImpl(app);
     },
-    onConnect: (app, gotResult) => {
-      if (!gotResult) loadAlertsImpl(app);
-    },
   });
 
-  const { trackViewRendered } = useAnalytics();
   useEffect(() => {
-    trackViewRendered("alert-triage");
-  }, [trackViewRendered]);
+    if (bootstrap.status === "idle") {
+      return;
+    }
+    if (bootstrap.status === "error") {
+      setLoading(false);
+      return;
+    }
+    const { summary: nextSummary, params, verdicts: nextVerdicts } = bootstrap.payload;
+    paramsRef.current = { ...params };
+    setSummary({
+      total: nextSummary.total,
+      bySeverity: nextSummary.bySeverity,
+      byRule: [...nextSummary.byRule],
+      byHost: [...nextSummary.byHost],
+      alerts: nextSummary.alerts.map((alert) => ({
+        _id: alert.id,
+        _index: "",
+        _source: {
+          "@timestamp": alert.timestamp ?? "",
+          "kibana.alert.rule.name": alert.rule ?? "",
+          "kibana.alert.rule.uuid": "",
+          "kibana.alert.severity": alert.severity ?? "low",
+          "kibana.alert.risk_score": alert.risk_score ?? 0,
+          "kibana.alert.workflow_status": "open",
+          "kibana.alert.reason": alert.reason ?? "",
+          host: alert.host ? { name: alert.host } : undefined,
+          user: alert.user ? { name: alert.user } : undefined,
+          process: alert.process
+            ? {
+                name: alert.process,
+                executable: alert.executable,
+                parent: alert.parent_process ? { name: alert.parent_process } : undefined,
+              }
+            : undefined,
+          file: alert.file ? { path: alert.file } : undefined,
+          source: alert.source_ip ? { ip: alert.source_ip } : undefined,
+          destination: alert.dest_ip ? { ip: alert.dest_ip } : undefined,
+          "kibana.alert.rule.threat": alert.mitre?.map((threat) => ({
+            framework: "MITRE ATT&CK",
+            tactic: { id: "", name: threat.tactic, reference: "" },
+            technique: threat.techniques.map((technique) => {
+              const [id, ...nameParts] = technique.split(" ");
+              return {
+                id,
+                name: nameParts.join(" "),
+                reference: "",
+              };
+            }),
+          })),
+        },
+      })),
+    });
+    setVerdicts(nextVerdicts.map((verdict) => ({
+      ...verdict,
+      hosts: verdict.hosts ? [...verdict.hosts] : undefined,
+    })));
+    setSearchInput(params.query ?? "");
+    const limKey = String(params.limit);
+    if (isLimitKey(limKey)) {
+      setLimit(limKey);
+    }
+    setLoading(false);
+  }, [bootstrap]);
+
+  const { trackEvent } = useAnalytics();
+  useEffect(() => {
+    trackEvent({ eventType: "view_rendered", viewId: "alert-triage" });
+  }, [trackEvent]);
 
   const loadAlerts = useCallback((overrideParams?: Partial<FilterParams>) => {
     const app = getApp();
@@ -165,9 +232,6 @@ function AppContent() {
     return () => clearInterval(interval);
   }, [connected, loadAlerts]);
 
-  // Sort + group the current alert summary. The pure helpers and `useMemo`
-  // wrappers live in `./hooks/useAlertSort` so they can be unit-tested
-  // independently of this component.
   const { sortedAlerts, groupedAlerts } = useAlertSort(summary, sortBy, groupBy);
 
   const toggleGroup = useCallback((key: string) => {
@@ -184,11 +248,6 @@ function AppContent() {
     setOpenGroups(new Set());
   }, []);
 
-  // Keep the left list in sync with the selected alert: when navigating to an
-  // alert from the detail pane (e.g. via the Related list), expand the group
-  // that contains it (if grouped) and scroll the row into view. `block: "nearest"`
-  // is a no-op when the row is already visible, so direct clicks in the list
-  // don't cause unnecessary scrolling.
   useEffect(() => {
     const id = selectedAlert?._id;
     if (!id) return;
@@ -390,8 +449,6 @@ function AppContent() {
   const activeQuery = paramsRef.current.query;
   const hasDetail = !!selectedAlert;
 
-  // verdict lookup removed for stability
-
   const list = (
     <>
       {hasDetail && <BackButton onClick={() => setSelectedAlert(null)} />}
@@ -508,6 +565,8 @@ function AppContent() {
       <div className="list-pane-content" ref={listRef}>
         {loading && !summary ? (
           <LoadingState>Loading alerts...</LoadingState>
+        ) : bootstrap.status === "error" && !summary ? (
+          <EmptyState>{bootstrap.reason}</EmptyState>
         ) : !summary || summary.alerts.length === 0 ? (
           <EmptyState>{activeQuery ? `No alerts matching "${activeQuery}"` : "No open alerts"}</EmptyState>
         ) : groupedAlerts ? (

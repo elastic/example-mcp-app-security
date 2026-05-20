@@ -46,11 +46,7 @@ describe("registerAnalyticsTools", () => {
     registerAnalyticsTools(server as unknown as McpServer, { analytics });
     const tool = server.tool("report-analytics-event");
 
-    const shape = tool.config.inputSchema as {
-      eventType: z.ZodTypeAny;
-      viewId: z.ZodTypeAny;
-    };
-    const inputSchema = z.object(shape);
+    const inputSchema = tool.config.inputSchema as z.ZodTypeAny;
 
     expect(
       inputSchema.safeParse({ eventType: "view_action", viewId: "alert-triage" })
@@ -65,6 +61,9 @@ describe("registerAnalyticsTools", () => {
         viewId: "alert-triage",
       }).success,
     ).toBe(true);
+    expect(
+      inputSchema.safeParse({ viewId: "alert-triage" }).success,
+    ).toBe(false);
   });
 
   it("never throws if trackViewRendered itself throws", async () => {

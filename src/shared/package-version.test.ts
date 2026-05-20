@@ -13,11 +13,6 @@ import { pathToFileURL } from "node:url";
 
 import { readPackageVersion } from "./package-version.js";
 
-/**
- * Build a fake `import.meta.url` pointing at a synthetic module file
- * inside `dir`. The util only consumes the directory portion, so the
- * file itself doesn't need to exist.
- */
 function moduleUrlFor(dir: string): string {
   return pathToFileURL(join(dir, "fake-module.js")).href;
 }

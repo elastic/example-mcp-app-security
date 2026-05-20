@@ -11,6 +11,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import {
   createMockMcpServer,
+  parseBootstrapToolText,
   parseToolText,
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
@@ -61,13 +62,19 @@ describe("registerSampleDataTools", () => {
   });
 
   describe("generate-sample-data", () => {
-    it("returns the static `ready` envelope listing every supported scenario", async () => {
-      const { server } = await setup();
+    it("returns a bootstrap payload listing scenarios and current sample data", async () => {
+      const { server, sampleDataService } = await setup();
+      vi.mocked(sampleDataService.checkExistingData).mockResolvedValueOnce({
+        totalDocs: 42,
+        totalAlerts: 5,
+        existingRules: 3,
+        byScenario: {},
+      });
       const out = await server.tool("generate-sample-data").callback({});
-      const body = parseToolText<{ status: string; scenarios: string[] }>(out);
-      expect(body.status).toBe("ready");
+      const body = parseBootstrapToolText(out, "sample-data");
       expect(body.scenarios).toContain("ransomware-kill-chain");
       expect(body.scenarios.length).toBeGreaterThan(5);
+      expect(body.existingData.totalDocs).toBe(42);
     });
 
     it("documents the supported scenarios in the tool description", async () => {

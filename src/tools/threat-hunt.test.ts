@@ -12,6 +12,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerThreatHuntTools } from "./threat-hunt.js";
 import {
   createMockMcpServer,
+  parseBootstrapToolText,
   parseToolText,
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
@@ -70,7 +71,7 @@ describe("registerThreatHuntTools", () => {
   });
 
   describe("threat-hunt", () => {
-    it("returns a compact summary listing the first 20 indices", async () => {
+    it("returns a bootstrap payload listing the first 20 indices", async () => {
       vi.mocked(indicesService.listIndices).mockResolvedValueOnce(
         Array.from({ length: 25 }, (_, i) => ({
           index: `idx-${i}`,
@@ -83,16 +84,13 @@ describe("registerThreatHuntTools", () => {
 
       const out = await server.tool("threat-hunt").callback({});
 
-      const body = parseToolText<{
-        indexCount: number;
-        indices: string[];
-      }>(out);
+      const body = parseBootstrapToolText(out, "threat-hunt");
       expect(body.indexCount).toBe(25);
       expect(body.indices).toHaveLength(20);
       expect(body.indices[0]).toBe("idx-0");
     });
 
-    it("executes the supplied query, formats the rows, and truncates long string cells at 100 chars", async () => {
+    it("executes the supplied query and includes the ES|QL result in the bootstrap payload", async () => {
       vi.mocked(indicesService.listIndices).mockResolvedValueOnce([]);
       vi.mocked(esqlService.executeEsql).mockResolvedValueOnce({
         columns: [{ name: "host", type: "keyword" }],
@@ -106,21 +104,22 @@ describe("registerThreatHuntTools", () => {
         description: "look for foo",
       });
 
-      const body = parseToolText<{
-        query: string;
-        rowCount: number;
-        columns: string[];
-        rows: (string | null)[][];
-        description: string;
-      }>(out);
-      expect(body.query).toBe("FROM logs-* | LIMIT 30");
-      expect(body.description).toBe("look for foo");
-      expect(body.rowCount).toBe(30);
-      expect(body.columns).toEqual(["host"]);
-      expect(body.rows).toHaveLength(20);
-      expect(body.rows[0][0]).toMatch(/x{100}\.\.\.$/);
-      expect(body.rows[1][0]).toBeNull();
-      expect(body.rows[2][0]).toBe('{"a":1}');
+      const body = parseBootstrapToolText(out, "threat-hunt");
+      expect(body.params.query).toBe("FROM logs-* | LIMIT 30");
+      expect(body.params.description).toBe("look for foo");
+      expect(body.queryResult).toEqual({
+        rowCount: 30,
+        columns: ["host"],
+        rows: Array.from({ length: 20 }, (_, i) => [
+          i === 0
+            ? `${"x".repeat(100)}...`
+            : i === 1
+              ? null
+              : i === 2
+                ? "{\"a\":1}"
+                : `host-${i}`,
+        ]),
+      });
     });
 
     it("captures query errors in `queryError` rather than throwing", async () => {
@@ -133,8 +132,8 @@ describe("registerThreatHuntTools", () => {
         .tool("threat-hunt")
         .callback({ query: "FROM bogus" });
 
-      const body = parseToolText<{ query: string; queryError: string }>(out);
-      expect(body.query).toBe("FROM bogus");
+      const body = parseBootstrapToolText(out, "threat-hunt");
+      expect(body.params.query).toBe("FROM bogus");
       expect(body.queryError).toBe("syntax error at line 1");
     });
 
@@ -146,7 +145,7 @@ describe("registerThreatHuntTools", () => {
         .tool("threat-hunt")
         .callback({ query: "FROM bogus" });
 
-      const body = parseToolText<{ queryError: string }>(out);
+      const body = parseBootstrapToolText(out, "threat-hunt");
       expect(body.queryError).toBe("network blip");
     });
 
@@ -168,12 +167,9 @@ describe("registerThreatHuntTools", () => {
         "host",
         "host-1"
       );
-      const body = parseToolText<{
-        entity: { type: string; value: string };
-        graph: { nodeCount: number; edgeCount: number };
-      }>(out);
-      expect(body.entity).toEqual({ type: "host", value: "host-1" });
-      expect(body.graph).toEqual({ nodeCount: 2, edgeCount: 1 });
+      const body = parseBootstrapToolText(out, "threat-hunt");
+      expect(body.params.entity).toEqual({ type: "host", value: "host-1" });
+      expect(body.entityGraph).toEqual({ nodeCount: 2, edgeCount: 1 });
     });
 
     it("swallows entity-investigation failures rather than failing the whole hunt", async () => {

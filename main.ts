@@ -24,9 +24,13 @@ import {
 import { TelemetryConfigClient } from "./src/elastic/client/telemetryConfigClient.js";
 import { TelemetryService } from "./src/elastic/service/telemetryService.js";
 import { createServer } from "./src/server.js";
+import { createStderrLogger } from "./src/shared/logger.js";
 import { readPackageVersion } from "./src/shared/package-version.js";
 
 const isStdio = process.argv.includes("--stdio");
+const logger = createStderrLogger();
+const serverLogger = logger.child("elastic-security");
+const telemetryLogger = logger.child("telemetry");
 
 /**
  * Format a startup error so it's actually useful in the MCP host's log
@@ -88,6 +92,7 @@ try {
   const defaultCredentials = credentialClient.get();
   analytics = createAnalyticsClient({
     mcpAppVersion: readPackageVersion(import.meta.url),
+    logger: telemetryLogger,
   });
 
   const defaultEsClient = createEsClient(defaultCredentials);
@@ -98,10 +103,12 @@ try {
   const telemetryService = new TelemetryService({
     telemetryConfigClient,
     analytics,
+    logger: telemetryLogger,
   });
   const contextLoader = createContextLoader({
     esClient: defaultEsClient,
     analytics,
+    logger: telemetryLogger,
   });
 
   // Fire-and-forget: a slow or unreachable Kibana / Elasticsearch must
@@ -141,16 +148,22 @@ const shutdown = ((): ((signal: NodeJS.Signals) => Promise<void>) => {
     if (started) return started;
     started = (async () => {
       try {
+        let flushed = false;
         await Promise.race([
-          analytics.shutdown(),
+          analytics.shutdown().then(() => {
+            flushed = true;
+          }),
           new Promise<void>((resolve) => {
             const timer = setTimeout(resolve, ANALYTICS_SHUTDOWN_TIMEOUT_MS);
             timer.unref();
           }),
         ]);
+        if (flushed) {
+          serverLogger.info("analytics events flushed before shutdown");
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`[elastic-security] analytics shutdown failed: ${message}`);
+        serverLogger.error(`analytics shutdown failed: ${message}`);
       }
       // Re-raise with the conventional 128+signo exit code so init
       // systems can tell us apart from a normal `exit(0)`.
@@ -191,7 +204,7 @@ if (isStdio) {
       await transport.handleRequest(req, res, req.body);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[elastic-security] request failed: ${message}`);
+      serverLogger.error(`request failed: ${message}`);
       if (!res.headersSent) {
         res.writeHead(500).end(JSON.stringify({ error: message }));
       }
@@ -208,13 +221,13 @@ if (isStdio) {
 
   const port = parseInt(process.env.PORT || "3001", 10);
   const httpServer = app.listen(port, () => {
-    console.log(`Elastic Security MCP App server running on http://localhost:${port}/mcp`);
+    serverLogger.info(`HTTP server running on http://localhost:${port}/mcp`);
   });
   httpServer.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {
-      console.error(`Error: Port ${port} is already in use. Set a different port with the PORT environment variable.`);
+      serverLogger.error(`Port ${port} is already in use. Set a different port with the PORT environment variable.`);
     } else {
-      console.error(`Server error: ${err.message}`);
+      serverLogger.error(`Server error: ${err.message}`);
     }
     process.exit(1);
   });

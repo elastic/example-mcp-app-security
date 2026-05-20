@@ -254,14 +254,18 @@ describe("MCP server integration (in-process Client + Server)", () => {
         expect(result.isError).toBeFalsy();
         const content = result.content as { type: "text"; text: string }[];
         const body = JSON.parse(content[0].text) as {
-          total: number;
-          alerts: { id: string; rule: string }[];
-          bySeverity: Record<string, number>;
-          params: { severity: string };
+          payload: {
+            summary: {
+              total: number;
+              alerts: { _id: string; _source: { "kibana.alert.rule.name": string } }[];
+              bySeverity: Record<string, number>;
+            };
+            params: { severity: string };
+          };
         };
-        expect(body.total).toBe(2);
-        expect(body.bySeverity).toEqual({ high: 1, critical: 1 });
-        expect(body.alerts).toEqual([
+        expect(body.payload.summary.total).toBe(2);
+        expect(body.payload.summary.bySeverity).toEqual({ high: 1, critical: 1 });
+        expect(body.payload.summary.alerts).toEqual([
           expect.objectContaining({
             id: "alert-1",
             rule: "Suspicious PowerShell",
@@ -271,7 +275,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
             rule: "LSASS dump",
           }),
         ]);
-        expect(body.params.severity).toBe("high");
+        expect(body.payload.params.severity).toBe("high");
 
         const calls = mockAxios.history();
         expect(calls).toHaveLength(1);
@@ -326,12 +330,14 @@ describe("MCP server integration (in-process Client + Server)", () => {
 
         const content = result.content as { type: "text"; text: string }[];
         const body = JSON.parse(content[0].text) as {
-          total: number;
-          rules: { id: string; name: string }[];
-          params: { page: number; perPage: number };
+          payload: {
+            total: number;
+            rules: { id: string; name: string }[];
+            params: { page: number; perPage: number };
+          };
         };
-        expect(body.total).toBe(1);
-        expect(body.rules[0]).toMatchObject({
+        expect(body.payload.total).toBe(1);
+        expect(body.payload.rules[0]).toMatchObject({
           id: "r-1",
           name: "Suspicious PowerShell",
         });

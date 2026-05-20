@@ -12,6 +12,7 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
+import { createMcpAppBootstrap } from "../shared/mcp-app-bootstrap.js";
 import type { CasesService } from "../elastic/service/index.js";
 import type { AnalyticsClient } from "../elastic/analytics/index.js";
 import { registerTrackedAppTool } from "./tracked-app-tool.js";
@@ -19,7 +20,6 @@ import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://manage-cases/mcp-app.html";
 
-/** Services the case-management tools depend on (default cluster only, for now). */
 export interface CaseManagementToolDeps {
   readonly casesService: CasesService;
   readonly analytics: AnalyticsClient;
@@ -47,20 +47,29 @@ export function registerCaseManagementTools(
     },
     async ({ status, severity, search }) => {
       const result = await casesService.listCases({ status, severity, search });
-      const compact = {
-        total: result.total,
-        cases: result.cases.slice(0, 20).map((c) => ({
-          id: c.id, title: c.title, status: c.status, severity: c.severity,
-          totalAlerts: c.totalAlerts, totalComment: c.totalComment,
-          tags: c.tags?.slice(0, 10),
-          description: c.description?.substring(0, 300),
-          created_at: c.created_at, updated_at: c.updated_at,
-          created_by: c.created_by?.username,
-        })),
-        params: { status, severity, search },
-      };
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(compact) }],
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(
+            createMcpAppBootstrap("case-management", {
+              total: result.total,
+              cases: result.cases.slice(0, 20).map((c) => ({
+                id: c.id,
+                title: c.title,
+                status: c.status,
+                severity: c.severity,
+                totalAlerts: c.totalAlerts,
+                totalComment: c.totalComment,
+                tags: c.tags?.slice(0, 10),
+                description: c.description?.substring(0, 300),
+                created_at: c.created_at,
+                updated_at: c.updated_at,
+                created_by: c.created_by?.username,
+              })),
+              params: { status, severity, search },
+            }),
+          ),
+        }],
       };
     }
   );

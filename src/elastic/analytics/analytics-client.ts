@@ -5,7 +5,10 @@
  * 2.0.
  */
 
-import type { McpToolCalledEvent, ViewRenderedEvent } from "./events.js";
+import type {
+  McpToolCalledEbtPayload,
+  ViewRenderedEbtPayload,
+} from "./events.js";
 
 /**
  * Elasticsearch cluster context attached to outgoing telemetry events.
@@ -23,7 +26,6 @@ export interface ClusterContext {
   readonly cluster_version: string;
 }
 
-/** License context attached to outgoing telemetry events. All optional. */
 export interface LicenseContext {
   readonly license_id?: string;
   readonly license_status?: string;
@@ -42,27 +44,15 @@ export interface LicenseContext {
  * Kibana telemetry config has been resolved (see `TelemetryService`).
  */
 export interface AnalyticsClient {
-  /** Report that an MCP tool handler resolved or threw. */
-  trackToolCalled(event: McpToolCalledEvent): void;
+  trackToolCalled(event: McpToolCalledEbtPayload): void;
 
-  /** Report that a React view mounted. */
-  trackViewRendered(event: ViewRenderedEvent): void;
+  trackViewRendered(event: ViewRenderedEbtPayload): void;
 
-  /**
-   * Mirror the user's Kibana telemetry opt-in onto the EBT client.
-   * `false` flushes and drops the in-memory queue immediately.
-   */
   setOptIn(enabled: boolean): void;
 
-  /**
-   * Publish cluster context. Required for the `x-elastic-cluster-id`
-   * header. Calling again replaces the previous value.
-   */
   setClusterContext(ctx: ClusterContext): void;
 
-  /** Publish license context. Calling again replaces the previous value. */
   setLicenseContext(ctx: LicenseContext): void;
 
-  /** Flush any queued events and tear the shipper down. */
   shutdown(): Promise<void>;
 }

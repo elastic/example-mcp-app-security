@@ -12,48 +12,39 @@ import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import {
   McpAppContext,
   type McpAppContextValue,
-  type OnConnect,
   type OnToolResult,
   type ToolResultParams,
 } from "./McpAppContext.js";
-import { useMcpAppEvents } from "./useMcpApp.js";
+import { createMcpAppBootstrap } from "../mcp-app-bootstrap.js";
+import { useMcpAppBootstrap, useMcpAppEvents } from "./useMcpApp.js";
 
 /**
  * Build a controllable context value that mirrors `McpAppProvider`'s
- * pub/sub registry without dragging in `new McpApp()` or its
- * `connect()` timer. Exposes `triggerToolResult` / `triggerConnect`
- * helpers so tests can drive events deterministically.
+ * pub/sub registry without dragging in `new McpApp()` or a real
+ * transport. Exposes `triggerToolResult` so tests can drive events
+ * deterministically, while bootstrap state is provided directly on the
+ * context value the same way late subscribers would read it in the app.
  */
 function buildTestContext({
   appStub,
   connected = true,
-  replayConnect,
+  bootstrapState = { status: "idle" } as const,
 }: {
   appStub: McpApp;
   connected?: boolean;
-  /** If set, late subscribers replay this firing immediately. */
-  replayConnect?: { gotResult: boolean };
+  bootstrapState?: McpAppContextValue["bootstrapState"];
 }) {
   const toolResultListeners = new Set<OnToolResult>();
-  const connectListeners = new Set<OnConnect>();
 
   const ctx: McpAppContextValue = {
     app: appStub,
     getApp: () => appStub,
     connected,
+    bootstrapState,
     subscribeToToolResult: (listener) => {
       toolResultListeners.add(listener);
       return () => {
         toolResultListeners.delete(listener);
-      };
-    },
-    subscribeToConnect: (listener) => {
-      connectListeners.add(listener);
-      if (replayConnect) {
-        listener(appStub, replayConnect.gotResult);
-      }
-      return () => {
-        connectListeners.delete(listener);
       };
     },
   };
@@ -63,11 +54,7 @@ function buildTestContext({
     triggerToolResult(params: ToolResultParams) {
       for (const l of [...toolResultListeners]) l(params, appStub);
     },
-    triggerConnect(gotResult: boolean) {
-      for (const l of [...connectListeners]) l(appStub, gotResult);
-    },
     toolResultCount: () => toolResultListeners.size,
-    connectCount: () => connectListeners.size,
   };
 }
 
@@ -114,56 +101,64 @@ describe("useMcpAppEvents", () => {
     expect(c).toHaveBeenCalledTimes(1);
   });
 
-  it("fans onConnect out to every subscriber in the tree", () => {
-    const { ctx, triggerConnect } = buildTestContext({ appStub: stubApp });
-
-    const a = vi.fn();
-    const b = vi.fn();
-
-    function Probe({ cb }: { cb: OnConnect }) {
-      useMcpAppEvents({ onConnect: cb });
-      return null;
-    }
-
-    render(
-      <Wrapper value={ctx}>
-        <Probe cb={a} />
-        <Probe cb={b} />
-      </Wrapper>,
-    );
-
-    act(() => {
-      triggerConnect(true);
-    });
-
-    expect(a).toHaveBeenCalledWith(stubApp, true);
-    expect(b).toHaveBeenCalledWith(stubApp, true);
-  });
-
-  it("replays the cached connect firing into late subscribers", () => {
-    // Provider already fired connect — context exposes this via the
-    // replay hook. A subscriber that mounts now should be notified
-    // synchronously.
+  it("reads the ready bootstrap payload synchronously for late subscribers", () => {
     const { ctx } = buildTestContext({
       appStub: stubApp,
-      replayConnect: { gotResult: false },
+      bootstrapState: {
+        status: "ready",
+        envelope: createMcpAppBootstrap("alert-triage", {
+          summary: {
+            total: 1,
+            bySeverity: { high: 1 },
+            byRule: [],
+            byHost: [],
+            alerts: [],
+          },
+          params: { days: 7, limit: 50 },
+          verdicts: [],
+        }),
+      },
     });
 
-    const late = vi.fn();
-
     function LateProbe() {
-      useMcpAppEvents({ onConnect: late });
-      return null;
+      const bootstrap = useMcpAppBootstrap("alert-triage");
+      return <div>{bootstrap.status === "ready" ? String(bootstrap.payload.summary.total) : "nope"}</div>;
     }
 
-    render(
+    const { getByText } = render(
       <Wrapper value={ctx}>
         <LateProbe />
       </Wrapper>,
     );
 
-    expect(late).toHaveBeenCalledTimes(1);
-    expect(late).toHaveBeenCalledWith(stubApp, false);
+    expect(getByText("1")).toBeTruthy();
+  });
+
+  it("surfaces a bootstrap mismatch as an error state", () => {
+    const { ctx } = buildTestContext({
+      appStub: stubApp,
+      bootstrapState: {
+        status: "ready",
+        envelope: createMcpAppBootstrap("case-management", {
+          total: 0,
+          cases: [],
+          params: {},
+        }),
+      },
+    });
+
+    function Probe() {
+      const bootstrap = useMcpAppBootstrap("alert-triage");
+      return <div>{bootstrap.status === "error" ? bootstrap.reason : "ok"}</div>;
+    }
+
+    const { getByText } = render(
+      <Wrapper value={ctx}>
+        <Probe />
+      </Wrapper>,
+    );
+
+    expect(getByText(/does not match alert-triage/)).toBeTruthy();
   });
 
   it("uses the latest callback identity without re-subscribing on every render", () => {
@@ -175,9 +170,6 @@ describe("useMcpAppEvents", () => {
 
     function Probe() {
       const [n, setN] = useState(0);
-      // Inline closure — identity changes every render. The hook
-      // should stash the latest in a ref and keep a single underlying
-      // subscription.
       const onToolResult = useCallback<OnToolResult>(() => {
         calls.push(n);
       }, [n]);
@@ -209,19 +201,17 @@ describe("useMcpAppEvents", () => {
       triggerToolResult(fakeToolResult);
     });
 
-    // Still a single underlying subscription — the hook didn't churn
-    // the provider's listener set.
     expect(toolResultCount()).toBe(1);
     expect(calls).toEqual([0, 1]);
   });
 
   it("unsubscribes on unmount", () => {
-    const { ctx, toolResultCount, connectCount } = buildTestContext({
+    const { ctx, toolResultCount } = buildTestContext({
       appStub: stubApp,
     });
 
     function Probe() {
-      useMcpAppEvents({ onToolResult: () => {}, onConnect: () => {} });
+      useMcpAppEvents({ onToolResult: () => {} });
       return null;
     }
 
@@ -232,12 +222,10 @@ describe("useMcpAppEvents", () => {
     );
 
     expect(toolResultCount()).toBe(1);
-    expect(connectCount()).toBe(1);
 
     unmount();
 
     expect(toolResultCount()).toBe(0);
-    expect(connectCount()).toBe(0);
   });
 
   it("throws a clear error when used outside <McpAppProvider>", () => {

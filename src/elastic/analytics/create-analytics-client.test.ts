@@ -5,19 +5,28 @@
  * 2.0.
  */
 
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { createAnalyticsClient } from "./create-analytics-client.js";
+import type { Logger } from "../../shared/logger.js";
 
-/**
- * The analytics client wraps `@elastic/ebt`, which is non-trivial to
- * mock at runtime. These tests treat the factory as a black box and
- * just verify the public surface — construction, opt-in toggling,
- * context setters, and graceful shutdown — works without throwing.
- *
- * Behavioural coverage of the EBT shipper (opt-in semantics, header
- * generation, retry/back-off) belongs to `@elastic/ebt`'s own suite.
- */
 describe("createAnalyticsClient", () => {
+  function createMockLogger(): Pick<Logger, "debug" | "info" | "warn" | "error"> {
+    return {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  }
+
+  beforeEach(() => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("exposes the typed AnalyticsClient surface", () => {
     const client = createAnalyticsClient({ mcpAppVersion: "1.2.3" });
 
@@ -30,7 +39,10 @@ describe("createAnalyticsClient", () => {
   });
 
   it("does not throw on track* calls before opt-in (events are queued)", () => {
-    const client = createAnalyticsClient({ mcpAppVersion: "1.2.3" });
+    const client = createAnalyticsClient({
+      mcpAppVersion: "1.2.3",
+      logger: createMockLogger(),
+    });
 
     expect(() => {
       client.trackToolCalled({
@@ -40,6 +52,53 @@ describe("createAnalyticsClient", () => {
       });
       client.trackViewRendered({ view_id: "alert-triage" });
     }).not.toThrow();
+  });
+
+  it("does not write EBT debug output to stdout with the default logger", () => {
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => undefined);
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const client = createAnalyticsClient({ mcpAppVersion: "1.2.3" });
+
+    client.trackViewRendered({ view_id: "alert-triage" });
+
+    expect(debug).not.toHaveBeenCalled();
+    expect(info).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("logs each tracked telemetry event through the injected logger", () => {
+    const logger = createMockLogger();
+    const client = createAnalyticsClient({ mcpAppVersion: "1.2.3", logger });
+
+    client.trackToolCalled({
+      tool_id: "triage-alerts",
+      duration_ms: 12,
+      success: true,
+    });
+    client.trackViewRendered({ view_id: "alert-triage" });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'reported event: send_to=production type=mcp_tool_called payload={"tool_id":"triage-alerts","duration_ms":12,"success":true}',
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      'reported event: send_to=production type=view_rendered payload={"view_id":"alert-triage"}',
+    );
+  });
+
+  it("logs the configured telemetry destination with tracked events", () => {
+    const logger = createMockLogger();
+    const client = createAnalyticsClient({
+      mcpAppVersion: "1.2.3",
+      sendTo: "staging",
+      logger,
+    });
+
+    client.trackViewRendered({ view_id: "alert-triage" });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'reported event: send_to=staging type=view_rendered payload={"view_id":"alert-triage"}',
+    );
   });
 
   it("setOptIn / setClusterContext / setLicenseContext are side-effect-only and return void", () => {

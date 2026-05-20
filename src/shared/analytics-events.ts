@@ -5,15 +5,6 @@
  * 2.0.
  */
 
-/**
- * Canonical list of view identifiers reported in the `view_rendered`
- * telemetry event.
- *
- * Shared between the React views (which call `useAnalytics().trackViewRendered`)
- * and the server-side report-analytics-event tool (whose Zod input schema
- * is `z.enum(VIEW_IDS)`). Adding a view means appending a literal here;
- * renaming or removing one is a dashboard-impacting event.
- */
 export const VIEW_IDS = [
   "alert-triage",
   "attack-discovery",
@@ -24,3 +15,13 @@ export const VIEW_IDS = [
 ] as const;
 
 export type ViewId = (typeof VIEW_IDS)[number];
+
+export type ViewRenderedEvent = {
+  readonly eventType: "view_rendered";
+  readonly viewId: ViewId;
+};
+
+export type AnalyticsEvent = ViewRenderedEvent;
+
+export const ANALYTICS_EVENT_TYPES = ["view_rendered"] as const;
+export type AnalyticsEventType = (typeof ANALYTICS_EVENT_TYPES)[number];
