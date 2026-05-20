@@ -219,6 +219,12 @@ function AppContent() {
     trackEvent({ eventType: "view_rendered", viewId: "alert-triage" });
   }, [trackEvent]);
 
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadAlertsImpl(app);
+  }, [connected, bootstrap.status, getApp, loadAlertsImpl]);
+
   const loadAlerts = useCallback((overrideParams?: Partial<FilterParams>) => {
     const app = getApp();
     if (app) loadAlertsImpl(app, overrideParams);

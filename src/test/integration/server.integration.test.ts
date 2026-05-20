@@ -626,6 +626,10 @@ describe("MCP server integration (in-process Client + Server)", () => {
       }
     }
 
+    it("boots successfully when analytics is omitted (defaults to noop)", () => {
+      expect(() => createServer({})).not.toThrow();
+    });
+
     it("crashes with a clear error when no cluster config is set", () => {
       withClustersJson(undefined, () => {
         expect(() =>

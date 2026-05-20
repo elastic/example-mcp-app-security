@@ -56,3 +56,12 @@ export interface AnalyticsClient {
 
   shutdown(): Promise<void>;
 }
+
+export const noopAnalyticsClient: AnalyticsClient = {
+  trackToolCalled: () => {},
+  trackViewRendered: () => {},
+  setOptIn: () => {},
+  setClusterContext: () => {},
+  setLicenseContext: () => {},
+  shutdown: async () => {},
+};

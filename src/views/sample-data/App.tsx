@@ -564,6 +564,12 @@ function AppContent() {
     trackEvent({ eventType: "view_rendered", viewId: "sample-data" });
   }, [trackEvent]);
 
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadExistingData(app);
+  }, [connected, bootstrap.status, getApp, loadExistingData]);
+
   const toggleScenario = useCallback((id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);

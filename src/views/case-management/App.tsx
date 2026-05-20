@@ -236,6 +236,12 @@ function AppContent() {
     trackEvent({ eventType: "view_rendered", viewId: "case-management" });
   }, [trackEvent]);
 
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadCasesImpl(app);
+  }, [connected, bootstrap.status, getApp, loadCasesImpl]);
+
   const fullscreen = useFullscreen(getApp);
   const toast = useToast();
 

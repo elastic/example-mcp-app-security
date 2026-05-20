@@ -231,7 +231,7 @@ function entityRiskColor(level: string): string {
 export function App() {
   return (
     <ToastProvider>
-      <McpAppProvider name="attack-discovery-triage" version="1.0.0">
+      <McpAppProvider name="attack-discovery" version="1.0.0">
         <AppContent />
       </McpAppProvider>
     </ToastProvider>
@@ -379,6 +379,12 @@ function AppContent() {
   useEffect(() => {
     trackEvent({ eventType: "view_rendered", viewId: "attack-discovery" });
   }, [trackEvent]);
+
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadDiscoveriesImpl(app);
+  }, [connected, bootstrap.status, getApp, loadDiscoveriesImpl]);
 
   const fullscreen = useFullscreen(getApp);
 

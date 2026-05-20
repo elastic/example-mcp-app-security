@@ -67,10 +67,27 @@ describe("createAnalyticsClient", () => {
     expect(log).not.toHaveBeenCalled();
   });
 
-  it("logs each tracked telemetry event through the injected logger", () => {
+  it("does not log tracked telemetry events before opt-in", () => {
     const logger = createMockLogger();
     const client = createAnalyticsClient({ mcpAppVersion: "1.2.3", logger });
 
+    client.trackToolCalled({
+      tool_id: "triage-alerts",
+      duration_ms: 12,
+      success: true,
+    });
+    client.trackViewRendered({ view_id: "alert-triage" });
+
+    expect(logger.info).not.toHaveBeenCalledWith(
+      expect.stringContaining("reported event:"),
+    );
+  });
+
+  it("logs each tracked telemetry event through the injected logger after opt-in", () => {
+    const logger = createMockLogger();
+    const client = createAnalyticsClient({ mcpAppVersion: "1.2.3", logger });
+
+    client.setOptIn(true);
     client.trackToolCalled({
       tool_id: "triage-alerts",
       duration_ms: 12,
@@ -94,10 +111,28 @@ describe("createAnalyticsClient", () => {
       logger,
     });
 
+    client.setOptIn(true);
     client.trackViewRendered({ view_id: "alert-triage" });
 
     expect(logger.info).toHaveBeenCalledWith(
       'reported event: send_to=staging type=view_rendered payload={"view_id":"alert-triage"}',
+    );
+  });
+
+  it("stops logging tracked telemetry events after opt-out", () => {
+    const logger = createMockLogger();
+    const client = createAnalyticsClient({ mcpAppVersion: "1.2.3", logger });
+
+    client.setOptIn(true);
+    client.trackViewRendered({ view_id: "alert-triage" });
+    client.setOptIn(false);
+    client.trackViewRendered({ view_id: "threat-hunt" });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'reported event: send_to=production type=view_rendered payload={"view_id":"alert-triage"}',
+    );
+    expect(logger.info).not.toHaveBeenCalledWith(
+      'reported event: send_to=production type=view_rendered payload={"view_id":"threat-hunt"}',
     );
   });
 

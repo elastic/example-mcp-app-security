@@ -10,6 +10,7 @@ export type {
   ClusterContext,
   LicenseContext,
 } from "./analytics-client.js";
+export { noopAnalyticsClient } from "./analytics-client.js";
 export type {
   McpToolCalledEbtPayload,
   ViewRenderedEbtPayload,

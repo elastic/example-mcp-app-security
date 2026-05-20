@@ -29,12 +29,6 @@ import {
 const CHANNEL_NAME = "elastic-security-mcp-app";
 const noop = (): void => undefined;
 export type TelemetrySendTo = "production" | "staging";
-type TelemetryEventPayload = McpToolCalledEbtPayload | ViewRenderedEbtPayload;
-
-interface BufferedTelemetryEvent {
-  readonly eventType: string;
-  readonly payload: TelemetryEventPayload;
-}
 
 const defaultLogger = createStderrLogger(["telemetry"]);
 const defaultLoggerBase: Pick<Logger, "info" | "warn" | "error" | "debug"> = {
@@ -63,48 +57,11 @@ function logReportedEvent(
   logger: Pick<EbtLogger, "info">,
   sendTo: TelemetrySendTo,
   eventType: string,
-  event: TelemetryEventPayload,
+  event: McpToolCalledEbtPayload | ViewRenderedEbtPayload,
 ): void {
   logger.info(
     `reported event: send_to=${sendTo} type=${eventType} payload=${JSON.stringify(event)}`,
   );
-}
-
-function formatBufferedTelemetryEvent(event: BufferedTelemetryEvent): string {
-  return `type=${event.eventType} payload=${JSON.stringify(event.payload)}`;
-}
-
-function parseEbtBatchLogCount(message: string, state: "Reporting" | "Reported"): number | undefined {
-  const match = message.match(new RegExp(`^${state} (\\d+) events`));
-  if (!match) return undefined;
-  return Number(match[1]);
-}
-
-function appendBufferedEvents(
-  message: string,
-  bufferedEvents: BufferedTelemetryEvent[],
-  eventCount: number,
-): string {
-  const events = bufferedEvents.slice(0, eventCount).map(formatBufferedTelemetryEvent);
-  if (events.length === 0) return message;
-  return `${message} events=[${events.join("; ")}]`;
-}
-
-function enrichEbtInfoMessage(
-  message: string,
-  bufferedEvents: BufferedTelemetryEvent[],
-): string {
-  const reportingCount = parseEbtBatchLogCount(message, "Reporting");
-  if (reportingCount !== undefined) {
-    return appendBufferedEvents(message, bufferedEvents, reportingCount);
-  }
-
-  const reportedCount = parseEbtBatchLogCount(message, "Reported");
-  if (reportedCount === undefined) return message;
-
-  const enrichedMessage = appendBufferedEvents(message, bufferedEvents, reportedCount);
-  bufferedEvents.splice(0, reportedCount);
-  return enrichedMessage;
 }
 
 /**
@@ -115,12 +72,10 @@ function enrichEbtInfoMessage(
  */
 function adaptLogger(
   base: Pick<Logger, "info" | "warn" | "error" | "debug">,
-  bufferedEvents: BufferedTelemetryEvent[],
 ): EbtLogger {
   const logger: EbtLogger = {
     debug: (msg) => base.debug(typeof msg === "function" ? msg() : msg),
-    info: (msg) =>
-      base.info(enrichEbtInfoMessage(typeof msg === "function" ? msg() : msg, bufferedEvents)),
+    info: (msg) => base.info(typeof msg === "function" ? msg() : msg),
     warn: (msg) => {
       if (msg instanceof Error) base.warn(msg);
       else base.warn(typeof msg === "function" ? msg() : msg);
@@ -155,8 +110,8 @@ export function createAnalyticsClient(
 ): AnalyticsClient {
   const sendTo = opts.sendTo ?? resolveTelemetrySendTo(process.env.MCP_APP_TELEMETRY_ENV);
   const baseUrl = baseUrlFor(sendTo);
-  const bufferedEvents: BufferedTelemetryEvent[] = [];
-  const logger = adaptLogger(opts.logger ?? defaultLoggerBase, bufferedEvents);
+  const logger = adaptLogger(opts.logger ?? defaultLoggerBase);
+  let optedIn = false;
 
   // `.mcpb` installs launch the MCP child without setting `NODE_ENV`, so
   // we opt **into** dev mode only when it's set explicitly to
@@ -244,15 +199,18 @@ export function createAnalyticsClient(
   return {
     trackToolCalled(event: McpToolCalledEbtPayload): void {
       ebt.reportEvent(EVENT_TYPES.mcpToolCalled, event);
-      bufferedEvents.push({ eventType: EVENT_TYPES.mcpToolCalled, payload: event });
-      logReportedEvent(logger, sendTo, EVENT_TYPES.mcpToolCalled, event);
+      if (optedIn) {
+        logReportedEvent(logger, sendTo, EVENT_TYPES.mcpToolCalled, event);
+      }
     },
     trackViewRendered(event: ViewRenderedEbtPayload): void {
       ebt.reportEvent(EVENT_TYPES.viewRendered, event);
-      bufferedEvents.push({ eventType: EVENT_TYPES.viewRendered, payload: event });
-      logReportedEvent(logger, sendTo, EVENT_TYPES.viewRendered, event);
+      if (optedIn) {
+        logReportedEvent(logger, sendTo, EVENT_TYPES.viewRendered, event);
+      }
     },
     setOptIn(enabled: boolean): void {
+      optedIn = enabled;
       ebt.optIn({ global: { enabled } });
     },
     setClusterContext(ctx: ClusterContext): void {

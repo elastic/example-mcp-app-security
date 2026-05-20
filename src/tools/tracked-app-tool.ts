@@ -76,32 +76,16 @@ export function registerTrackedAppTool<
       }
     };
 
-    let result: unknown;
-    try {
-      result = original(...args);
-    } catch (err) {
-      emit(false);
-      throw err;
-    }
-
-    if (
-      result &&
-      typeof (result as Promise<unknown>).then === "function"
-    ) {
-      return (result as Promise<unknown>).then(
-        (value) => {
-          emit(true);
-          return value;
-        },
-        (err: unknown) => {
-          emit(false);
-          throw err;
-        },
-      );
-    }
-
-    emit(true);
-    return result;
+    return Promise.resolve(original(...args)).then(
+      (value) => {
+        emit(true);
+        return value;
+      },
+      (err: unknown) => {
+        emit(false);
+        throw err;
+      },
+    );
   };
 
   return registerAppTool<OutputArgs, InputArgs>(

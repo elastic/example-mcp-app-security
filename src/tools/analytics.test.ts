@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { registerAnalyticsTools } from "./analytics.js";
@@ -84,6 +84,25 @@ describe("registerAnalyticsTools", () => {
           expect.objectContaining({ text: JSON.stringify({ ok: true }) }),
         ],
       }),
+    );
+  });
+
+  it("warns via the injected logger when trackViewRendered throws", async () => {
+    const server = createMockMcpServer();
+    const analytics = createMockAnalyticsClient();
+    const warn = vi.fn();
+    (analytics.trackViewRendered as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      throw new Error("shipper offline");
+    });
+
+    registerAnalyticsTools(server as unknown as McpServer, { analytics, logger: { warn } });
+    const tool = server.tool("report-analytics-event");
+
+    await tool.callback({ eventType: "view_rendered", viewId: "alert-triage" });
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("shipper offline"),
     );
   });
 

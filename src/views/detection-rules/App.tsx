@@ -196,6 +196,12 @@ function AppContent() {
     trackEvent({ eventType: "view_rendered", viewId: "detection-rules" });
   }, [trackEvent]);
 
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadRulesImpl(app);
+  }, [connected, bootstrap.status, getApp, loadRulesImpl]);
+
   const loadRules = useCallback((filter?: string) => {
     const app = getApp();
     if (app) loadRulesImpl(app, filter);

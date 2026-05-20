@@ -12,9 +12,11 @@ import {
   VIEW_IDS,
   type AnalyticsClient,
 } from "../elastic/analytics/index.js";
+import { createStderrLogger, type Logger } from "../shared/logger.js";
 
 export interface AnalyticsToolDeps {
   readonly analytics: Pick<AnalyticsClient, "trackViewRendered">;
+  readonly logger?: Pick<Logger, "warn">;
 }
 
 /**
@@ -49,6 +51,7 @@ export function registerAnalyticsTools(
   deps: AnalyticsToolDeps,
 ): void {
   const { analytics } = deps;
+  const logger = deps.logger ?? createStderrLogger(["analytics-tool"]);
 
   registerAppTool(
     server,
@@ -70,7 +73,10 @@ export function registerAnalyticsTools(
             void _exhaustive;
           }
         }
-      } catch {
+      } catch (err) {
+        logger.warn(
+          `report-analytics-event: trackViewRendered failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ ok: true }) }],

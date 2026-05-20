@@ -41,7 +41,7 @@ import { registerCaseManagementTools } from "./tools/case-management.js";
 import { registerDetectionRuleTools } from "./tools/detection-rules.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
-import type { AnalyticsClient } from "./elastic/analytics/index.js";
+import { noopAnalyticsClient, type AnalyticsClient } from "./elastic/analytics/index.js";
 
 export interface CreateServerDeps {
   /**
@@ -58,7 +58,7 @@ export interface CreateServerDeps {
    * per-request servers in HTTP mode. Wired through to each tool group
    * so handlers can emit `mcp_tool_called` via `registerTrackedAppTool`.
    */
-  readonly analytics: AnalyticsClient;
+  readonly analytics?: AnalyticsClient;
 }
 
 /**
@@ -69,10 +69,10 @@ export interface CreateServerDeps {
  * moment. Once tools accept a cluster parameter, this will be replaced with
  * a per-request factory call.
  */
-export function createServer(deps: CreateServerDeps): McpServer {
+export function createServer(deps: CreateServerDeps = {}): McpServer {
   const credentialClient = deps.credentialClient ?? createCredentialClient();
   const credentials = credentialClient.get();
-  const { analytics } = deps;
+  const analytics = deps.analytics ?? noopAnalyticsClient;
 
   const esClient = createEsClient(credentials);
   const kibanaClient = createKibanaClient(credentials);
