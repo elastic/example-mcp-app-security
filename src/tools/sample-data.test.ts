@@ -9,6 +9,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+// `sample-data.ts` → `service/index.ts` → `telemetryService.ts` →
+// `analytics/index.ts` → `create-analytics-client.ts` → `@elastic/ebt`.
+// The `vi.resetModules()` pattern in this file causes a fresh CJS load of
+// `@elastic/ebt` on every dynamic re-import, which fails in vitest's ESM
+// context. Mocking the boundary that imports ebt prevents the load entirely;
+// the mock persists across `vi.resetModules()` calls.
+vi.mock("../elastic/analytics/create-analytics-client.js", () => ({
+  createAnalyticsClient: vi.fn(),
+  resolveTelemetrySendTo: vi.fn().mockReturnValue("production"),
+}));
+
 import {
   createMockMcpServer,
   parseBootstrapToolText,
