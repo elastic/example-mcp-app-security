@@ -7,29 +7,32 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
 import type { SecurityAlert } from "../shared/types.js";
+import { createMcpAppBootstrap } from "../shared/mcp-app-bootstrap.js";
 import type { AlertsService } from "../elastic/service/index.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://triage-alerts/mcp-app.html";
 
-/** Services the alert-triage tools depend on (default cluster only, for now). */
 export interface AlertTriageToolDeps {
   readonly alertsService: AlertsService;
+  readonly analytics: AnalyticsClient;
 }
 
 export function registerAlertTriageTools(
   server: McpServer,
   deps: AlertTriageToolDeps
 ) {
-  const { alertsService } = deps;
-  registerAppTool(
+  const { alertsService, analytics } = deps;
+  registerTrackedAppTool(
+    analytics,
     server,
     "triage-alerts",
     {
@@ -57,49 +60,53 @@ export function registerAlertTriageTools(
     },
     async ({ days, severity, limit, query, verdicts }) => {
       const summary = await alertsService.getAlerts({ days, severity, limit, query });
-      const compact = {
-        total: summary.total,
-        bySeverity: summary.bySeverity,
-        byRule: summary.byRule.slice(0, 10),
-        byHost: summary.byHost.slice(0, 10),
-        params: { days: days || 7, severity, limit: limit || 50, query },
-        verdicts: verdicts || [],
-        alerts: summary.alerts.slice(0, 30).map((a) => {
-          const s = a._source;
-          return {
-            id: a._id,
-            rule: s["kibana.alert.rule.name"],
-            severity: s["kibana.alert.severity"],
-            risk_score: s["kibana.alert.risk_score"],
-            reason: s["kibana.alert.reason"],
-            host: s.host?.name,
-            user: s.user?.name,
-            process: s.process?.name,
-            executable: s.process?.executable,
-            parent_process: s.process?.parent?.name,
-            file: s.file?.path,
-            source_ip: s.source?.ip,
-            dest_ip: s.destination?.ip,
-            timestamp: s["@timestamp"],
-            mitre: s["kibana.alert.rule.threat"]?.map((t) => ({
-              tactic: t.tactic.name,
-              techniques: t.technique?.map((tech) => `${tech.id} ${tech.name}`) || [],
-            })),
-          };
-        }),
-      };
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(compact),
+            text: JSON.stringify(
+              createMcpAppBootstrap("alert-triage", {
+                summary: {
+                  total: summary.total,
+                  bySeverity: summary.bySeverity,
+                  byRule: summary.byRule.slice(0, 10),
+                  byHost: summary.byHost.slice(0, 10),
+                  alerts: summary.alerts.slice(0, 30).map((a) => {
+                    const s = a._source;
+                    return {
+                      id: a._id,
+                      rule: s["kibana.alert.rule.name"],
+                      severity: s["kibana.alert.severity"],
+                      risk_score: s["kibana.alert.risk_score"],
+                      reason: s["kibana.alert.reason"],
+                      host: s.host?.name,
+                      user: s.user?.name,
+                      process: s.process?.name,
+                      executable: s.process?.executable,
+                      parent_process: s.process?.parent?.name,
+                      file: s.file?.path,
+                      source_ip: s.source?.ip,
+                      dest_ip: s.destination?.ip,
+                      timestamp: s["@timestamp"],
+                      mitre: s["kibana.alert.rule.threat"]?.map((t) => ({
+                        tactic: t.tactic.name,
+                        techniques: t.technique?.map((tech) => `${tech.id} ${tech.name}`) || [],
+                      })),
+                    };
+                  }),
+                },
+                params: { days: days || 7, severity, limit: limit || 50, query },
+                verdicts: verdicts || [],
+              }),
+            ),
           },
         ],
       };
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "poll-alerts",
     {
@@ -122,7 +129,8 @@ export function registerAlertTriageTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-alert-context",
     {
@@ -143,7 +151,8 @@ export function registerAlertTriageTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "acknowledge-alert",
     {
@@ -162,7 +171,8 @@ export function registerAlertTriageTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "unacknowledge-alert",
     {
@@ -181,7 +191,8 @@ export function registerAlertTriageTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "acknowledge-alerts-bulk",
     {

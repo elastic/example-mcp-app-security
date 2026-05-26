@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { timeAgo } from "../../shared/theme";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
+import { inspectMcpAppBootstrapResult } from "../../shared/mcp-app-bootstrap";
 import { SeverityBadge } from "../../shared/severity";
 import type { AttackDiscoveryFinding, DiscoveryDetail } from "../../shared/types";
 import { AttackFlowDiagram } from "./AttackFlowDiagram";
@@ -37,7 +38,9 @@ import {
 } from "../../shared/components";
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppBootstrap, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import { stripKibanaTemplateSyntax } from "./template-syntax";
 import "./styles.css";
 
@@ -228,7 +231,9 @@ function entityRiskColor(level: string): string {
 export function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <McpAppProvider name="attack-discovery" version="1.0.0">
+        <AppContent />
+      </McpAppProvider>
     </ToastProvider>
   );
 }
@@ -318,10 +323,13 @@ function AppContent() {
     }
   }, [assessConfidence]);
 
-  const { connected, getApp } = useMcpApp({
-    name: "attack-discovery-triage",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  const bootstrap = useMcpAppBootstrap("attack-discovery");
+  useMcpAppEvents({
     onToolResult: (result) => {
+      if (inspectMcpAppBootstrapResult(result).status !== "not_bootstrap") {
+        return;
+      }
       try {
         const text = extractToolText(result);
         if (text) {
@@ -339,11 +347,44 @@ function AppContent() {
         }
       } catch { /* ignore */ }
     },
-    onConnect: (app, gotResult) => {
-      if (!gotResult) loadDiscoveriesImpl(app);
-      checkGenerationStatusImpl(app);
-    },
   });
+
+  useEffect(() => {
+    if (bootstrap.status === "idle") {
+      return;
+    }
+    if (bootstrap.status === "error") {
+      setLoading(false);
+      return;
+    }
+    const { discoveries: nextDiscoveries, params } = bootstrap.payload;
+    paramsRef.current = { ...params };
+    setDiscoveries(
+      nextDiscoveries.map((d) => ({
+        ...d,
+        alertCount: d.alertIds?.length || d.alertCount || 0,
+      })),
+    );
+    setLoading(false);
+  }, [bootstrap]);
+
+  useEffect(() => {
+    if (!connected) return;
+    const app = getApp();
+    if (!app) return;
+    void checkGenerationStatusImpl(app);
+  }, [checkGenerationStatusImpl, connected, getApp]);
+
+  const { trackEvent } = useAnalytics();
+  useEffect(() => {
+    trackEvent({ eventType: "view_rendered", viewId: "attack-discovery" });
+  }, [trackEvent]);
+
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadDiscoveriesImpl(app);
+  }, [connected, bootstrap.status, getApp, loadDiscoveriesImpl]);
 
   const fullscreen = useFullscreen(getApp);
 
@@ -568,8 +609,6 @@ function AppContent() {
     return sorted;
   }, [discoveries, activeQuery, confidenceFilter, sortBy]);
 
-  // Group filtered discoveries by the selected key. A single discovery can land in multiple
-  // buckets when grouping by host/user/tactic (since each discovery may reference many of each).
   const groupedDiscoveries = useMemo(() => {
     if (groupBy === "none") return null;
     const buckets = new Map<string, {
@@ -809,6 +848,8 @@ function AppContent() {
       <div className="discoveries-list-content">
         {loading && discoveries.length === 0 ? (
           <LoadingState>Loading attack discoveries...</LoadingState>
+        ) : bootstrap.status === "error" && discoveries.length === 0 ? (
+          <EmptyState>{bootstrap.reason}</EmptyState>
         ) : filtered.length === 0 ? (
           <EmptyState>
             <div style={{ fontSize: 28, marginBottom: 8 }}>&#128737;</div>

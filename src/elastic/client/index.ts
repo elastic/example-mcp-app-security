@@ -74,3 +74,6 @@ export type {
   DeleteByQueryResponse,
 } from "./sampleDataClient.js";
 export { SampleDataClient } from "./sampleDataClient.js";
+
+export type { TelemetryConfig } from "./telemetryConfigClient.js";
+export { TelemetryConfigClient } from "./telemetryConfigClient.js";

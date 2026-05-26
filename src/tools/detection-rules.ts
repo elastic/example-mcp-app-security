@@ -7,28 +7,31 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import fs from "fs";
+import { createMcpAppBootstrap } from "../shared/mcp-app-bootstrap.js";
 import type { RulesService } from "../elastic/service/index.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://manage-rules/mcp-app.html";
 
-/** Services the detection-rules tools depend on (default cluster only, for now). */
 export interface DetectionRuleToolDeps {
   readonly rulesService: RulesService;
+  readonly analytics: AnalyticsClient;
 }
 
 export function registerDetectionRuleTools(
   server: McpServer,
   deps: DetectionRuleToolDeps
 ) {
-  const { rulesService } = deps;
-  registerAppTool(
+  const { rulesService, analytics } = deps;
+  registerTrackedAppTool(
+    analytics,
     server,
     "manage-rules",
     {
@@ -44,29 +47,38 @@ export function registerDetectionRuleTools(
     },
     async ({ filter, page, perPage }) => {
       const result = await rulesService.findRules({ filter, page, perPage });
-      const compact = {
-        total: result.total,
-        rules: result.data.slice(0, 20).map((r) => ({
-          id: r.id, name: r.name, type: r.type, severity: r.severity,
-          enabled: r.enabled, risk_score: r.risk_score,
-          description: r.description?.substring(0, 200),
-          query: r.query?.substring(0, 300),
-          language: r.language,
-          tags: r.tags?.slice(0, 10),
-          threat: r.threat?.map((t: any) => ({
-            tactic: t.tactic?.name,
-            techniques: t.technique?.map((tech: any) => tech.id + ' ' + tech.name) || [],
-          })),
-        })),
-        params: { filter, page, perPage },
-      };
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(compact) }],
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(
+            createMcpAppBootstrap("detection-rules", {
+              total: result.total,
+              rules: result.data.slice(0, 20).map((r) => ({
+                id: r.id,
+                name: r.name,
+                type: r.type,
+                severity: r.severity,
+                enabled: r.enabled,
+                risk_score: r.risk_score,
+                description: r.description?.substring(0, 200),
+                query: r.query?.substring(0, 300),
+                language: r.language,
+                tags: r.tags?.slice(0, 10),
+                threat: r.threat?.map((t) => ({
+                  tactic: t.tactic?.name,
+                  techniques: t.technique?.map((tech) => `${tech.id} ${tech.name}`) || [],
+                })),
+              })),
+              params: { filter, page, perPage },
+            }),
+          ),
+        }],
       };
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "find-rules",
     {
@@ -87,7 +99,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-rule",
     {
@@ -102,7 +115,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "create-rule",
     {
@@ -120,7 +134,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "patch-rule",
     {
@@ -141,7 +156,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "toggle-rule",
     {
@@ -159,7 +175,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "validate-query",
     {
@@ -177,7 +194,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "noisy-rules",
     {
@@ -195,7 +213,8 @@ export function registerDetectionRuleTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "manage-exceptions",
     {

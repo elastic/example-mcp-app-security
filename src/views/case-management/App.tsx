@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { timeAgo } from "../../shared/theme";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
+import { inspectMcpAppBootstrapResult } from "../../shared/mcp-app-bootstrap";
 import { renderMarkdown } from "../../shared/markdown";
 import type { KibanaCase } from "../../shared/types";
 import { CaseForm } from "./components/CaseForm";
@@ -39,13 +40,14 @@ import {
 } from "../../shared/components";
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppBootstrap, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import { FactIcon } from "../../shared/components/icons/icons";
 import "./styles.css";
 
 type SeverityKey = Severity;
 type StatusKey = "open" | "in-progress" | "closed";
-/** StatusKey plus the UI-only "all" sentinel used by the filter dropdown. */
 type StatusFilterKey = StatusKey | "all";
 type SortKey = "severity" | "newest" | "oldest" | "title" | "alerts" | "comments";
 type GroupKey = "none" | "status" | "severity" | "creator" | "tag";
@@ -130,7 +132,9 @@ function normalizeCase(raw: unknown): KibanaCase | null {
 export function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <McpAppProvider name="case-management" version="1.0.0">
+        <AppContent />
+      </McpAppProvider>
     </ToastProvider>
   );
 }
@@ -181,10 +185,13 @@ function AppContent() {
     }
   }, []);
 
-  const { connected, getApp } = useMcpApp({
-    name: "case-management",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  const bootstrap = useMcpAppBootstrap("case-management");
+  useMcpAppEvents({
     onToolResult: (result, app) => {
+      if (inspectMcpAppBootstrapResult(result).status !== "not_bootstrap") {
+        return;
+      }
       try {
         const text = extractToolText(result);
         if (text) {
@@ -203,10 +210,38 @@ function AppContent() {
       } catch { /* ignore */ }
       loadCasesImpl(app);
     },
-    onConnect: (app, gotResult) => {
-      if (!gotResult) loadCasesImpl(app);
-    },
   });
+
+  useEffect(() => {
+    if (bootstrap.status === "idle") {
+      return;
+    }
+    if (bootstrap.status === "error") {
+      setLoading(false);
+      return;
+    }
+    const { cases: nextCases, total: nextTotal, params } = bootstrap.payload;
+    setCases(nextCases.map(normalizeCase).filter(Boolean) as KibanaCase[]);
+    setTotal(nextTotal);
+    paramsRef.current = {
+      status: params.status,
+      search: params.search,
+    };
+    setStatusFilter((params.status as StatusFilterKey | undefined) ?? "open");
+    setSearchInput(params.search ?? "");
+    setLoading(false);
+  }, [bootstrap]);
+
+  const { trackEvent } = useAnalytics();
+  useEffect(() => {
+    trackEvent({ eventType: "view_rendered", viewId: "case-management" });
+  }, [trackEvent]);
+
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadCasesImpl(app);
+  }, [connected, bootstrap.status, getApp, loadCasesImpl]);
 
   const fullscreen = useFullscreen(getApp);
   const toast = useToast();
@@ -322,8 +357,6 @@ function AppContent() {
     return arr;
   }, [cases, sortBy]);
 
-  // Group cases into buckets by the selected grouping key. Each bucket carries a display
-  // name, optional subtitle, the highest-severity case in the group, and the cases themselves.
   const groupedCases = useMemo(() => {
     if (groupBy === "none") return null;
     const buckets = new Map<string, {
@@ -360,7 +393,6 @@ function AppContent() {
         }
       }
     }
-    // Sort groups: highest severity first, then by case count desc, then alphabetically.
     return [...buckets.values()].sort((a, b) => {
       const d = (SEV_RANK[b.topSeverity] || 0) - (SEV_RANK[a.topSeverity] || 0);
       if (d !== 0) return d;
@@ -483,6 +515,8 @@ function AppContent() {
       <div className="case-list-content">
         {loading && !cases.length ? (
           <LoadingState>Loading cases…</LoadingState>
+        ) : bootstrap.status === "error" && !cases.length ? (
+          <EmptyState>{bootstrap.reason}</EmptyState>
         ) : isCreating ? (
           <EmptyState>Fill in the form on the right to create a case.</EmptyState>
         ) : !cases.length ? (
@@ -644,8 +678,6 @@ function AppContent() {
   );
 }
 
-// ─── Card ─────────────────────────────────────────────────────────────────────
-
 function CaseCard({ caseData, compact, selected, showDetails = true, onClick, onFilter }: {
   caseData: KibanaCase; compact?: boolean; selected?: boolean; showDetails?: boolean; onClick?: () => void; onFilter?: (q: string) => void;
 }) {
@@ -737,8 +769,6 @@ function CaseCard({ caseData, compact, selected, showDetails = true, onClick, on
     </div>
   );
 }
-
-// ─── Detail view ─────────────────────────────────────────────────────────────
 
 const ALERTS_PREVIEW = 3;
 const COMMENTS_PREVIEW = 3;
@@ -937,7 +967,6 @@ function FactCol({ label, value, icon, onFilter }: { label: string; value?: stri
     </div>
   );
 }
-
 
 function ExpandSection({ title, count, expanded, onToggle, previewCount, children }: {
   title: string; count: number; expanded: boolean; onToggle: () => void; previewCount: number; children: React.ReactNode;

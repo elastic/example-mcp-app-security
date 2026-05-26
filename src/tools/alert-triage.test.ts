@@ -12,10 +12,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAlertTriageTools } from "./alert-triage.js";
 import {
   createMockMcpServer,
+  parseBootstrapToolText,
   parseToolText,
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
 import { createMockAlertsService } from "../test/helpers/mockServices.js";
+import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
 import type { AlertSummary, SecurityAlert } from "../shared/types.js";
 import type { AlertsService } from "../elastic/service/index.js";
 
@@ -58,7 +60,10 @@ describe("registerAlertTriageTools", () => {
     alertsService = createMockAlertsService();
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
     vi.spyOn(fs, "readFileSync").mockReturnValue("<html>triage</html>");
-    registerAlertTriageTools(server as unknown as McpServer, { alertsService });
+    registerAlertTriageTools(server as unknown as McpServer, {
+      alertsService,
+      analytics: noopAnalyticsClient,
+    });
   });
 
   it("registers every alert-triage tool plus its UI resource", () => {
@@ -83,7 +88,7 @@ describe("registerAlertTriageTools", () => {
   });
 
   describe("triage-alerts", () => {
-    it("forwards days/severity/limit/query to AlertsService and shapes a compact response", async () => {
+    it("forwards days/severity/limit/query to AlertsService and emits a bootstrap payload", async () => {
       vi.mocked(alertsService.getAlerts).mockResolvedValueOnce(
         emptySummary({
           total: 12,
@@ -115,19 +120,12 @@ describe("registerAlertTriageTools", () => {
         query: "powershell",
       });
 
-      const body = parseToolText<{
-        total: number;
-        byRule: unknown[];
-        byHost: unknown[];
-        alerts: { id: string }[];
-        params: Record<string, unknown>;
-        verdicts: unknown[];
-      }>(out);
+      const body = parseBootstrapToolText(out, "alert-triage");
 
-      expect(body.total).toBe(12);
-      expect(body.byRule).toHaveLength(10);
-      expect(body.byHost).toHaveLength(10);
-      expect(body.alerts).toHaveLength(30);
+      expect(body.summary.total).toBe(12);
+      expect(body.summary.byRule).toHaveLength(10);
+      expect(body.summary.byHost).toHaveLength(10);
+      expect(body.summary.alerts).toHaveLength(30);
       expect(body.params).toEqual({
         days: 3,
         severity: "high",
@@ -152,10 +150,7 @@ describe("registerAlertTriageTools", () => {
       ];
       const out = await server.tool("triage-alerts").callback({ verdicts });
 
-      const body = parseToolText<{
-        params: Record<string, unknown>;
-        verdicts: unknown[];
-      }>(out);
+      const body = parseBootstrapToolText(out, "alert-triage");
       expect(body.params).toEqual({
         days: 7,
         severity: undefined,
@@ -196,17 +191,9 @@ describe("registerAlertTriageTools", () => {
 
       const out = await server.tool("triage-alerts").callback({});
 
-      const body = parseToolText<{
-        alerts: {
-          id: string;
-          rule: string;
-          host: string;
-          process: string;
-          mitre: { tactic: string; techniques: string[] }[];
-        }[];
-      }>(out);
+      const body = parseBootstrapToolText(out, "alert-triage");
 
-      expect(body.alerts).toEqual([
+      expect(body.summary.alerts).toEqual([
         expect.objectContaining({
           id: "alert-1",
           rule: "Suspicious PowerShell",
@@ -243,8 +230,8 @@ describe("registerAlertTriageTools", () => {
       );
 
       const out = await server.tool("triage-alerts").callback({});
-      const body = parseToolText<{ alerts: { mitre?: unknown[] }[] }>(out);
-      expect(body.alerts[0].mitre).toEqual([
+      const body = parseBootstrapToolText(out, "alert-triage");
+      expect(body.summary.alerts[0]?.mitre).toEqual([
         { tactic: "Initial Access", techniques: [] },
       ]);
     });

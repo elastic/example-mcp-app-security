@@ -7,7 +7,6 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
@@ -19,24 +18,28 @@ import type {
   IndicesService,
   InvestigateService,
 } from "../elastic/service/index.js";
+import { createMcpAppBootstrap } from "../shared/mcp-app-bootstrap.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://threat-hunt/mcp-app.html";
 
-/** Services the threat-hunt tools depend on (default cluster only, for now). */
 export interface ThreatHuntToolDeps {
   readonly esqlService: EsqlService;
   readonly indicesService: IndicesService;
   readonly investigateService: InvestigateService;
   readonly entityDetailService: EntityDetailService;
+  readonly analytics: AnalyticsClient;
 }
 
 export function registerThreatHuntTools(
   server: McpServer,
   deps: ThreatHuntToolDeps
 ) {
-  const { esqlService, indicesService, investigateService, entityDetailService } = deps;
-  registerAppTool(
+  const { esqlService, indicesService, investigateService, entityDetailService, analytics } = deps;
+  registerTrackedAppTool(
+    analytics,
     server,
     "threat-hunt",
     {
@@ -55,44 +58,63 @@ export function registerThreatHuntTools(
     },
     async ({ query, description, entity }) => {
       const indices = await indicesService.listIndices();
-      const compact: Record<string, unknown> = {
+      const payload: {
+        indexCount: number;
+        indices: string[];
+        params: { query?: string; description?: string; entity?: typeof entity };
+        queryResult?: {
+          columns: string[];
+          rows: (string | number | boolean | null)[][];
+          rowCount: number;
+        };
+        queryError?: string;
+        entityGraph?: { nodeCount: number; edgeCount: number };
+      } = {
         indexCount: indices.length,
         indices: indices.slice(0, 20).map((i) => i.index),
+        params: { query, description, entity },
       };
       if (query) {
         try {
           const qr = await esqlService.executeEsql(query);
-          compact.query = query;
-          compact.rowCount = qr.values.length;
-          compact.columns = qr.columns.map((c) => c.name);
-          compact.rows = qr.values.slice(0, 20).map((row) =>
-            row.map((cell) => {
-              if (cell === null || cell === undefined) return null;
-              const s = typeof cell === "object" ? JSON.stringify(cell) : String(cell);
-              return s.length > 100 ? s.substring(0, 100) + "..." : s;
-            })
-          );
+          payload.queryResult = {
+            rowCount: qr.values.length,
+            columns: qr.columns.map((c) => c.name),
+            rows: qr.values.slice(0, 20).map((row) =>
+              row.map((cell) => {
+                if (cell === null || cell === undefined) return null;
+                const value =
+                  typeof cell === "string" ||
+                  typeof cell === "number" ||
+                  typeof cell === "boolean"
+                    ? cell
+                    : JSON.stringify(cell);
+                const s = typeof value === "string" ? value : String(value);
+                return s.length > 100 ? `${s.substring(0, 100)}...` : value;
+              }),
+            ),
+          };
         } catch (e) {
-          compact.query = query;
-          compact.queryError = e instanceof Error ? e.message : String(e);
+          payload.queryError = e instanceof Error ? e.message : String(e);
         }
       }
-      if (description) compact.description = description;
       if (entity) {
         try {
           const graph = await investigateService.investigateEntity(entity.type, entity.value);
-          compact.entity = entity;
-          compact.graph = { nodeCount: graph.nodes.length, edgeCount: graph.edges.length };
+          payload.entityGraph = { nodeCount: graph.nodes.length, edgeCount: graph.edges.length };
         } catch { /* ignore */ }
       }
-      compact.params = { query, description, entity };
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(compact) }],
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(createMcpAppBootstrap("threat-hunt", payload)),
+        }],
       };
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "execute-esql",
     {
@@ -113,7 +135,8 @@ export function registerThreatHuntTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "list-indices",
     {
@@ -130,7 +153,8 @@ export function registerThreatHuntTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-mapping",
     {
@@ -145,7 +169,8 @@ export function registerThreatHuntTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "get-entity-detail",
     {
@@ -163,7 +188,8 @@ export function registerThreatHuntTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "investigate-entity",
     {

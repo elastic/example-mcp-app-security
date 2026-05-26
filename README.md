@@ -46,6 +46,10 @@ When a user asks Claude to triage alerts or run a threat hunt, Claude calls a mo
 
 See [docs/architecture.md](docs/architecture.md) for details on how views are built, how the UI communicates with the server, and key design decisions.
 
+### Telemetry
+
+The MCP App emits anonymised usage events via `@elastic/ebt`. Shipping is mirrored to the user's Kibana telemetry opt-in — nothing leaves the process unless Kibana reports `optIn === true`. See [docs/telemetry.md](docs/telemetry.md) for the event catalog, what's collected, and how to opt out.
+
 ### Skills
 
 The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/overview) — `SKILL.md` files that teach Claude *when* and *how* to use the tools. See [docs/setup-skills.md](docs/setup-skills.md) for installation instructions.

@@ -19,3 +19,4 @@ export type {
   ScenarioRuleDef,
 } from "./sampleDataService.js";
 export { SampleDataService, SCENARIO_NAMES, SCENARIO_RULES } from "./sampleDataService.js";
+export { TelemetryService } from "./telemetryService.js";

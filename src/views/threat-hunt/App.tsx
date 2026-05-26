@@ -5,23 +5,57 @@
  * 2.0.
  */
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
+import { inspectMcpAppBootstrapResult } from "../../shared/mcp-app-bootstrap";
 import type { EsqlResult } from "../../shared/types";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppBootstrap, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import { AppGlyph, FullscreenIcon, ExitFullscreenIcon } from "../../shared/components/icons/icons";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
-// TODO: re-enable the force-directed Network view once it's stable.
-// import { InvestigationGraph } from "./components/InvestigationGraph";
 import type { GNode, GEdge } from "./components/InvestigationGraph";
 import { CardGraph } from "./components/CardGraph";
 import "./styles.css";
 
+const DEFAULT_QUERY = `FROM logs-*
+| WHERE host.name == "win-dc-01"
+| STATS count = COUNT(*) BY user.name, process.name
+| SORT count DESC
+| LIMIT 10`;
+
+const DEFAULT_RESULTS: EsqlResult = {
+  columns: [
+    { name: "user.name", type: "keyword" },
+    { name: "process.name", type: "keyword" },
+    { name: "host.name", type: "keyword" },
+    { name: "count", type: "long" },
+  ],
+  values: [
+    ["svc_backup", "powershell.exe", "win-dc-01", 147],
+    ["svc_backup", "procdump.exe", "win-dc-01", 42],
+    ["admin.backup", "powershell.exe", "win-dc-01", 38],
+    ["svc_backup", "cmd.exe", "win-dc-01", 29],
+    ["admin.backup", "rundll32.exe", "win-dc-01", 21],
+    ["svc_backup", "net.exe", "win-dc-01", 17],
+    ["admin.backup", "wmic.exe", "win-dc-01", 14],
+    ["svc_backup", "reg.exe", "win-dc-01", 11],
+  ],
+};
+
 export function App() {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<EsqlResult | null>(null);
+  return (
+    <McpAppProvider name="threat-hunt" version="1.0.0">
+      <AppContent />
+    </McpAppProvider>
+  );
+}
+
+function AppContent() {
+  const [query, setQuery] = useState(DEFAULT_QUERY);
+  const [results, setResults] = useState<EsqlResult | null>(DEFAULT_RESULTS);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const [hasExecuted, setHasExecuted] = useState(false);
@@ -29,16 +63,13 @@ export function App() {
   const [graphNodes, setGraphNodes] = useState<GNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GEdge[]>([]);
   const [graphActive, setGraphActive] = useState(false);
-  // The force-directed "Network" view is hidden for now — it gets messy fast
-  // when hunting across many alerts/users/hosts. We default to the Cards view
-  // and leave the toggle out of the UI until the network layout is improved.
   const [selectedNode, setSelectedNode] = useState<GNode | null>(null);
   const [nodeDetail, setNodeDetail] = useState<Record<string, unknown> | null>(null);
   const [nodeDetailLoading, setNodeDetailLoading] = useState(false);
 
   // Pending query/entity references survive across renders so the
-  // ontoolresult callback can stash work that came in before connect()
-  // resolved, and the onConnect callback can flush it.
+  // ontoolresult callback can stash work that came in before the
+  // explicit bootstrap payload or transport connect effect flushes it.
   const pendingRef = useRef<{ query: string | null; entity: { type: string; value: string } | null }>({
     query: null,
     entity: null,
@@ -50,10 +81,13 @@ export function App() {
   // need to call flush) and the closures themselves (which need `getApp`).
   const flushPendingRef = useRef<() => void>(() => {});
 
-  const { connected, getApp } = useMcpApp({
-    name: "threat-hunt",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  const bootstrap = useMcpAppBootstrap("threat-hunt");
+  useMcpAppEvents({
     onToolResult: (result) => {
+      if (inspectMcpAppBootstrapResult(result).status !== "not_bootstrap") {
+        return;
+      }
       try {
         const text = extractToolText(result);
         if (text) {
@@ -70,12 +104,43 @@ export function App() {
       } catch { /* ignore */ }
       flushPendingRef.current();
     },
-    onConnect: () => {
-      // Final flush after the grace window — picks up anything that arrived
-      // before connect() resolved.
-      flushPendingRef.current();
-    },
   });
+
+  useEffect(() => {
+    if (bootstrap.status !== "ready") {
+      return;
+    }
+    const { params, queryResult, queryError, entityGraph } = bootstrap.payload;
+    if (params.query) {
+      const q = params.query.trim();
+      setQuery(q);
+      pendingRef.current.query = q;
+    }
+    if (params.entity) {
+      pendingRef.current.entity = params.entity;
+    }
+    if (queryResult) {
+      setResults({
+        columns: queryResult.columns.map((name) => ({ name, type: "keyword" })),
+        values: queryResult.rows.map((row) => [...row]),
+      });
+      setQueryError(null);
+      setHasExecuted(true);
+    } else if (queryError) {
+      setResults(null);
+      setQueryError(queryError);
+      setHasExecuted(true);
+    }
+    if (entityGraph) {
+      setGraphActive(entityGraph.nodeCount > 0 || entityGraph.edgeCount > 0);
+    }
+    flushPendingRef.current();
+  }, [bootstrap]);
+
+  const { trackEvent } = useAnalytics();
+  useEffect(() => {
+    trackEvent({ eventType: "view_rendered", viewId: "threat-hunt" });
+  }, [trackEvent]);
 
   const fullscreen = useFullscreen(getApp);
 
@@ -172,15 +237,6 @@ export function App() {
     finally { setNodeDetailLoading(false); }
   }, []);
 
-  /**
-   * Seed the investigation graph with a pre-built example so users can see the
-   * visualization without having to click entities in a results table. This is
-   * especially useful when the view is driven by a playbook that only issues
-   * ES|QL queries — the graph pane would otherwise stay hidden. The example
-   * mirrors the "domain-controller compromise" storyline used in the fixtures:
-   * a host hub with user/process/IP/alert neighbors and a lateral pivot to a
-   * second host.
-   */
   const loadExampleInvestigation = useCallback(() => {
     const rootId = "host:win-dc-01";
     const nodes: GNode[] = [
@@ -208,11 +264,6 @@ export function App() {
     setSelectedNode(null);
   }, []);
 
-  // collapseEntity was used by the hidden InvestigationGraph (force-directed)
-  // view; restore alongside that component when re-enabling the Network view.
-
-  // Bind the live flush function so the `useMcpApp` callbacks declared above
-  // can call it via `flushPendingRef.current()` without TDZ issues.
   flushPendingRef.current = () => {
     const pending = pendingRef.current;
     if (pending.entity) {
@@ -300,15 +351,11 @@ export function App() {
       </header>
 
       <div className="hunt-body">
-        {/* Filter (ES|QL query editor) sits directly under the header. */}
         <QueryEditor query={query} onChange={setQuery} onExecute={() => executeQuery(query)} executing={executing} />
         {queryError && <div className="query-error">{queryError}</div>}
 
-        {/* Visualization (on top) + results table share a single bordered block. */}
         <div className="hunt-viz-results-block">
           {graphActive && (() => {
-            // Title shows "Exploring: <root>" where root is the first expanded
-            // node (or the first node if none are expanded). Matches Figma 3-3041.
             const rootNode = graphNodes.find((n) => n.expanded) || graphNodes[0];
             return (
               <div className="graph-pane">
@@ -356,8 +403,6 @@ export function App() {
     </div>
   );
 }
-
-/* ─── Node Detail Panel ─── */
 
 const TYPE_LABELS: Record<string, { icon: string; label: string; color: string }> = {
   alert: { icon: "\u26A0", label: "Alert", color: "#f04040" },

@@ -5,12 +5,18 @@
  * 2.0.
  */
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractCallResult } from "../../shared/extract-tool-text";
+import {
+  inspectMcpAppBootstrapResult,
+  type SampleDataExistingData,
+} from "../../shared/mcp-app-bootstrap";
 import { SeverityChip } from "../../shared/components";
+import { useMcpApp, useMcpAppBootstrap, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import { AppGlyph, SearchIcon } from "../../shared/components/icons/icons";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
 import "./styles.css";
 
 interface AlertInfo {
@@ -491,6 +497,14 @@ const SEVERITY_FILTERS: { key: SeverityFilter; label: string }[] = [
 ];
 
 export function App() {
+  return (
+    <McpAppProvider name="sample-data" version="1.0.0">
+      <AppContent />
+    </McpAppProvider>
+  );
+}
+
+function AppContent() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [count, setCount] = useState(50);
@@ -502,7 +516,7 @@ export function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cleanupCount, setCleanupCount] = useState<number | null>(null);
   const [rulesCreated, setRulesCreated] = useState(0);
-  const [existingData, setExistingData] = useState<{ totalDocs: number; totalAlerts: number; existingRules: number; byScenario: Record<string, { events: number; alerts: number }> } | null>(null);
+  const [existingData, setExistingData] = useState<SampleDataExistingData | null>(null);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [searchInput, setSearchInput] = useState("");
 
@@ -514,10 +528,13 @@ export function App() {
     } catch { /* cluster might not be reachable */ }
   }, []);
 
-  const { connected, getApp } = useMcpApp({
-    name: "sample-data",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  const bootstrap = useMcpAppBootstrap("sample-data");
+  useMcpAppEvents({
     onToolResult: (toolResult) => {
+      if (inspectMcpAppBootstrapResult(toolResult).status !== "not_bootstrap") {
+        return;
+      }
       try {
         const text = extractCallResult(toolResult);
         if (text) {
@@ -528,10 +545,25 @@ export function App() {
         }
       } catch { /* ignore */ }
     },
-    onConnect: (app) => {
-      loadExistingData(app);
-    },
   });
+
+  useEffect(() => {
+    if (bootstrap.status !== "ready") {
+      return;
+    }
+    setExistingData(bootstrap.payload.existingData);
+  }, [bootstrap]);
+
+  const { trackEvent } = useAnalytics();
+  useEffect(() => {
+    trackEvent({ eventType: "view_rendered", viewId: "sample-data" });
+  }, [trackEvent]);
+
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadExistingData(app);
+  }, [connected, bootstrap.status, getApp, loadExistingData]);
 
   const toggleScenario = useCallback((id: string) => {
     setSelected((prev) => {
