@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { useContext, useEffect, useRef } from "react";
+import { useContext, useEffect, useMemo, useRef } from "react";
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import type {
   McpAppBootstrapEnvelope,
@@ -97,19 +97,21 @@ export function useMcpAppBootstrap<V extends ViewId>(
   viewId: V,
 ): UseMcpAppBootstrapState<V> {
   const { bootstrapState } = useMcpApp();
-  if (bootstrapState.status !== "ready") {
-    return bootstrapState;
-  }
-  if (bootstrapState.envelope.viewId !== viewId) {
+  return useMemo(() => {
+    if (bootstrapState.status !== "ready") {
+      return bootstrapState;
+    }
+    if (bootstrapState.envelope.viewId !== viewId) {
+      return {
+        status: "error",
+        reason: `Bootstrap for ${bootstrapState.envelope.viewId} does not match ${viewId}.`,
+      };
+    }
     return {
-      status: "error",
-      reason: `Bootstrap for ${bootstrapState.envelope.viewId} does not match ${viewId}.`,
+      status: "ready",
+      // The runtime check above narrows the envelope to the requested view.
+      envelope: bootstrapState.envelope as McpAppBootstrapEnvelope<V>,
+      payload: bootstrapState.envelope.payload as ViewBootstrapPayloads[V],
     };
-  }
-  return {
-    status: "ready",
-    // The runtime check above narrows the envelope to the requested view.
-    envelope: bootstrapState.envelope as McpAppBootstrapEnvelope<V>,
-    payload: bootstrapState.envelope.payload as ViewBootstrapPayloads[V],
-  };
+  }, [bootstrapState, viewId]);
 }

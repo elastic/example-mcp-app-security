@@ -134,6 +134,52 @@ describe("useMcpAppEvents", () => {
     expect(getByText("1")).toBeTruthy();
   });
 
+  it("keeps the ready bootstrap object stable across unrelated rerenders", () => {
+    const { ctx } = buildTestContext({
+      appStub: stubApp,
+      bootstrapState: {
+        status: "ready",
+        envelope: createMcpAppBootstrap("threat-hunt", {
+          indexCount: 1,
+          indices: ["logs-*"],
+          params: { query: "FROM logs-* | LIMIT 1" },
+          queryResult: {
+            columns: ["host.name"],
+            rows: [["win-dc-01"]],
+            rowCount: 1,
+          },
+        }),
+      },
+    });
+
+    const seenBootstrapObjects: object[] = [];
+
+    function Probe({ tick }: { tick: number }) {
+      const bootstrap = useMcpAppBootstrap("threat-hunt");
+      seenBootstrapObjects.push(bootstrap);
+      return <div>{tick}</div>;
+    }
+
+    const { rerender } = render(
+      <Wrapper value={ctx}>
+        <Probe tick={0} />
+      </Wrapper>,
+    );
+
+    rerender(
+      <Wrapper value={ctx}>
+        <Probe tick={1} />
+      </Wrapper>,
+    );
+
+    // Views such as threat-hunt put `bootstrap` in an effect dependency list.
+    // Returning a fresh ready object every render causes those effects to replay
+    // the same bootstrap query and call `execute-esql` repeatedly.
+    expect(seenBootstrapObjects[seenBootstrapObjects.length - 1]).toBe(
+      seenBootstrapObjects[0],
+    );
+  });
+
   it("surfaces a bootstrap mismatch as an error state", () => {
     const { ctx } = buildTestContext({
       appStub: stubApp,
