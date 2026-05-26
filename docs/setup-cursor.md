@@ -13,6 +13,8 @@ Click to install:
 <!-- cursor-mcp-config:END -->
 
 > After clicking, Cursor opens its MCP settings with `CLUSTERS_JSON` pre-filled. Replace the placeholder URLs and API key with your real values. See [Creating an API key](./setup-local.md#creating-an-api-key) for how to generate your credentials.
+>
+> **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
 Or add manually to `.cursor/mcp.json`:
 

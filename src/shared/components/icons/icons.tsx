@@ -77,3 +77,76 @@ export const CloseIcon = ({ size = 12 }: { size?: number }) => (
     <path d="m7.293 8-3.147 3.146a.5.5 0 0 0 .708.708L8 8.707l3.146 3.147a.5.5 0 0 0 .708-.708L8.707 8l3.147-3.146a.5.5 0 1 0-.708-.708L8 7.293 4.854 4.146a.5.5 0 1 0-.708.708L7.293 8Z" />
   </svg>
 );
+
+export const EntityIcon = {
+  host: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="3" width="12" height="8" rx="1" />
+      <path d="M5 13h6M8 11v2" />
+      <circle cx="4.5" cy="7" r="0.4" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  user: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <circle cx="8" cy="6" r="2.5" />
+      <path d="M3 13c0-2.5 2.2-4 5-4s5 1.5 5 4" />
+    </svg>
+  ),
+  process: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="3" width="12" height="10" rx="1" />
+      <path d="M4.5 6.5 6 8 4.5 9.5M7.5 9.5h3" />
+    </svg>
+  ),
+  executable: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
+      <path d="M10 2v3h3" />
+    </svg>
+  ),
+};
+
+export const FactIcon = {
+  status: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <circle cx="8" cy="8" r="5.5" />
+      <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  severity: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 2.5 1.5 13.5h13z" />
+      <path d="M8 7v3" />
+      <circle cx="8" cy="12" r="0.4" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  alerts: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 12.5V7a5 5 0 0 1 10 0v5.5z" />
+      <path d="M6.5 14.5a1.5 1.5 0 0 0 3 0" />
+    </svg>
+  ),
+  comments: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 3h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2v-2H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+    </svg>
+  ),
+  createdBy: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <circle cx="8" cy="6" r="2.5" />
+      <path d="M3 13c0-2.5 2.2-4 5-4s5 1.5 5 4" />
+    </svg>
+  ),
+  created: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 4.5V8l2.2 1.5" />
+    </svg>
+  ),
+  updated: (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13 8a5 5 0 1 1-1.5-3.5" />
+      <path d="M13 2.5V5H10.5" />
+    </svg>
+  ),
+};
