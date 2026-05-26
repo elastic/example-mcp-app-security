@@ -193,6 +193,47 @@ export function registerCaseManagementTools(
 
   registerAppTool(
     server,
+    "close-case",
+    {
+      title: "Close Case",
+      description:
+        "Close a security case by setting its status to 'closed'. Call this whenever the user asks to close, resolve, or finish a case. Pass the case's `version` if known; otherwise it is fetched automatically. Set `namespace` to the Kibana space the case lives in (default: 'default').",
+      inputSchema: {
+        caseId: z.string().describe("ID of the case to close"),
+        version: z
+          .string()
+          .optional()
+          .describe(
+            "Current case version for optimistic concurrency. If omitted, the latest version is fetched first."
+          ),
+        namespace: namespaceSchema,
+      },
+      _meta: { ui: {} },
+    },
+    async ({ caseId, version, namespace }) => {
+      const resolvedVersion =
+        version ?? (await casesService.getCase(caseId, namespace)).version;
+      const [updated] = await casesService.updateCase(
+        caseId,
+        resolvedVersion,
+        { status: "closed" },
+        namespace
+      );
+      const compact = {
+        id: updated.id,
+        title: updated.title,
+        status: updated.status,
+        version: updated.version,
+        updated_at: updated.updated_at,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(compact) }],
+      };
+    }
+  );
+
+  registerAppTool(
+    server,
     "add-case-comment",
     {
       title: "Add Case Comment",
