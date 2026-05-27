@@ -165,21 +165,38 @@ export function registerCaseManagementTools(
     "update-case",
     {
       title: "Update Case",
-      description: "Update case status, severity, or tags",
+      description:
+        "Update an existing security case — change its status (e.g. to 'in-progress'), severity, or tags. Call this whenever the user asks to set a case's status, change severity, or retag a case. Pass the case's `version` if known; otherwise it is fetched automatically. Set `namespace` to the Kibana space the case lives in (default: 'default'). For closing a case, prefer the `close-case` tool.",
       inputSchema: {
-        caseId: z.string(),
-        version: z.string(),
-        status: z.string().optional(),
-        severity: z.string().optional(),
-        tags: z.string().optional().describe("Comma-separated tags"),
+        caseId: z.string().describe("ID of the case to update"),
+        version: z
+          .string()
+          .optional()
+          .describe(
+            "Current case version for optimistic concurrency. If omitted, the latest version is fetched first."
+          ),
+        status: z
+          .enum(["open", "in-progress", "closed"])
+          .optional()
+          .describe("New status for the case"),
+        severity: z
+          .enum(["low", "medium", "high", "critical"])
+          .optional()
+          .describe("New severity for the case"),
+        tags: z
+          .string()
+          .optional()
+          .describe("Comma-separated tags. Replaces the existing tag list."),
         namespace: namespaceSchema,
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: {} },
     },
     async ({ caseId, version, status, severity, tags, namespace }) => {
-      const result = await casesService.updateCase(
+      const resolvedVersion =
+        version ?? (await casesService.getCase(caseId, namespace)).version;
+      const [updated] = await casesService.updateCase(
         caseId,
-        version,
+        resolvedVersion,
         {
           status,
           severity,
@@ -187,7 +204,18 @@ export function registerCaseManagementTools(
         },
         namespace
       );
-      return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+      const compact = {
+        id: updated.id,
+        title: updated.title,
+        status: updated.status,
+        severity: updated.severity,
+        tags: updated.tags,
+        version: updated.version,
+        updated_at: updated.updated_at,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(compact) }],
+      };
     }
   );
 
