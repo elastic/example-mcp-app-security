@@ -130,13 +130,31 @@ export function registerCaseManagementTools(
     "create-case",
     {
       title: "Create Case",
-      description: "Create a new security case. Call this directly to create cases from attack discoveries or alert triage findings. Pass alertIds to automatically attach alerts to the case.",
+      description:
+        "Einen neuen Security-Case anlegen. Wird immer dann aufgerufen, wenn der Analyst einen neuen Case erstellen möchte – auch aus Attack-Discoveries oder Alert-Triage-Ergebnissen heraus. Mit `alertIds` werden die übergebenen Alerts automatisch an den Case angehängt. WICHTIG: `title` und `description` werden in Kibana von anderen Analysten gelesen und müssen daher auf Deutsch verfasst werden. Eigennamen, Host-/Benutzer-/Hash-/IP-Werte sowie Detection-Rule-Namen bleiben im Original.",
       inputSchema: {
-        title: z.string(),
-        description: z.string(),
-        tags: z.string().optional().describe("Comma-separated tags"),
-        severity: z.string().optional(),
-        alertIds: z.array(z.string()).optional().describe("Alert document IDs to attach to the case"),
+        title: z
+          .string()
+          .describe("Case-Titel auf Deutsch (für andere Analysten lesbar)"),
+        description: z
+          .string()
+          .describe(
+            "Ausführliche Case-Beschreibung auf Deutsch. Eigennamen, Hosts, Benutzer, Hashes, IPs und Rule-Namen bleiben im Original."
+          ),
+        tags: z
+          .string()
+          .optional()
+          .describe(
+            "Tags, kommagetrennt. Deutsch bevorzugt; etablierte englische Fachbegriffe (z. B. 'phishing', 'lateral-movement') sind erlaubt."
+          ),
+        severity: z
+          .enum(["low", "medium", "high", "critical"])
+          .optional()
+          .describe("Schweregrad (Kibana-Wert, englisch)"),
+        alertIds: z
+          .array(z.string())
+          .optional()
+          .describe("Alert-Dokument-IDs, die an den Case angehängt werden sollen"),
         namespace: namespaceSchema,
       },
       _meta: { ui: {} },
@@ -238,10 +256,14 @@ export function registerCaseManagementTools(
     {
       title: "Add Case Comment",
       description:
-        "Add a comment / investigation note to an existing security case. Call this whenever the user asks to comment on, annotate, or add a note to a case. Set `namespace` to the Kibana space the case lives in (default: 'default').",
+        "Einen Kommentar bzw. eine Untersuchungsnotiz an einen bestehenden Security-Case anhängen. Wird aufgerufen, sobald der Analyst einen Case kommentieren, annotieren oder eine Notiz hinzufügen möchte. `namespace` ist der Kibana-Space, in dem der Case liegt (Standard: 'default'). WICHTIG: Der Kommentartext wird in Kibana von anderen Analysten gelesen und muss auf Deutsch verfasst werden. Eigennamen, Host-/Benutzer-/Hash-/IP-Werte sowie Detection-Rule-Namen bleiben im Original.",
       inputSchema: {
-        caseId: z.string().describe("ID of the case to comment on"),
-        comment: z.string().describe("Comment text to append to the case"),
+        caseId: z.string().describe("ID des zu kommentierenden Cases"),
+        comment: z
+          .string()
+          .describe(
+            "Kommentartext auf Deutsch. Eigennamen, Hosts, Benutzer, Hashes, IPs und Rule-Namen bleiben im Original."
+          ),
         namespace: namespaceSchema,
       },
       _meta: { ui: {} },
