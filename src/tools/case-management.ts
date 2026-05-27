@@ -237,13 +237,14 @@ export function registerCaseManagementTools(
     "add-case-comment",
     {
       title: "Add Case Comment",
-      description: "Add investigation notes to a case",
+      description:
+        "Add a comment / investigation note to an existing security case. Call this whenever the user asks to comment on, annotate, or add a note to a case. Set `namespace` to the Kibana space the case lives in (default: 'default').",
       inputSchema: {
-        caseId: z.string(),
-        comment: z.string(),
+        caseId: z.string().describe("ID of the case to comment on"),
+        comment: z.string().describe("Comment text to append to the case"),
         namespace: namespaceSchema,
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: {} },
     },
     async ({ caseId, comment, namespace }) => {
       const result = await casesService.addComment(caseId, comment, namespace);
