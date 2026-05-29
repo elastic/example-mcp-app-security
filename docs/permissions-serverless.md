@@ -66,22 +66,9 @@ All built-in Serverless Security roles use `cluster: read_project_routing` rathe
 
 ## Connecting with a built-in role identity
 
-Serverless file-realm users can't use Basic auth with the MCP app directly — the app requires an API key. Mint a scoped key via the `grant_api_key` endpoint as the `elastic_serverless` admin:
+The MCP app requires an API key. Create one in Kibana under **Stack Management → API Keys** while logged in as the user whose role you want to use. The key inherits that user's role permissions.
 
-```bash
-# In Dev Tools or via curl (replace <role> with t1_analyst, t2_analyst, soc_manager, etc.)
-POST /_security/api_key/grant
-{
-  "grant_type": "password",
-  "username": "<role>",
-  "password": "changeme",
-  "api_key": { "name": "mcp-app-<role>" }
-}
-```
-
-Use the `encoded` value from the response as `elasticsearchApiKey` in your cluster config.
-
-> **Password:** All local serverless dev-stack file-realm users share password `changeme` (set in `kbn-es/src/serverless_resources/users`). On an actual Elastic Cloud Serverless project, users authenticate via SSO — use your cloud API key instead of the grant flow.
+Use the `encoded` value from the created key as `elasticsearchApiKey` in your cluster config.
 
 ---
 
