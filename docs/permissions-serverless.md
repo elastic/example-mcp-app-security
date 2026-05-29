@@ -74,7 +74,7 @@ Use the `encoded` value from the created key as `elasticsearchApiKey` in your cl
 
 ## Custom roles
 
-Custom roles are supported on Serverless Security projects (GA since October 2024). Use `PUT /_security/role/<name>` via Dev Tools as `elastic_serverless`. The Kibana feature privilege names on serverless differ slightly from stateful 9.4+:
+Custom roles are supported on Serverless Security projects (GA since October 2024). Create them with `PUT /_security/role/<name>` in Kibana Dev Tools. The Kibana feature privilege names on serverless differ slightly from stateful 9.4+:
 
 | Feature | Serverless privilege (all/read) |
 |---|---|

@@ -87,7 +87,7 @@ npm run test:permissions:serverless:all
 Observed reports look like:
 
 ```
-── SERVERLESS_VIEWER (observe-only) ──
+── SERVERLESS_T1_ANALYST (observe-only) ──
   Layer A: skipped (built-in role — privileges not enumerable from a role descriptor)
   Layer B (operations, observed — no pass/fail assertions):
     [alerts]
