@@ -7,7 +7,7 @@ This guide defines the least-privilege roles for the Elastic Security MCP app on
 
 > **Space ID:** Kibana index patterns include a `<space-id>` segment (e.g., `.alerts-security.alerts-<space-id>`). For most deployments this is `default`. Replace `<space-id>` with your actual space ID throughout this guide. The app currently targets the `default` space.
 
-> **Serverless:** This guide targets stateful deployments. Serverless projects ship a different set of built-in roles (`t1_analyst`, `soc_manager`, etc.) and aren't covered here yet.
+> **Serverless:** This guide targets stateful deployments. For Elastic Cloud Serverless Security projects, see [permissions-serverless.md](./permissions-serverless.md).
 
 ---
 

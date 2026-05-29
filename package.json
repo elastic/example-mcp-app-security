@@ -40,6 +40,8 @@
     "dev": "concurrently --raw \"node scripts/build-views.js --watch\" \"tsx watch main.ts\"",
     "typecheck": "tsc --noEmit",
     "test:permissions": "tsx scripts/test-permissions/runner.ts",
+    "test:permissions:serverless": "tsx scripts/test-permissions/runner.ts --mode serverless --role serverless",
+    "test:permissions:serverless:all": "tsx scripts/test-permissions/runner.ts --mode serverless --role serverless_all",
     "skills:zip": "bash scripts/build-skill-zips.sh",
     "mcpb:pack": "bash scripts/build-mcpb.sh",
     "lint": "eslint .",
