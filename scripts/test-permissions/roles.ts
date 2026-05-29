@@ -112,7 +112,35 @@ export type AssertedRoleName =
   | "readonly"
   | "quickstart_full"
   | "quickstart_readonly";
-export type RoleName = AssertedRoleName;
+
+export type ServerlessRoleName =
+  | "serverless_t1_analyst"
+  | "serverless_t2_analyst"
+  | "serverless_soc_manager";
+
+/**
+ * Maps each serverless built-in role identity to the Elastic Cloud
+ * Serverless Security project role name and the file-realm password
+ * used by the local dev stack.
+ *
+ * All local serverless file-realm users share password `changeme`
+ * (see kibana-main serverless_resources/users). The runner mints
+ * per-run API keys via `grant_type: "password"` — no role creation
+ * or native user creation is needed.
+ *
+ * Note: `viewer` is a platform-level role with no pre-provisioned file-realm
+ * user in the Security project. Security-specific tiers start at `t1_analyst`.
+ */
+export const SERVERLESS_BUILTINS: Record<
+  ServerlessRoleName,
+  { roleName: string; password: string }
+> = {
+  serverless_t1_analyst: { roleName: "t1_analyst", password: "changeme" },
+  serverless_t2_analyst: { roleName: "t2_analyst", password: "changeme" },
+  serverless_soc_manager: { roleName: "soc_manager", password: "changeme" },
+};
+
+export type RoleName = AssertedRoleName | ServerlessRoleName;
 
 /**
  * Custom-role descriptors for the asserted "Advanced" path. These
@@ -190,7 +218,7 @@ export const QUICKSTART_COMPANION_DESCRIPTORS: Record<
 };
 
 /** Any role identity the runner may exercise. */
-export type AnyRoleName = AssertedRoleName;
+export type AnyRoleName = RoleName;
 
 export type OperationGroup =
   | "alerts"

@@ -34,7 +34,7 @@ See [docs/features.md](docs/features.md) for a full breakdown of each tool's cap
 >
 > Claude Desktop handles the rest — during install, fill in your Elasticsearch URL, Kibana URL, and API key. See [Creating an API key](docs/setup-local.md#creating-an-api-key) if you need to generate one first.
 >
-> For the API key's permissions, see [Required permissions](docs/permissions.md). The recommended Quickstart there uses Kibana's built-in **editor** (full-featured) or **viewer** (read-only) role plus a small companion role for index access — fastest unless you need a fully scripted custom role.
+> For the API key's permissions, see [Required permissions](docs/permissions.md) (stateful) or [Serverless permissions](docs/permissions-serverless.md) (Elastic Cloud Serverless Security projects). The stateful Quickstart uses Kibana's built-in **editor** (full-featured) or **viewer** (read-only) role plus a small companion role for index access — fastest unless you need a fully scripted custom role.
 
 For other hosts (Cursor, VS Code, Claude Code) or building from source, see [Installation](#installation) below.
 
