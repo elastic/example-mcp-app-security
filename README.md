@@ -1,6 +1,6 @@
 # Elastic Security MCP App
 
-[![Latest Release](https://img.shields.io/github/v/release/elastic/example-mcp-app-security?label=Download%20.mcpb&color=00bfb3)](https://github.com/elastic/example-mcp-app-security/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/elastic/example-mcp-app-security?label=Download%20.mcpb&color=00bfb3&cacheSeconds=3600)](https://github.com/elastic/example-mcp-app-security/releases/latest)
 
 ## Quick Demo
 
