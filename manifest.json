@@ -25,7 +25,7 @@
         "--stdio"
       ],
       "env": {
-        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"${user_config.elasticsearch_url}\",\"kibanaUrl\":\"${user_config.kibana_url}\",\"elasticsearchApiKey\":\"${user_config.elasticsearch_api_key}\"}]"
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"${user_config.elasticsearch_url}\",\"kibanaUrl\":\"${user_config.kibana_url}\",\"elasticsearchApiKey\":\"${user_config.elasticsearch_api_key}\",\"sslVerify\":${user_config.ssl_verification}}]"
       }
     }
   },
@@ -80,6 +80,14 @@
       "title": "Kibana URL",
       "description": "Kibana URL (e.g. https://your-cluster.kb.cloud.example.com).",
       "required": true,
+      "sensitive": false
+    },
+    "ssl_verification": {
+      "type": "boolean",
+      "title": "Verify SSL/TLS Certificates",
+      "description": "Verifies the Elasticsearch / Kibana TLS certificate against trusted CAs. ⚠ Uncheck ONLY if you are connecting to a trusted self-signed development cluster — disabling verification removes protection against man-in-the-middle attacks.",
+      "default": true,
+      "required": false,
       "sensitive": false
     }
   },

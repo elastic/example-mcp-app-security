@@ -85,6 +85,20 @@ let analytics: AnalyticsClient;
 try {
   credentialClient = createCredentialClient();
 
+  for (const summary of credentialClient.list()) {
+    const cluster = credentialClient.get(summary.name);
+    if (cluster.sslVerify === false) {
+      serverLogger.warn(
+        `cluster "${cluster.name}": TLS certificate verification is DISABLED. ` +
+          `This is insecure and should only be used with trusted self-signed dev clusters.`
+      );
+    } else if (cluster.caCert) {
+      serverLogger.info(
+        `cluster "${cluster.name}": using custom CA bundle for TLS verification`
+      );
+    }
+  }
+
   // Default cluster is the analytics seed: telemetry config opt-in is
   // read from it and cluster/license context is pulled from it. These
   // are constructed once at startup and shared across all per-request

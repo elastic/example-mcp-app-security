@@ -32,12 +32,58 @@ Set `CLUSTERS_JSON` to a JSON-encoded array with a single cluster:
     "name": "primary",
     "elasticsearchUrl": "https://your-cluster.es.cloud.example.com",
     "kibanaUrl": "https://your-cluster.kb.cloud.example.com",
-    "elasticsearchApiKey": "your-elasticsearch-api-key"
+    "elasticsearchApiKey": "your-elasticsearch-api-key",
+    "sslVerify": true
   }
 ]
 ```
 
 The config is validated at startup — bad JSON, missing fields, or unmodified placeholder URLs/keys fail fast.
+
+### TLS verification options
+
+Self-managed clusters with self-signed or private-CA certificates need extra TLS configuration. Two optional per-cluster fields control this:
+
+| Field | Type | Default | Purpose |
+|---|---|---|---|
+| `sslVerify` | boolean | `true` | When `false`, skips TLS certificate verification. Use only with trusted self-signed dev clusters. |
+| `caCertPath` | string | — | Absolute path to a PEM CA bundle file. Node uses this bundle instead of the system trust store. |
+
+**Precedence:** `sslVerify: false` and `caCertPath` cannot both be set — the server rejects that combination at startup. If you add a CA bundle, make sure `sslVerify` is `true` (or omitted).
+
+**Prefer `caCertPath` over `sslVerify: false`.** Pointing at your private CA keeps verification enabled; disabling verification removes protection against man-in-the-middle attacks.
+
+Example with a custom CA bundle:
+
+```json
+[
+  {
+    "name": "primary",
+    "elasticsearchUrl": "https://es.local:9200",
+    "kibanaUrl": "https://kb.local:5601",
+    "elasticsearchApiKey": "your-api-key",
+    "caCertPath": "/absolute/path/to/ca.pem"
+  }
+]
+```
+
+Example for a trusted self-signed dev cluster (insecure — dev only):
+
+```json
+[
+  {
+    "name": "primary",
+    "elasticsearchUrl": "https://es.local:9200",
+    "kibanaUrl": "https://kb.local:5601",
+    "elasticsearchApiKey": "your-api-key",
+    "sslVerify": false
+  }
+]
+```
+
+When `sslVerify` is `false`, the server logs a warning at startup. When `caCertPath` is set, it logs an info line confirming the custom CA bundle is in use. Both messages go to stderr (visible in MCP host logs, not in the host UI).
+
+In Claude Desktop's install dialog, the **Verify SSL/TLS Certificates** checkbox maps to `sslVerify`. Uncheck it only for trusted self-signed development clusters.
 
 ### Keeping secrets out of config files
 
