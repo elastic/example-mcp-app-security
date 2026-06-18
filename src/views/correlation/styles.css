@@ -1,0 +1,416 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+@import "../../shared/base.css";
+
+/* ─── Shell ─── */
+
+.corr-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 400px;
+  background: #1f1f1e;
+  color: #e6e6e5;
+  font-family: var(--font-sans, "Fira Sans", system-ui, sans-serif);
+  overflow: hidden;
+  border: 1px solid #474745;
+}
+
+/* ─── Header ─── */
+
+.corr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #30302f;
+  background: #1f1f1e;
+  flex-shrink: 0;
+}
+
+.corr-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.corr-header-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #e6e6e5;
+}
+
+.corr-header-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: #e6e6e5;
+  margin: 0;
+}
+
+.corr-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.corr-header-count {
+  font-family: var(--font-mono, "Fira Mono", monospace);
+  font-size: 11px;
+  color: #817f78;
+}
+
+.corr-header-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.corr-header-pill-warn {
+  background: rgba(240, 184, 64, 0.08);
+  border: 1px solid rgba(240, 184, 64, 0.25);
+  color: #f0b840;
+}
+
+.corr-header-pill-info {
+  background: rgba(92, 124, 250, 0.08);
+  border: 1px solid rgba(92, 124, 250, 0.2);
+  color: #8fa6fb;
+  font-family: var(--font-mono, "Fira Mono", monospace);
+}
+
+/* ─── Body ─── */
+
+.corr-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Coverage nudge banner ─── */
+
+.corr-coverage-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 16px 0;
+  padding: 10px 14px;
+  background: rgba(240, 184, 64, 0.06);
+  border: 1px solid rgba(240, 184, 64, 0.28);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.corr-coverage-banner-icon {
+  font-size: 14px;
+  color: #f0b840;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.corr-coverage-banner-text {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #d4b86a;
+}
+
+.corr-coverage-banner-dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #817f78;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.corr-coverage-banner-dismiss:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e6e6e5;
+}
+
+/* ─── Candidate list ─── */
+
+.corr-list {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 16px;
+  gap: 0;
+}
+
+.corr-list-header {
+  display: grid;
+  grid-template-columns: 28px 64px 1fr 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px 6px 12px;
+  margin-bottom: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #474745;
+}
+
+.corr-list-col-rank { text-align: center; }
+.corr-list-col-diamond { text-align: center; }
+.corr-list-col-overlap { text-align: center; }
+
+/* ─── Candidate row ─── */
+
+.corr-candidate-row {
+  display: grid;
+  grid-template-columns: 28px 64px 1fr 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+
+.corr-candidate-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.corr-candidate-row + .corr-candidate-row {
+  border-top: 1px solid #262626;
+}
+
+.corr-candidate-rank {
+  font-family: var(--font-mono, "Fira Mono", monospace);
+  font-size: 11px;
+  font-weight: 500;
+  color: #474745;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ─── Diamond SVG ─── */
+
+.corr-diamond-svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* ─── Report meta ─── */
+
+.corr-candidate-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.corr-candidate-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #e6e6e5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.corr-candidate-link {
+  color: #7ca4fb;
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.corr-candidate-link:hover {
+  color: #a5bcfd;
+  text-decoration: underline;
+}
+
+.corr-candidate-title-text {
+  color: #e6e6e5;
+}
+
+.corr-candidate-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.corr-candidate-vendor {
+  font-family: var(--font-mono, "Fira Mono", monospace);
+  font-size: 10.5px;
+  color: #817f78;
+  white-space: nowrap;
+}
+
+/* ─── Vertex score pills ─── */
+
+.corr-score-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.corr-score-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono, "Fira Mono", monospace);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.corr-score-pill-high {
+  background: rgba(64, 199, 144, 0.1);
+  border: 1px solid rgba(64, 199, 144, 0.25);
+  color: #40c790;
+}
+
+.corr-score-pill-mid {
+  background: rgba(240, 184, 64, 0.08);
+  border: 1px solid rgba(240, 184, 64, 0.22);
+  color: #c9992b;
+}
+
+/* ─── Overlap badge ─── */
+
+.corr-candidate-overlap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.corr-overlap-count {
+  font-family: var(--font-mono, "Fira Mono", monospace);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  color: #e6e6e5;
+}
+
+.corr-overlap-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #474745;
+}
+
+/* ─── Idle / empty states ─── */
+
+.corr-idle {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 24px;
+  text-align: center;
+}
+
+.corr-idle-diamond {
+  opacity: 0.35;
+}
+
+.corr-idle-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #b9b9ae;
+}
+
+.corr-idle-hint {
+  font-size: 12px;
+  color: #817f78;
+  max-width: 320px;
+  line-height: 1.55;
+}
+
+.corr-idle-hint code {
+  font-family: var(--font-mono, "Fira Mono", monospace);
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #b9b9ae;
+}
+
+.corr-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 60px 24px;
+  text-align: center;
+}
+
+.corr-empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #b9b9ae;
+}
+
+.corr-empty-hint {
+  font-size: 12px;
+  color: #817f78;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+/* ─── Loading ─── */
+
+.corr-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 24px;
+  color: #817f78;
+  font-size: 12.5px;
+}
+
+.corr-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid #30302f;
+  border-top-color: #5c7cfa;
+  border-radius: 50%;
+  animation: corr-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes corr-spin {
+  to { transform: rotate(360deg); }
+}

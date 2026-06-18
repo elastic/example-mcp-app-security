@@ -79,6 +79,51 @@ export interface ReportFull {
 }
 
 // ---------------------------------------------------------------------------
+// Scored types — analyst-led transparent path (diamond_search_analyst)
+// ---------------------------------------------------------------------------
+
+/** Per-report vertex match scores (only vertices that scored >= NOISE_FLOOR). */
+export type VertexScores = Partial<Record<DiamondVertex, number>>;
+
+/** A candidate stub WITH scores — returned by the analyst-led search path. */
+export interface ScoredStub {
+  report_id: string;
+  title: string;
+  vendor: string;
+  url: string;
+  /** Scores for each vertex that matched above NOISE_FLOOR (0.7). Keys present only for matched vertices. */
+  vertex_scores: VertexScores;
+  /** Number of vertices that scored >= NOISE_FLOOR. */
+  overlap: number;
+  /** Highest score across all matched vertices. */
+  max_score: number;
+}
+
+/**
+ * Coverage signal for the backfill-suggestion nudge.
+ * thin = true when: the search degraded to BM25, OR avg_overlap across returned
+ * candidates is less than 2 matched vertices (threshold chosen to flag cases where
+ * most candidates matched only a single vertex — weak retrieval signal).
+ */
+export interface CoverageSignal {
+  /** Number of vertices that had a non-empty query. */
+  queried: number;
+  /** Mean overlap (matched vertices per candidate) across the returned candidates. 0 when no candidates. */
+  avg_overlap: number;
+  /** True when degraded OR avg_overlap < 2. Advisory: consider BM25 backfill. */
+  thin: boolean;
+}
+
+export interface DiamondSearchScoredResult {
+  candidates: ScoredStub[];
+  total: number;
+  /** True when inference was unavailable and BM25 fallback was used. Scores are absent when degraded. */
+  degraded: boolean;
+  vertices_queried: DiamondVertex[];
+  coverage: CoverageSignal;
+}
+
+// ---------------------------------------------------------------------------
 // Internal ES response shapes
 // ---------------------------------------------------------------------------
 
@@ -398,6 +443,113 @@ const runAnchorSearch = async (
 };
 
 // ---------------------------------------------------------------------------
+// Scored semantic search — surfaces the score matrix instead of stripping it
+// ---------------------------------------------------------------------------
+
+const runSemanticSearchScored = async (
+  esClient: EsClient,
+  queriedVertices: DiamondVertex[],
+  vertexQueries: DiamondVertexQueries,
+  size: number
+): Promise<{ candidates: ScoredStub[]; total: number; degraded: false }> => {
+  const lines: string[] = [];
+  for (const vertex of queriedVertices) {
+    lines.push(
+      JSON.stringify({
+        index: THREAT_REPORTS_INDEX_PATTERN,
+        ignore_unavailable: true,
+      })
+    );
+    lines.push(
+      JSON.stringify({
+        query: {
+          bool: {
+            must: [
+              {
+                semantic: {
+                  field: `extracted.diamond.${vertex}.summary`,
+                  query: vertexQueries[vertex],
+                },
+              },
+            ],
+            filter: [{ term: { "extracted.diamond.suitable": true } }],
+          },
+        },
+        size: KNN_CANDIDATES_PER_VERTEX,
+        _source: ["content.title", "source.name", "source.type", "source.url"],
+      })
+    );
+  }
+  const ndjson = lines.join("\n") + "\n";
+
+  const resp = await esClient.post<EsMsearchResponse<SourceFields>>(
+    "/_msearch",
+    ndjson,
+    { headers: { "Content-Type": "application/x-ndjson" } }
+  );
+  const msearch = resp.data;
+
+  const matrix = new Map<
+    string,
+    { source: SourceFields; scores: VertexScores }
+  >();
+
+  for (let i = 0; i < queriedVertices.length; i++) {
+    const vertex = queriedVertices[i];
+    const response = msearch.responses[i];
+    if ("error" in response && response.error) {
+      const errMsg = JSON.stringify(response.error).toLowerCase();
+      if (errMsg.includes("inference") || errMsg.includes("service_unavailable")) {
+        throw new Error(`inference_unavailable: ${JSON.stringify(response.error)}`);
+      }
+      continue;
+    }
+    const hits = response.hits?.hits ?? [];
+    for (const hit of hits) {
+      if (!matrix.has(hit._id)) {
+        matrix.set(hit._id, { source: hit._source ?? {}, scores: {} });
+      }
+      const entry = matrix.get(hit._id)!;
+      entry.scores[vertex] = hit._score ?? 0;
+    }
+  }
+
+  const candidates: ScoredStub[] = [];
+
+  for (const [reportId, { source, scores }] of matrix) {
+    const aboveFloor = DIAMOND_VERTICES.filter(
+      (v) => scores[v] !== undefined && (scores[v] as number) >= NOISE_FLOOR
+    );
+    if (aboveFloor.length === 0) continue;
+    const aboveScores = aboveFloor.map((v) => scores[v] as number);
+    // Include only scores at or above the noise floor in the returned vertex_scores.
+    const filteredScores: VertexScores = {};
+    for (const v of aboveFloor) {
+      filteredScores[v] = scores[v];
+    }
+    candidates.push({
+      report_id: reportId,
+      title: source.content?.title?.trim() ?? reportId,
+      vendor: source.source?.name ?? source.source?.type ?? "unknown",
+      url: source.source?.url ?? "",
+      vertex_scores: filteredScores,
+      overlap: aboveFloor.length,
+      max_score: Math.max(...aboveScores),
+    });
+  }
+
+  candidates.sort((a, b) =>
+    b.overlap !== a.overlap ? b.overlap - a.overlap : b.max_score - a.max_score
+  );
+
+  return {
+    candidates: candidates.slice(0, size),
+    total: candidates.length,
+    degraded: false,
+  };
+};
+
+// ---------------------------------------------------------------------------
 // Public service
 // ---------------------------------------------------------------------------
 
@@ -463,6 +615,108 @@ export class CorrelationService {
       total: semanticResult.total,
       degraded: semanticResult.degraded,
       vertices_queried: queriedVertices,
+    };
+  }
+
+  /**
+   * Analyst-led transparent Diamond Model correlation search.
+   *
+   * Identical retrieval logic to diamondSearch() but surfaces the full score
+   * matrix (vertex_scores per candidate) instead of stripping it. Also computes
+   * a coverage signal that drives the "consider BM25 backfill" nudge in the UI.
+   *
+   * coverage.thin = true when:
+   *   - inference degraded to BM25 (scores unavailable), OR
+   *   - avg_overlap across returned candidates < 2 (most candidates matched only
+   *     one vertex — weak multi-vertex retrieval signal)
+   *
+   * The 2-vertex threshold is deterministic and documented here. It was chosen
+   * to flag searches where single-vertex recall dominates, which tends to
+   * produce noisier rankings than true multi-vertex overlap.
+   */
+  async diamondSearchScored(params: DiamondSearchParams): Promise<DiamondSearchScoredResult> {
+    const { esClient } = this.options;
+    const size = Math.min(params.size ?? DEFAULT_SIZE, MAX_SIZE);
+    const vertexQueries = params.vertex_queries ?? {};
+
+    const queriedVertices = DIAMOND_VERTICES.filter(
+      (v) => (vertexQueries[v] ?? "").trim().length > 0
+    );
+
+    const emptyResult = (degraded: boolean): DiamondSearchScoredResult => ({
+      candidates: [],
+      total: 0,
+      degraded,
+      vertices_queried: queriedVertices,
+      coverage: { queried: queriedVertices.length, avg_overlap: 0, thin: true },
+    });
+
+    if (queriedVertices.length === 0) {
+      return emptyResult(false);
+    }
+
+    let semanticResult: { candidates: ScoredStub[]; total: number; degraded: boolean };
+    try {
+      semanticResult = await runSemanticSearchScored(esClient, queriedVertices, vertexQueries, size);
+    } catch (err) {
+      const msg = String((err as Error)?.message ?? "").toLowerCase();
+      const isInferenceUnavailable =
+        msg.includes("inference_unavailable") ||
+        msg.includes("service_unavailable") ||
+        msg.includes("503");
+
+      if (isInferenceUnavailable) {
+        // BM25 fallback: return stubs with empty vertex_scores.
+        const bm25 = await runBm25Fallback(esClient, queriedVertices, vertexQueries, size);
+        const bm25Scored: ScoredStub[] = bm25.stubs.map((s) => ({
+          ...s,
+          vertex_scores: {},
+          overlap: 0,
+          max_score: 0,
+        }));
+        return {
+          candidates: bm25Scored,
+          total: bm25.total,
+          degraded: true,
+          vertices_queried: queriedVertices,
+          coverage: { queried: queriedVertices.length, avg_overlap: 0, thin: true },
+        };
+      } else {
+        throw err;
+      }
+    }
+
+    let candidates = semanticResult.candidates;
+    if (params.iocs && params.iocs.length > 0) {
+      const anchorStubs = await runAnchorSearch(esClient, params.iocs, size, new Set());
+      const anchorIds = new Set(anchorStubs.map((c) => c.report_id));
+      const anchorScored: ScoredStub[] = anchorStubs.map((s) => ({
+        ...s,
+        vertex_scores: {},
+        overlap: 0,
+        max_score: 0,
+      }));
+      const semanticOnly = candidates.filter((c) => !anchorIds.has(c.report_id));
+      candidates = [...anchorScored, ...semanticOnly].slice(0, size);
+    }
+
+    const avg_overlap =
+      candidates.length > 0
+        ? candidates.reduce((sum, c) => sum + c.overlap, 0) / candidates.length
+        : 0;
+
+    const coverage: CoverageSignal = {
+      queried: queriedVertices.length,
+      avg_overlap,
+      thin: semanticResult.degraded || avg_overlap < 2,
+    };
+
+    return {
+      candidates,
+      total: semanticResult.total,
+      degraded: semanticResult.degraded,
+      vertices_queried: queriedVertices,
+      coverage,
     };
   }
 

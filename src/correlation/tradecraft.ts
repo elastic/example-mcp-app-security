@@ -153,6 +153,48 @@ BEHAVIORAL RULES
 10. Format technical indicators. Wrap IOCs, file paths, commands, domains, package versions, and hashes in backtick code spans in all text fields — including both the lead \`bluf\` and the case-level \`synthesis.bluf\`.
 11. Evidence per rated vertex. Every vertex you rate \`partial\` or \`high\` in vertex_signal MUST have at least one evidence item whose \`vertex\` matches it. If you cannot cite evidence for a vertex, rate it \`none\`. (e.g. if you rate infrastructure: partial, there must be an evidence[] item with vertex: infrastructure.)`;
 
+// ---------------------------------------------------------------------------
+// Input-signal self-rating guidance — used with correlation_input_check
+// ---------------------------------------------------------------------------
+
+/**
+ * Instructions for the host model on how to self-rate each vertex's signal
+ * quality when calling `correlation_input_check`.
+ *
+ * Self-ratings mirror the corpus-side `extracted.diamond.*.signal` scale:
+ *   HIGH    — specific, well-attested; multiple concrete behavioural details
+ *   PARTIAL — present but weak or inferred; one vague indicator or indirect evidence
+ *   NONE    — genuinely absent from the case; no observable signal for this vertex
+ *
+ * The rating is a SELF-ASSESSMENT to help the analyst decide whether the input
+ * is ready to search or needs more information. It is NOT a search weight and
+ * does NOT affect retrieval — it is advisory context for the analyst gate.
+ */
+export const INPUT_SIGNAL_GUIDANCE = `\
+SELF-RATING YOUR DIAMOND VERTEX SIGNAL
+
+Before running a correlation search, rate each vertex's signal quality using
+the same scale as the corpus index:
+
+HIGH    — You have specific, well-attested behavioural details: named malware
+          families, attributed threat-actor aliases, confirmed infrastructure
+          patterns, concrete target industry/geography.  Multiple corroborating
+          observations.  High-confidence search anchor.
+
+PARTIAL — You have some signal but it is weak or inferred: one vague indicator,
+          a single technique without context, a suspected (not confirmed) actor.
+          The query will be sent but may produce noisier results.
+
+NONE    — Genuinely absent from the case.  Do NOT write a placeholder paragraph.
+          Omit this vertex from the query entirely (pass empty string or omit).
+
+RULES:
+- Rate only the signal you actually have — do NOT inflate a PARTIAL to HIGH.
+- NONE is not a failure; many real cases have strong signal on only 2–3 vertices.
+- A PARTIAL vertex is still worth querying; a NONE vertex adds noise, omit it.
+- The gate view shows the analyst your self-ratings before the search runs;
+  they may ask you to refine weak vertices before proceeding.`;
+
 /**
  * Composite tradecraft bundle returned in every `diamond_search` response.
  * The host model uses the triage rubric to rank candidates, then the synthesis
@@ -160,6 +202,7 @@ BEHAVIORAL RULES
  */
 export const TRADECRAFT = {
   diamond_summarisation_guidance: DIAMOND_SUMMARISATION_GUIDANCE,
+  input_signal_guidance: INPUT_SIGNAL_GUIDANCE,
   triage_rubric: TRIAGE_RUBRIC,
   synthesis_guidance: {
     instructions: SYNTHESIS_GUIDANCE_TEXT,
