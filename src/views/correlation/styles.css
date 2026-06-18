@@ -164,7 +164,7 @@
 
 .corr-list-header {
   display: grid;
-  grid-template-columns: 28px 64px 1fr 44px;
+  grid-template-columns: 28px 64px 1fr 44px 28px;
   align-items: center;
   gap: 12px;
   padding: 6px 12px 6px 12px;
@@ -179,21 +179,31 @@
 .corr-list-col-rank { text-align: center; }
 .corr-list-col-diamond { text-align: center; }
 .corr-list-col-overlap { text-align: center; }
+.corr-list-col-sel { text-align: center; }
 
 /* ─── Candidate row ─── */
 
 .corr-candidate-row {
   display: grid;
-  grid-template-columns: 28px 64px 1fr 44px;
+  grid-template-columns: 28px 64px 1fr 44px 28px;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
   border-radius: 8px;
   transition: background 0.12s;
+  cursor: pointer;
 }
 
 .corr-candidate-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.corr-candidate-row-selected {
+  background: rgba(92, 124, 250, 0.07);
+}
+
+.corr-candidate-row-selected:hover {
+  background: rgba(92, 124, 250, 0.10);
 }
 
 .corr-candidate-row + .corr-candidate-row {
@@ -385,6 +395,72 @@
   color: #817f78;
   max-width: 300px;
   line-height: 1.5;
+}
+
+/* ─── Selection checkbox glyph ─── */
+
+.corr-candidate-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #474745;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  background: transparent;
+  transition: border-color 0.12s, background 0.12s;
+  flex-shrink: 0;
+}
+
+.corr-candidate-check-on {
+  border-color: #5c7cfa;
+  background: #5c7cfa;
+}
+
+/* ─── Synthesize action bar ─── */
+
+.corr-synth-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(92, 124, 250, 0.06);
+  border-top: 1px solid rgba(92, 124, 250, 0.18);
+  flex-shrink: 0;
+}
+
+.corr-synth-bar-count {
+  font-size: 12px;
+  color: #8fa6fb;
+  font-family: var(--font-mono, "Fira Mono", monospace);
+}
+
+.corr-synth-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 16px;
+  background: #5c7cfa;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.corr-synth-btn:hover {
+  background: #7a97fb;
+}
+
+.corr-synth-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* ─── Loading ─── */

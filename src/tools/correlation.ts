@@ -381,4 +381,143 @@ INPUT SIGNAL SELF-RATING SCALE:
       };
     }
   );
+
+  // -------------------------------------------------------------------------
+  // render_correlation — pure pass-through; the host synthesized, we render
+  // -------------------------------------------------------------------------
+
+  const CORRELATION_REPORT_RESOURCE_URI = "ui://correlation-report/mcp-app.html";
+
+  const VERTEX_SIGNAL_SCHEMA = z.enum(["high", "partial", "none"]);
+
+  const EVIDENCE_ITEM_SCHEMA = z.object({
+    vertex: z.enum(["adversary", "capability", "infrastructure", "victim"]),
+    weight: z.enum([
+      "smoking_gun",
+      "supporting",
+      "non_discriminatory",
+      "counter",
+      "decisive_counter",
+    ]),
+    text: z.string(),
+  });
+
+  const CONSOLIDATED_CANDIDATE_SCHEMA = z.object({
+    id: z.string(),
+    title: z.string(),
+    reason: z.string(),
+  });
+
+  const LEAD_SCHEMA = z.object({
+    candidate_ids: z.array(z.string()).min(1),
+    title: z.string(),
+    relationship: z.enum(["same_campaign", "same_actor", "shared_tradecraft"]),
+    confidence: z.enum(["high", "moderate", "low"]),
+    vertex_signal: z.object({
+      adversary: VERTEX_SIGNAL_SCHEMA,
+      capability: VERTEX_SIGNAL_SCHEMA,
+      infrastructure: VERTEX_SIGNAL_SCHEMA,
+      victim: VERTEX_SIGNAL_SCHEMA,
+    }),
+    bluf: z.string(),
+    evidence: z.array(EVIDENCE_ITEM_SCHEMA),
+    gaps: z.string(),
+    consolidated_candidates: z.array(CONSOLIDATED_CANDIDATE_SCHEMA).default([]),
+  });
+
+  const NO_MATCH_SCHEMA = z.object({
+    id: z.string(),
+    title: z.string(),
+    vendor: z.string().optional(),
+  });
+
+  const SYNTHESIS_SCHEMA = z.object({
+    bluf: z.string(),
+    correlation_signal: z.enum(["high", "moderate", "low", "none"]),
+    reasoning: z.string(),
+    gaps: z.string(),
+    next_steps: z.array(
+      z.object({
+        priority: z.enum(["high", "moderate"]),
+        text: z.string(),
+      })
+    ),
+    inferential_hops: z.number().int().optional(),
+    atomic_ioc_overlap: z
+      .object({ assessed: z.boolean(), note: z.string().optional() })
+      .optional(),
+    case_title: z.string().optional(),
+  });
+
+  const CANDIDATE_META_ENTRY_SCHEMA = z.object({
+    title: z.string().optional(),
+    vendor: z.string().optional(),
+    url: z.string().optional(),
+  });
+
+  registerTrackedAppTool(
+    analytics,
+    server,
+    "render_correlation",
+    {
+      title: "Render Correlation Report",
+      description: `Render a structured correlation report you (the host) synthesized.
+
+Call this AFTER calling get_report and completing your synthesis. Pass your CorrelationFindings; the analyst sees the rendered deep-dive report.
+
+This tool performs NO synthesis and NO Elasticsearch queries — it is a pure pass-through to the analyst view. The host is responsible for all reasoning; this tool only hands the structured result to the UI.`,
+      _meta: { ui: { resourceUri: CORRELATION_REPORT_RESOURCE_URI } },
+      inputSchema: {
+        findings: z
+          .object({
+            leads: z.array(LEAD_SCHEMA),
+            no_match: z.array(NO_MATCH_SCHEMA),
+            synthesis: SYNTHESIS_SCHEMA,
+            case_vertex_signal: z
+              .object({
+                adversary: VERTEX_SIGNAL_SCHEMA,
+                capability: VERTEX_SIGNAL_SCHEMA,
+                infrastructure: VERTEX_SIGNAL_SCHEMA,
+                victim: VERTEX_SIGNAL_SCHEMA,
+              })
+              .optional(),
+            candidate_labels: z.record(z.string(), z.string()).optional(),
+            candidate_meta: z.record(z.string(), CANDIDATE_META_ENTRY_SCHEMA).optional(),
+          })
+          .describe("CorrelationFindings you synthesized from get_report output."),
+      },
+    },
+    async ({ findings }) => {
+      const leadsCount = findings.leads.length;
+      const signal = findings.synthesis.correlation_signal;
+      const caseTitle = findings.synthesis.case_title ?? "Correlation deep-dive";
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              kind: "correlation_report",
+              findings,
+              summary: `${caseTitle} — ${leadsCount} lead${leadsCount !== 1 ? "s" : ""}, signal: ${signal}`,
+            }),
+          },
+        ],
+      };
+    }
+  );
+
+  const correlationReportViewPath = resolveViewPath("correlation-report");
+  registerAppResource(
+    server,
+    CORRELATION_REPORT_RESOURCE_URI,
+    CORRELATION_REPORT_RESOURCE_URI,
+    { mimeType: RESOURCE_MIME_TYPE },
+    async () => {
+      const html = fs.readFileSync(correlationReportViewPath, "utf-8");
+      return {
+        contents: [{ uri: CORRELATION_REPORT_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: html }],
+      };
+    }
+  );
 }

@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { extractToolText } from "../../shared/extract-tool-text";
 import { useMcpApp, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
 import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
@@ -185,18 +185,27 @@ function CoverageBanner({ coverage, onDismiss }: CoverageBannerProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Candidate row
+// Candidate row — now with checkbox for selection
 // ---------------------------------------------------------------------------
 
 interface CandidateRowProps {
   stub: ScoredStub;
   rank: number;
+  selected: boolean;
+  onToggle: (id: string) => void;
 }
 
-function CandidateRow({ stub, rank }: CandidateRowProps) {
+function CandidateRow({ stub, rank, selected, onToggle }: CandidateRowProps) {
   const hasUrl = stub.url.length > 0;
   return (
-    <div className="corr-candidate-row">
+    <div
+      className={`corr-candidate-row${selected ? " corr-candidate-row-selected" : ""}`}
+      onClick={() => onToggle(stub.report_id)}
+      role="checkbox"
+      aria-checked={selected}
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") onToggle(stub.report_id); }}
+    >
       <span className="corr-candidate-rank" aria-label={`Rank ${rank}`}>
         {rank}
       </span>
@@ -211,6 +220,7 @@ function CandidateRow({ stub, rank }: CandidateRowProps) {
               target="_blank"
               rel="noopener noreferrer"
               className="corr-candidate-link"
+              onClick={(e) => e.stopPropagation()}
             >
               {stub.title}
             </a>
@@ -228,6 +238,13 @@ function CandidateRow({ stub, rank }: CandidateRowProps) {
         <span className="corr-overlap-count">{stub.overlap}</span>
         <span className="corr-overlap-label">vtx</span>
       </div>
+
+      <span
+        className={`corr-candidate-check${selected ? " corr-candidate-check-on" : ""}`}
+        aria-hidden="true"
+      >
+        {selected ? "✓" : ""}
+      </span>
     </div>
   );
 }
@@ -299,8 +316,10 @@ export function App() {
 function AppContent() {
   const [result, setResult] = useState<AnalystSearchResult | null>(null);
   const [coverageDismissed, setCoverageDismissed] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [synthesizing, setSynthesizing] = useState(false);
 
-  const { connected } = useMcpApp();
+  const { connected, getApp } = useMcpApp();
   const { trackEvent } = useAnalytics();
 
   useEffect(() => {
@@ -313,16 +332,54 @@ function AppContent() {
         const text = extractToolText(toolResult);
         if (!text) return;
         const data = JSON.parse(text);
-        // Accept any payload that looks like an analyst search result.
         if (data && Array.isArray(data.candidates) && data.coverage && data.meta) {
           setResult(data as AnalystSearchResult);
           setCoverageDismissed(false);
+          setSelectedIds(new Set());
         }
       } catch {
         // Not a correlation result — ignore.
       }
     },
   });
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSynthesize = useCallback(async () => {
+    const app = getApp();
+    if (!app || selectedIds.size === 0) return;
+    setSynthesizing(true);
+
+    const ids = [...selectedIds];
+    const idsJson = JSON.stringify(ids);
+    const message =
+      `PROCEED — deep-dive correlation on report_ids ${idsJson}: ` +
+      `call get_report for their full text, synthesize per the synthesis rubric, ` +
+      `then call render_correlation with the resulting CorrelationFindings.`;
+
+    try {
+      await app.sendMessage({
+        role: "user",
+        content: [{ type: "text", text: message }],
+      });
+    } catch {
+      await app.updateModelContext({
+        content: [{ type: "text", text: message }],
+      });
+    } finally {
+      setSynthesizing(false);
+    }
+  }, [getApp, selectedIds]);
 
   if (!connected) {
     return (
@@ -379,17 +436,41 @@ function AppContent() {
             </div>
           </div>
         ) : (
-          <div className="corr-list">
-            <div className="corr-list-header">
-              <span className="corr-list-col-rank" aria-hidden="true">#</span>
-              <span className="corr-list-col-diamond" aria-hidden="true">Match</span>
-              <span className="corr-list-col-report">Report</span>
-              <span className="corr-list-col-overlap">Vtx</span>
+          <>
+            <div className="corr-list">
+              <div className="corr-list-header">
+                <span className="corr-list-col-rank" aria-hidden="true">#</span>
+                <span className="corr-list-col-diamond" aria-hidden="true">Match</span>
+                <span className="corr-list-col-report">Report</span>
+                <span className="corr-list-col-overlap">Vtx</span>
+                <span className="corr-list-col-sel" aria-hidden="true" />
+              </div>
+              {result.candidates.map((stub, i) => (
+                <CandidateRow
+                  key={stub.report_id}
+                  stub={stub}
+                  rank={i + 1}
+                  selected={selectedIds.has(stub.report_id)}
+                  onToggle={toggleSelect}
+                />
+              ))}
             </div>
-            {result.candidates.map((stub, i) => (
-              <CandidateRow key={stub.report_id} stub={stub} rank={i + 1} />
-            ))}
-          </div>
+
+            {selectedIds.size > 0 && (
+              <div className="corr-synth-bar">
+                <span className="corr-synth-bar-count">
+                  {selectedIds.size} report{selectedIds.size !== 1 ? "s" : ""} selected
+                </span>
+                <button
+                  className="corr-synth-btn"
+                  onClick={handleSynthesize}
+                  disabled={synthesizing}
+                >
+                  {synthesizing ? "Synthesizing…" : "Synthesize selected"}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
