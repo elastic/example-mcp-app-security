@@ -57,7 +57,12 @@
     {
       "name": "generate-sample-data",
       "description": "Generate ECS-compliant security events for demos"
-    }
+    },
+    { "name": "diamond_search",          "description": "Blind diamond-model correlation search over the threat corpus" },
+    { "name": "get_report",              "description": "Fetch full threat report(s) by id for correlation deep-dive" },
+    { "name": "diamond_search_analyst",  "description": "Scored diamond-model correlation search with per-vertex triage view" },
+    { "name": "correlation_input_check", "description": "Pre-search input gate: per-vertex signal stoplight before correlating" },
+    { "name": "render_correlation",      "description": "Render a host-synthesized correlation deep-dive report" }
   ],
   "tools_generated": true,
   "user_config": {
