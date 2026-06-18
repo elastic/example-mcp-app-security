@@ -85,7 +85,7 @@
     "ssl_verification": {
       "type": "boolean",
       "title": "Verify SSL/TLS Certificates",
-      "description": "Verifies the Elasticsearch / Kibana TLS certificate against trusted CAs. ⚠ Uncheck ONLY if you are connecting to a trusted self-signed development cluster — disabling verification removes protection against man-in-the-middle attacks.",
+      "description": "⚠ Uncheck ONLY for trusted self-signed dev clusters — disabling removes protection against man-in-the-middle attacks. When checked (default), the Elasticsearch / Kibana TLS certificate is verified against trusted CAs.",
       "default": true,
       "required": false,
       "sensitive": false
