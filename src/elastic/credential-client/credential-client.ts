@@ -17,6 +17,10 @@ export interface ClusterCredentials {
   readonly elasticsearchUrl: string;
   readonly kibanaUrl: string;
   readonly elasticsearchApiKey: string;
+  /** Whether to verify TLS certificates (default `true`). */
+  readonly sslVerify: boolean;
+  /** Custom CA bundle, pre-loaded at startup when `caCertPath` was set. */
+  readonly caCert?: Buffer;
 }
 
 /**

@@ -19,7 +19,7 @@ Add to `.vscode/mcp.json`:
         "--stdio"
       ],
       "env": {
-        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\"}]"
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\",\"sslVerify\":true}]"
       }
     }
   }
@@ -31,6 +31,8 @@ Add to `.vscode/mcp.json`:
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 >
 > **Keeping secrets out of `mcp.json`:** replace `CLUSTERS_JSON` with `CLUSTERS_FILE` pointing at the absolute path of a JSON file containing the same array. See [Cluster configuration](./setup-local.md#cluster-configuration).
+>
+> **Self-signed TLS:** see [TLS verification options](./setup-local.md#tls-verification-options) for `sslVerify` and `caCertPath`.
 >
 > **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
@@ -47,7 +49,7 @@ Add to `.vscode/mcp.json`:
       "command": "node",
       "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
       "env": {
-        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\"}]"
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\",\"sslVerify\":true}]"
       }
     }
   }

@@ -7,6 +7,7 @@
 
 import axios, { AxiosError } from "axios";
 import type { ClusterCredentials } from "../credential-client/index.js";
+import { createHttpsAgent } from "../shared/https-agent.js";
 import type { KibanaClient } from "./kibana-client.js";
 
 const USER_AGENT = "elastic-security-mcp-app";
@@ -33,6 +34,7 @@ export function createKibanaClient(creds: ClusterCredentials): KibanaClient {
   const instance = axios.create({
     baseURL: creds.kibanaUrl,
     timeout: DEFAULT_TIMEOUT_MS,
+    httpsAgent: createHttpsAgent(creds),
     headers: {
       "User-Agent": USER_AGENT,
       Authorization: `ApiKey ${creds.elasticsearchApiKey}`,
