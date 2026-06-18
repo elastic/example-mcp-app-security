@@ -27,6 +27,7 @@ import {
   AlertsService,
   AttackDiscoveryService,
   CasesService,
+  CorrelationService,
   EntityDetailService,
   EsqlService,
   IndicesService,
@@ -35,6 +36,7 @@ import {
   SampleDataService,
 } from "./elastic/service/index.js";
 import { registerAlertTriageTools } from "./tools/alert-triage.js";
+import { registerCorrelationTools } from "./tools/correlation.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
 import { registerAttackDiscoveryTools } from "./tools/attack-discovery.js";
 import { registerCaseManagementTools } from "./tools/case-management.js";
@@ -105,6 +107,7 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     sampleDataClient: new SampleDataClient({ esClient }),
     rulesService,
   });
+  const correlationService = new CorrelationService({ esClient });
 
   const server = new McpServer({
     name: "elastic-security",
@@ -128,6 +131,7 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     analytics,
   });
   registerAnalyticsTools(server, { analytics });
+  registerCorrelationTools(server, { correlationService, analytics });
 
   return server;
 }
