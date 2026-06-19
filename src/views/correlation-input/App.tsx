@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { extractToolText } from "../../shared/extract-tool-text";
 import { useMcpApp, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
 import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
@@ -237,14 +237,12 @@ export function App() {
 
 function AppContent() {
   const [payload, setPayload] = useState<InputCheckPayload | null>(null);
-  const [proceeding, setProceeding] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
 
-  const { connected, getApp } = useMcpApp();
+  const { connected } = useMcpApp();
   const { trackEvent } = useAnalytics();
 
   useEffect(() => {
-    trackEvent({ eventType: "view_rendered", viewId: "threat-hunt" });
+    trackEvent({ eventType: "view_rendered", viewId: "correlation-input" });
   }, [trackEvent]);
 
   useMcpAppEvents({
@@ -255,8 +253,6 @@ function AppContent() {
         const data = JSON.parse(text);
         if (data?.kind === "correlation_input_check" && data.vertices) {
           setPayload(data as InputCheckPayload);
-          setProceeding(false);
-          setDismissed(false);
         }
       } catch {
         // Not a gate payload — ignore.
@@ -264,60 +260,12 @@ function AppContent() {
     },
   });
 
-  const handleProceed = useCallback(async () => {
-    const app = getApp();
-    if (!app || !payload) return;
-    setProceeding(true);
-
-    // Build a concise proceed message that gives the LLM everything it needs
-    // to call diamond_search_analyst without the analyst retyping anything.
-    const vertexLines = VERTEX_ORDER
-      .filter((v) => payload.vertices[v] && payload.vertices[v]!.signal !== "NONE" && payload.vertices[v]!.query.trim())
-      .map((v) => `  ${VERTEX_ABBREV[v]}: ${payload.vertices[v]!.query.trim()}`);
-
-    const message = vertexLines.length > 0
-      ? `PROCEED — call diamond_search_analyst with the following vertex queries:\n${vertexLines.join("\n")}`
-      : "PROCEED — call diamond_search_analyst with the vertex queries from the correlation_input_check you just ran.";
-
-    try {
-      await app.sendMessage({
-        role: "user",
-        content: [{ type: "text", text: message }],
-      });
-    } catch {
-      // sendMessage may be unsupported by some hosts; fall back gracefully.
-      await app.updateModelContext({
-        content: [{ type: "text", text: message }],
-      });
-    } finally {
-      setProceeding(false);
-    }
-  }, [getApp, payload]);
-
-  const handleRevise = useCallback(() => {
-    setDismissed(true);
-  }, []);
-
   if (!connected) {
     return (
       <div className="gate-app">
         <div className="gate-loading">
           <div className="gate-spinner" />
           <span>Connecting to server...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (dismissed) {
-    return (
-      <div className="gate-app">
-        <div className="gate-dismissed">
-          <div className="gate-dismissed-title">Revising input</div>
-          <div className="gate-dismissed-hint">
-            Provide additional case context in the conversation. The model will
-            re-summarize and call <code>correlation_input_check</code> again when ready.
-          </div>
         </div>
       </div>
     );
@@ -369,24 +317,19 @@ function AppContent() {
 
             <div className="gate-footer">
               <div className="gate-footer-question">
-                Proceed with this search?
+                Signal looks ready. Tell me how to proceed:
               </div>
-              <div className="gate-footer-actions">
-                <button
-                  className="gate-btn gate-btn-primary"
-                  onClick={handleProceed}
-                  disabled={proceeding}
-                >
-                  {proceeding ? "Searching…" : "Search this case"}
-                </button>
-                <button
-                  className="gate-btn gate-btn-ghost"
-                  onClick={handleRevise}
-                  disabled={proceeding}
-                >
-                  I'll revise first
-                </button>
-              </div>
+              <ul className="gate-footer-options">
+                <li>
+                  <strong>Full run</strong> — I'll triage and synthesize the strongest matches
+                  autonomously (more thorough, uses our full correlation tradecraft; slower and
+                  higher token cost).
+                </li>
+                <li>
+                  <strong>Analyst-led</strong> — I'll show you the ranked candidates and you pick
+                  which to deep-dive (faster, cheaper, more interactive; you steer the depth).
+                </li>
+              </ul>
             </div>
           </>
         )}

@@ -323,7 +323,7 @@ function AppContent() {
   const { trackEvent } = useAnalytics();
 
   useEffect(() => {
-    trackEvent({ eventType: "view_rendered", viewId: "threat-hunt" });
+    trackEvent({ eventType: "view_rendered", viewId: "correlation" });
   }, [trackEvent]);
 
   useMcpAppEvents({

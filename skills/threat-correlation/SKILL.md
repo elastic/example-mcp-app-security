@@ -22,6 +22,42 @@ When the user asks to correlate a case or find related threat intel, ALWAYS star
 `correlation_input_check` to surface the per-vertex signal stoplight. Do not attempt to
 answer from memory or describe correlation results without calling the tools.
 
+## Gate: choose a run mode after `correlation_input_check`
+
+After `correlation_input_check` surfaces the per-vertex stoplight, PAUSE and offer the analyst
+two run modes. Branch on their reply.
+
+### Mode A — Full run (autonomous, disciplined)
+
+1. Call `diamond_search_analyst` with the confirmed vertex queries.
+2. Review the scored candidates yourself using the `triage_rubric` in the response. Pull
+   `get_report` for the **top ~10 candidates** ranked by (overlap desc, max_score desc) — cap
+   at ~10 to bound token cost.
+3. Apply the full `synthesis_guidance` and `triage_rubric` tradecraft from the tool's payload.
+4. Call `render_correlation` with the completed `CorrelationFindings`.
+
+Frame honestly: more thorough, full tradecraft and bias-reduction discipline, but **slower
+and higher token cost** (synthesis across many reports); results are model-dependent.
+
+### Mode B — Analyst-led (interactive, short-circuitable)
+
+1. Call `diamond_search_analyst` with the confirmed vertex queries.
+2. **Present the ranked candidates to the analyst** — show titles, scores, and per-vertex
+   match detail from the response.
+3. Wait for the analyst to pick which candidates to deep-dive.
+4. Call `get_report` for only the analyst-selected `report_ids`.
+5. Synthesize findings and call `render_correlation`.
+
+Frame honestly: **faster, cheaper, more interactive** — analyst steers depth and can
+short-circuit at any point — but less programmatically disciplined (relies on analyst judgment
+rather than a full autonomous triage pass).
+
+### Both modes use the same 5 tools
+
+The only difference is who performs triage: the model (Mode A) or the analyst (Mode B).
+
+---
+
 ## Primary path — analyst-led (transparent)
 
 Use this path for interactive human-in-the-loop correlation. It gives the analyst full
@@ -30,7 +66,7 @@ visibility into what signal you have before the search runs.
 | Step | User says / situation | Tool call |
 |------|-----------------------|-----------|
 | 1 | Summarise the case into Diamond Model vertices, then show the analyst the signal quality | `correlation_input_check` with `adversary`, `capability`, `infrastructure`, `victim` — each with a `query` paragraph and a `signal` self-rating (HIGH / PARTIAL / NONE) |
-| 2 | Analyst confirms signal is ready | `diamond_search_analyst` with the same vertex queries — presents scored candidates with per-vertex match detail |
+| 2 | Analyst confirms signal is ready (or chooses Mode A/B at the gate) | `diamond_search_analyst` with the same vertex queries — presents scored candidates with per-vertex match detail |
 | 3 | Analyst selects top candidates from the scored list | `get_report` with the chosen `report_ids` (1–10) |
 | 4 | You (the host) synthesize CorrelationFindings from the report text | `render_correlation` with your completed `findings` object |
 
