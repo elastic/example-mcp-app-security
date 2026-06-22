@@ -61,13 +61,17 @@ export function registerCorrelationTools(
     "diamond_search",
     {
       title: "Diamond Model Correlation Search",
-      description: `Search the threat-report corpus for reports that correlate with a new case using the Diamond Model of Intrusion Analysis.
+      description: `AUTONOMOUS / unsupervised threat-report correlation search. Use this when NO human analyst will triage the candidates.
 
-HOST WORKFLOW:
+This tool is the BLIND path: it returns candidates with per-vertex matched_vertices evidence summaries and NO numeric scores, BY DESIGN. Scores are withheld so the model judges evidence on its merits instead of anchoring on similarity rank. Triage candidates using their matched_vertices text and the triage_rubric in the response.
+
+Do NOT use this tool when a human analyst will review and select candidates — use diamond_search_analyst instead. Pick ONE: diamond_search for autonomous runs, diamond_search_analyst for analyst-led runs.
+
+HOST WORKFLOW (autonomous):
 1. Summarise your case into up to four Diamond Model vertex paragraphs (adversary, capability, infrastructure, victim) following the diamond_summarisation_guidance included in every response. Omit vertices with no signal.
 2. Call this tool with your vertex summaries and any file-hash IOCs from the case.
-3. You will receive ranked candidate stubs (report_id, title, vendor, url) plus the triage_rubric and synthesis_guidance you need for later steps.
-4. Triage candidates using the returned triage_rubric — do NOT anchor on numeric scores (none are returned).
+3. You receive candidate stubs with matched_vertices evidence text (which vertices matched + what the report said about each). No numeric scores are returned.
+4. Triage candidates by reading matched_vertices evidence against the triage_rubric. Pull the top ~10 by evidence strength.
 5. Call get_report with the IDs of your top candidates.
 6. Synthesise correlation findings using the returned synthesis_guidance.`,
       _meta: { ui: {} },
@@ -192,12 +196,16 @@ Call this after triaging the candidates returned by diamond_search. Pass the rep
     "diamond_search_analyst",
     {
       title: "Diamond Model Correlation Search (Analyst-Led)",
-      description: `Analyst-led transparent correlation: returns ranked candidates WITH per-vertex match scores and retrieval coverage, for an analyst (or analyst-supervised LLM) to triage with full visibility. Use this for interactive human-in-the-loop correlation. For blinded independent judgment instead, use \`diamond_search\`.
+      description: `INTERACTIVE / analyst-led threat-report correlation search. Use this when a human analyst WILL review and select candidates. Do NOT use this for autonomous unsupervised correlation — use diamond_search instead.
+
+This tool is the SCORED path: it returns ranked candidates with per-vertex match scores (vertex_scores) for the analyst to triage with full score visibility. Scores are present here because the analyst, not the model, makes the selection decision.
+
+Pick ONE: diamond_search_analyst for analyst-led runs, diamond_search for autonomous runs. Running both in sequence is not a workflow.
 
 The response includes:
 - candidates: ScoredStub[] ranked by (overlap desc, max_score desc) — each with vertex_scores showing which Diamond Model vertices matched and their semantic similarity scores
 - coverage: { queried, avg_overlap, thin } — thin=true signals weak retrieval (degraded or low multi-vertex overlap); the UI renders a backfill nudge
-- tradecraft: the same triage_rubric and synthesis_guidance as diamond_search
+- tradecraft: triage_rubric and synthesis_guidance for subsequent steps
 
 HOST WORKFLOW (analyst-supervised):
 1. Summarise the case into Diamond Model vertex paragraphs following diamond_summarisation_guidance.

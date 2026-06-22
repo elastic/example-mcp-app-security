@@ -16,7 +16,7 @@ import {
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
 import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
-import type { CorrelationService } from "../elastic/service/correlationService.js";
+import type { CorrelationService, MatchedVertex } from "../elastic/service/correlationService.js";
 
 // ---------------------------------------------------------------------------
 // Local mock — NOT added to shared mockServices.ts (off-limits)
@@ -77,10 +77,21 @@ describe("registerCorrelationTools", () => {
   // -------------------------------------------------------------------------
 
   describe("diamond_search", () => {
-    it("returns candidate stubs without scores and attaches tradecraft", async () => {
+    it("returns candidate stubs with matched_vertices evidence (no scores) and attaches tradecraft", async () => {
+      const matchedVertices: MatchedVertex[] = [
+        { vertex: "adversary", summary: "APT28 / Fancy Bear, attributed to GRU Unit 26165" },
+        { vertex: "capability", summary: "Zebrocy downloader used as first-stage implant" },
+      ];
+
       vi.mocked(correlationService.diamondSearch).mockResolvedValueOnce({
         candidates: [
-          { report_id: "rpt-1", title: "APT28 Zebrocy", vendor: "elastic", url: "https://example.com/1" },
+          {
+            report_id: "rpt-1",
+            title: "APT28 Zebrocy",
+            vendor: "elastic",
+            url: "https://example.com/1",
+            matched_vertices: matchedVertices,
+          },
         ],
         total: 1,
         degraded: false,
@@ -104,18 +115,50 @@ describe("registerCorrelationTools", () => {
       });
 
       const body = parseToolText<{
-        candidates: Array<{ report_id: string; title: string; vendor: string; url: string }>;
+        candidates: Array<{
+          report_id: string;
+          title: string;
+          vendor: string;
+          url: string;
+          matched_vertices?: MatchedVertex[];
+        }>;
         meta: { total: number; degraded: boolean; vertices_queried: string[] };
         tradecraft: unknown;
       }>(out);
 
       expect(body.candidates).toHaveLength(1);
       expect(body.candidates[0].report_id).toBe("rpt-1");
-      // Blind path: no vertex_scores key in the stubs
+
+      // Blind path: matched_vertices with evidence text present, no numeric scores
+      expect(body.candidates[0].matched_vertices).toEqual(matchedVertices);
       expect((body.candidates[0] as Record<string, unknown>).vertex_scores).toBeUndefined();
+
       expect(body.meta.total).toBe(1);
       expect(body.meta.degraded).toBe(false);
       expect(body.tradecraft).toBeDefined();
+    });
+
+    it("returns stubs without matched_vertices when service returns none (BM25 fallback)", async () => {
+      vi.mocked(correlationService.diamondSearch).mockResolvedValueOnce({
+        candidates: [
+          { report_id: "rpt-bm25", title: "BM25 hit", vendor: "elastic", url: "https://example.com/bm25" },
+        ],
+        total: 1,
+        degraded: true,
+        vertices_queried: ["adversary"],
+      });
+
+      const out = await server.tool("diamond_search").callback({ adversary: "APT28" });
+
+      const body = parseToolText<{
+        candidates: Array<Record<string, unknown>>;
+        meta: { degraded: boolean };
+      }>(out);
+
+      expect(body.meta.degraded).toBe(true);
+      // BM25 stubs: no matched_vertices, no vertex_scores
+      expect(body.candidates[0].matched_vertices).toBeUndefined();
+      expect(body.candidates[0].vertex_scores).toBeUndefined();
     });
   });
 

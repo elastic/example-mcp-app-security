@@ -62,8 +62,28 @@ export interface ReportStub {
   url: string;
 }
 
+/** A matched vertex with its evidence summary text (no score). */
+export interface MatchedVertex {
+  vertex: DiamondVertex;
+  summary: string;
+}
+
+/**
+ * A candidate stub for the BLIND autonomous path (diamond_search).
+ * Carries which vertices matched and their evidence summaries — NO scores.
+ * The model triages on evidence text, not similarity rank.
+ */
+export interface BlindReportStub {
+  report_id: string;
+  title: string;
+  vendor: string;
+  url: string;
+  /** Vertices that scored >= NOISE_FLOOR, in DIAMOND_VERTICES order, with evidence text. */
+  matched_vertices?: MatchedVertex[];
+}
+
 export interface DiamondSearchResult {
-  candidates: ReportStub[];
+  candidates: BlindReportStub[];
   total: number;
   /** True when inference was unavailable and BM25 fallback was used. */
   degraded: boolean;
@@ -153,6 +173,9 @@ interface SourceFields {
   source?: { name?: string; type?: string; url?: string };
   severity?: { level?: string };
   provenance?: { extracted_at?: string };
+  extracted?: {
+    diamond?: Partial<Record<DiamondVertex, { summary?: string }>>;
+  };
 }
 
 interface SourceFieldsFull extends SourceFields {
@@ -195,8 +218,9 @@ const runSemanticSearch = async (
   queriedVertices: DiamondVertex[],
   vertexQueries: DiamondVertexQueries,
   size: number
-): Promise<{ stubs: ReportStub[]; total: number; degraded: false }> => {
+): Promise<{ stubs: BlindReportStub[]; total: number; degraded: false }> => {
   // Build ndjson body: one header + body pair per vertex.
+  const vertexSummaryFields = DIAMOND_VERTICES.map((v) => `extracted.diamond.${v}.summary`);
   const lines: string[] = [];
   for (const vertex of queriedVertices) {
     lines.push(
@@ -221,7 +245,13 @@ const runSemanticSearch = async (
           },
         },
         size: KNN_CANDIDATES_PER_VERTEX,
-        _source: ["content.title", "source.name", "source.type", "source.url"],
+        _source: [
+          "content.title",
+          "source.name",
+          "source.type",
+          "source.url",
+          ...vertexSummaryFields,
+        ],
       })
     );
   }
@@ -262,7 +292,7 @@ const runSemanticSearch = async (
   }
 
   // Qualify: at least one vertex score >= NOISE_FLOOR.
-  const candidates: Array<{ stub: ReportStub; overlap: number; maxScore: number }> = [];
+  const candidates: Array<{ stub: BlindReportStub; overlap: number; maxScore: number }> = [];
 
   for (const [reportId, { source, scores }] of matrix) {
     const aboveFloor = DIAMOND_VERTICES.filter(
@@ -270,12 +300,25 @@ const runSemanticSearch = async (
     );
     if (aboveFloor.length === 0) continue;
     const aboveScores = aboveFloor.map((v) => scores[v] as number);
+
+    // Build matched_vertices in deterministic DIAMOND_VERTICES order, no scores.
+    const matched_vertices: MatchedVertex[] = aboveFloor
+      .filter((v) => {
+        const summary = source.extracted?.diamond?.[v]?.summary;
+        return summary != null && summary.length > 0;
+      })
+      .map((v) => ({
+        vertex: v,
+        summary: source.extracted!.diamond![v]!.summary as string,
+      }));
+
     candidates.push({
       stub: {
         report_id: reportId,
         title: source.content?.title?.trim() ?? reportId,
         vendor: source.source?.name ?? source.source?.type ?? "unknown",
         url: source.source?.url ?? "",
+        ...(matched_vertices.length > 0 ? { matched_vertices } : {}),
       },
       overlap: aboveFloor.length,
       maxScore: Math.max(...aboveScores),
@@ -303,7 +346,7 @@ const runBm25Fallback = async (
   queriedVertices: DiamondVertex[],
   vertexQueries: DiamondVertexQueries,
   size: number
-): Promise<{ stubs: ReportStub[]; total: number; degraded: true }> => {
+): Promise<{ stubs: BlindReportStub[]; total: number; degraded: true }> => {
   const combinedQuery = queriedVertices
     .map((v) => vertexQueries[v])
     .filter(Boolean)
@@ -583,7 +626,7 @@ export class CorrelationService {
       return { candidates: [], total: 0, degraded: false, vertices_queried: [] };
     }
 
-    let semanticResult: { stubs: ReportStub[]; total: number; degraded: boolean };
+    let semanticResult: { stubs: BlindReportStub[]; total: number; degraded: boolean };
     try {
       semanticResult = await runSemanticSearch(esClient, queriedVertices, vertexQueries, size);
     } catch (err) {
@@ -607,7 +650,8 @@ export class CorrelationService {
       // De-duplicate: anchor-first, then semantic hits not already in anchors.
       const anchorIds = new Set(anchorHits.map((c) => c.report_id));
       const semanticOnly = candidates.filter((c) => !anchorIds.has(c.report_id));
-      candidates = [...anchorHits, ...semanticOnly].slice(0, size);
+      // Anchor hits carry no vertex summary data (BM25 path); matched_vertices omitted.
+      candidates = [...(anchorHits as BlindReportStub[]), ...semanticOnly].slice(0, size);
     }
 
     return {
