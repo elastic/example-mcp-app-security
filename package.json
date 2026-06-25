@@ -42,6 +42,7 @@
     "test:permissions": "tsx scripts/test-permissions/runner.ts",
     "skills:zip": "bash scripts/build-skill-zips.sh",
     "mcpb:pack": "bash scripts/build-mcpb.sh",
+    "mcpb:pack:dev": "bash scripts/build-mcpb-dev.sh",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "test": "vitest",
