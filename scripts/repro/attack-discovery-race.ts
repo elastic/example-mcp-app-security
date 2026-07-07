@@ -9,24 +9,16 @@
  * Ground-truth repro for github.com/elastic/example-mcp-app-security#46.
  *
  * Triggers `generate-attack-discovery`, then polls `get-generation-status`
- * (Kibana's own generation envelope — includes a `discoveries` count once
- * terminal) side-by-side with `triage-attack-discoveries` /
- * `poll-discoveries` (the ES|QL-based tools) in the same time window, on
- * every tick. This isolates which of the two hypotheses from the issue is
- * responsible for "0 discoveries":
+ * (Kibana's own view, includes `discoveries` count once terminal)
+ * side-by-side with `triage-attack-discoveries` / `poll-discoveries`
+ * (ES|QL-based tools). Isolates which hypothesis explains "0 discoveries":
  *
- *   1. Race: `get-generation-status` reports `discoveries: N > 0` (Kibana's
- *      own view of what it wrote) while `triage-attack-discoveries` still
- *      returns `total: 0` for several ticks after the generation reaches a
- *      terminal status. This is the "retrieval hasn't caught up yet" case
- *      the UI paper over by polling both independently.
- *   2. Swallowed error: `triage-attack-discoveries` returns `total: 0` even
- *      several ticks *after* the generation's terminal status, while
- *      `get-generation-status` reports `discoveries: N > 0` the whole time.
+ *   1. Race — generation-status reports discoveries>0 while triage still
+ *      returns 0 for a few ticks after terminal status (retrieval lag).
+ *   2. Swallowed error — triage stays at 0 well after terminal status.
  *      Run with MCP_DEBUG_ESQL=1 to surface the underlying safeEsql()
- *      failure that would otherwise be silently swallowed.
- *   3. Neither: both report 0 — the generation itself found nothing (not a
- *      bug in this app).
+ *      failure.
+ *   3. Neither — both report 0 (generation itself found nothing).
  *
  * Usage:
  *   MCP_DEBUG_ESQL=1 npx tsx scripts/repro/attack-discovery-race.ts

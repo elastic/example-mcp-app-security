@@ -18,6 +18,7 @@ export default tseslint.config(
       'src/**/*.tsx',
       '*.ts',
       'scripts/**/*.js',
+      'scripts/**/*.ts',
       '*.mjs',
     ],
     languageOptions: {

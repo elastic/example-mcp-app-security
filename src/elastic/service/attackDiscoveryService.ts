@@ -703,12 +703,10 @@ export class AttackDiscoveryService {
   }
 
   /**
-   * Fail-loud guard against a repeat of #46: a silently-dropped/mis-cased
-   * query param on `findAnonymizationFields` truncated the field list to
-   * Kibana's default page size (20) and starved the LLM prompt of the
-   * ECS fields it needs to find anything. This can't distinguish "small
-   * on purpose" from "silently truncated", so it only warns — but a warning
-   * that fires every run is a strong signal something upstream regressed.
+   * Fail-loud guard against a repeat of #46: a dropped/mis-cased query param
+   * on `findAnonymizationFields` truncated the field list to Kibana's
+   * default page size and starved the LLM prompt of ECS fields. Can't
+   * distinguish "small on purpose" from "truncated", so it only warns.
    */
   private warnIfAnonymizationFieldsLookTruncated(
     fields: AnonymizationField[]
@@ -724,11 +722,9 @@ export class AttackDiscoveryService {
       console.error(
         `[getAnonymizationFields] WARNING: anonymization field list looks truncated ` +
           `(count=${fields.length}, missing=[${missingKeyFields.join(", ")}]). ` +
-          `This is the failure mode of github.com/elastic/example-mcp-app-security#46 ` +
-          `(a param sent to the Kibana _find endpoint was silently dropped/mis-cased, ` +
-          `falling back to the default page size of ${KIBANA_DEFAULT_PAGE_SIZE}). ` +
-          `Verify findAnonymizationFields() in attackDiscoveryClient.ts still sends ` +
-          `per_page (snake_case) and check for upstream schema changes.`
+          `Failure mode of github.com/elastic/example-mcp-app-security#46 — verify ` +
+          `findAnonymizationFields() in attackDiscoveryClient.ts still sends per_page ` +
+          `(snake_case) and check for upstream schema changes.`
       );
     }
   }

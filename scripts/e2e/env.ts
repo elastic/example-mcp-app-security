@@ -9,13 +9,9 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const ENV_KEYS = [
-  "TREADMILL_MCP_E2E_CLUSTERS_FILE",
-  "MCP_E2E_CLUSTERS_FILE",
-  "CLUSTERS_FILE",
-] as const;
+const ENV_KEYS = ["MCP_E2E_CLUSTERS_FILE", "CLUSTERS_FILE"] as const;
 
-const DEFAULT_SHARED_PATH = join(homedir(), ".treadmill", "mcp-e2e-clusters.json");
+const DEFAULT_SHARED_PATH = join(homedir(), ".mcp-e2e", "clusters.json");
 
 export interface SharedClusterResolution {
   readonly clustersFile: string;
@@ -46,7 +42,6 @@ export function formatSkipMessage(): string {
   return [
     "MCP E2E skipped: no shared cluster credentials found.",
     "Set one of:",
-    "  TREADMILL_MCP_E2E_CLUSTERS_FILE",
     "  MCP_E2E_CLUSTERS_FILE",
     "  CLUSTERS_FILE",
     `Or place credentials at ${DEFAULT_SHARED_PATH}`,

@@ -7,9 +7,7 @@
 
 /**
  * Shared polling helper for Attack Discovery on-demand generation, used by
- * both `scripts/e2e/run.ts` (CI smoke test) and
- * `scripts/repro/attack-discovery-race.ts` (manual repro for
- * github.com/elastic/example-mcp-app-security#46).
+ * `scripts/e2e/run.ts` and `scripts/repro/attack-discovery-race.ts`.
  */
 
 export interface Generation {

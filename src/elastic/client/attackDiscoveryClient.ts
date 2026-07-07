@@ -159,13 +159,10 @@ export class AttackDiscoveryClient {
     const { data } = await this.options.kibanaClient.get<{
       data: AnonymizationField[];
     }>("/api/security_ai_assistant/anonymization_fields/_find", {
-      // The route's query schema only recognizes snake_case `per_page`
-      // (see FindAnonymizationFieldsRequestQuery in Kibana). A camelCase
-      // `perPage` is silently dropped, and the endpoint falls back to its
-      // default of 20 per page - truncating the "allowed" field list before
-      // it's used to build the alerts query for the LLM prompt, and
-      // starving Attack Discovery of the fields (host.name, user.name,
-      // rule.name, etc.) it needs to find anything.
+      // Route schema only recognizes snake_case `per_page`
+      // (FindAnonymizationFieldsRequestQuery in Kibana) — a camelCase
+      // `perPage` is silently dropped, falling back to a 20-item default
+      // page that starves Attack Discovery of the fields it needs (#46).
       params: { per_page: "1000" },
       headers: KIBANA_HEADERS,
     });

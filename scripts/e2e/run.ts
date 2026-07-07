@@ -30,11 +30,9 @@ function parseToolJson(result: { content?: Array<{ type: string; text?: string }
   return JSON.parse(text);
 }
 
-// Generation runs two sequential LLM round-trips (generate, then refine), each
-// through whatever connector is configured. Behind a slow/overloaded provider
-// this observably took ~10 minutes end-to-end in local testing, well past a
-// naive "1-3 minutes" assumption - so default generously and let CI override
-// via MCP_E2E_ATTACK_DISCOVERY_TIMEOUT_MS if its connector is faster.
+// Generation runs two sequential LLM round-trips (generate, then refine) and
+// observably took ~10 minutes end-to-end behind a slow connector in local
+// testing, so default generously; override via MCP_E2E_ATTACK_DISCOVERY_TIMEOUT_MS.
 const ATTACK_DISCOVERY_GEN_TIMEOUT_MS = Number(
   process.env.MCP_E2E_ATTACK_DISCOVERY_TIMEOUT_MS ?? 15 * 60_000
 );
@@ -45,20 +43,16 @@ const ATTACK_DISCOVERY_POLL_INTERVAL_MS = 10_000;
  * list connectors -> trigger generation -> poll get-generation-status to a
  * terminal state -> assert the generation itself reports discoveries.
  *
- * This exists to catch regressions like
- * github.com/elastic/example-mcp-app-security#46, where a `camelCase`/
- * `snake_case` param mismatch silently truncated the anonymization field
- * list feeding the LLM prompt, starving generation of context. Skips
- * cleanly (does not fail the run) when no AI connector is configured on
- * the shared cluster, since connector provisioning is out of this script's
- * control.
+ * Guards against #46 (github.com/elastic/example-mcp-app-security), where a
+ * `camelCase`/`snake_case` param mismatch silently truncated the
+ * anonymization field list feeding the LLM prompt. Skips cleanly when no AI
+ * connector is configured on the shared cluster.
  */
 async function runAttackDiscoverySmoke(client: Client): Promise<void> {
-  // Discovery count depends on a live LLM's non-deterministic output (see the
-  // #46 postmortem this test guards against), so it's a useful manual/local
-  // regression check but too flaky to gate an unattended CI/treadmill run on.
-  // Default to skipped whenever a CI env is detected; explicitly set
-  // MCP_E2E_ATTACK_DISCOVERY_SKIP=0 to force it on in CI, or =1 to skip locally.
+  // Discovery count depends on non-deterministic live-LLM output, so this is
+  // a useful manual/local regression check but too flaky to gate unattended
+  // CI on. Defaults to skipped when CI is detected; MCP_E2E_ATTACK_DISCOVERY_SKIP
+  // explicitly overrides (0 = force on, 1 = force off).
   const skipEnv = process.env.MCP_E2E_ATTACK_DISCOVERY_SKIP;
   const isCi = process.env.CI === "true" || process.env.CI === "1";
   const shouldSkip = skipEnv != null ? skipEnv === "1" : isCi;
@@ -122,12 +116,11 @@ async function runAttackDiscoverySmoke(client: Client): Promise<void> {
 
   console.log(`attack-discovery smoke: status=${gen?.status} discoveries=${gen?.discoveries}`);
 
-  // This is the actual regression check for #46: against seeded sample data
-  // (a full ransomware kill-chain, correlated alerts), a healthy pipeline
-  // should find at least one discovery. A silent param-casing mismatch that
-  // starves the LLM prompt of anonymization fields reproduces as
-  // succeeded-but-empty here, not as an HTTP error — so this assertion,
-  // not just a terminal-status check, is what catches it.
+  // The actual #46 regression check: against seeded sample data (a full
+  // ransomware kill-chain), a healthy pipeline should find at least one
+  // discovery. A silent param-casing mismatch reproduces as
+  // succeeded-but-empty, not an HTTP error, so a terminal-status check alone
+  // wouldn't catch it.
   if ((gen?.discoveries ?? 0) === 0) {
     throw new Error(
       "attack-discovery generation succeeded but found 0 discoveries against seeded sample data. " +
