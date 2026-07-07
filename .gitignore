@@ -16,7 +16,3 @@ dist/
 context/
 coverage/
 openspec/
-
-# Local shared-cluster credentials for scripts/e2e + scripts/repro (see
-# docs/testing-shared-instance.md) — contains a live ES API key, never commit.
-.mcp-e2e/clusters*.json

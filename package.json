@@ -48,8 +48,6 @@
     "lint:fix": "eslint --fix .",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:e2e": "tsx scripts/e2e/run.ts",
-    "test:evals": "tsx scripts/evals/run.ts",
     "test:coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build",
     "prepare": "husky",
