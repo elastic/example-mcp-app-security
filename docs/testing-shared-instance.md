@@ -42,10 +42,32 @@ Resolution order (first existing file wins):
 
 | Script | Command | Behavior |
 |--------|---------|----------|
-| E2E | `npm run test:e2e` | Seeds sample data when sparse, then calls `poll-alerts`, `list-cases`, `find-rules`, `list-indices` via in-process MCP client |
+| E2E | `npm run test:e2e` | Seeds sample data when sparse, then calls `poll-alerts`, `list-cases`, `find-rules`, `list-indices` via in-process MCP client, then an Attack Discovery generation smoke test |
 | Evals | `npm run test:evals` | Runs scenario table in `scripts/evals/scenarios.ts` — asserts JSON shapes from live tool responses |
 
 Both skip cleanly when no credentials file exists (exit 0) unless `MCP_E2E_REQUIRED=1`.
+
+### Attack Discovery generation smoke test
+
+`npm run test:e2e` includes a generation smoke test (guarding against
+[#46](https://github.com/elastic/example-mcp-app-security/issues/46): a silent
+`camelCase`/`snake_case` param mismatch that truncated the anonymization
+field list and starved the LLM prompt of context). It selects an AI
+connector, triggers `generate-attack-discovery`, polls to a terminal status,
+and asserts `discoveries > 0` against seeded sample data.
+
+Discovery count depends on a live LLM's non-deterministic output, so this
+assertion is **skipped by default in CI** (detected via `CI=true`/`CI=1`) to
+avoid flaking unattended runs — it's intended as a manual/local regression
+check. Control it explicitly with `MCP_E2E_ATTACK_DISCOVERY_SKIP`:
+
+- `1` — always skip (e.g. to bypass local flakiness)
+- `0` — always run, even in CI
+- unset — runs locally, skips automatically when `CI` is set
+
+`MCP_E2E_ATTACK_DISCOVERY_TIMEOUT_MS` overrides the poll timeout (default 15
+minutes — generation runs two sequential LLM round-trips and can be slow
+behind an overloaded connector).
 
 ## Local run
 

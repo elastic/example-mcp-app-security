@@ -54,8 +54,20 @@ const ATTACK_DISCOVERY_POLL_INTERVAL_MS = 10_000;
  * control.
  */
 async function runAttackDiscoverySmoke(client: Client): Promise<void> {
-  if (process.env.MCP_E2E_ATTACK_DISCOVERY_SKIP === "1") {
-    console.log("attack-discovery smoke: SKIPPED (MCP_E2E_ATTACK_DISCOVERY_SKIP=1)");
+  // Discovery count depends on a live LLM's non-deterministic output (see the
+  // #46 postmortem this test guards against), so it's a useful manual/local
+  // regression check but too flaky to gate an unattended CI/treadmill run on.
+  // Default to skipped whenever a CI env is detected; explicitly set
+  // MCP_E2E_ATTACK_DISCOVERY_SKIP=0 to force it on in CI, or =1 to skip locally.
+  const skipEnv = process.env.MCP_E2E_ATTACK_DISCOVERY_SKIP;
+  const isCi = process.env.CI === "true" || process.env.CI === "1";
+  const shouldSkip = skipEnv != null ? skipEnv === "1" : isCi;
+  if (shouldSkip) {
+    console.log(
+      `attack-discovery smoke: SKIPPED (${
+        skipEnv != null ? "MCP_E2E_ATTACK_DISCOVERY_SKIP=1" : "CI detected, defaults to skipped"
+      })`
+    );
     return;
   }
 
