@@ -85,7 +85,11 @@ export function App() {
   );
 }
 
-function AppContent() {
+// Exported (alongside the default `App`) so tests can render it directly
+// against a stubbed `McpAppContext.Provider`, bypassing the real
+// `McpAppProvider`/transport — mirrors the pattern used for the hook tests in
+// src/shared/hooks/*.test.tsx.
+export function AppContent() {
   const [summary, setSummary] = useState<AlertSummary | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<SecurityAlert | null>(null);
   const [alertContext, setAlertContext] = useState<AlertContext | null>(null);
@@ -103,19 +107,28 @@ function AppContent() {
   const [relatedOpen, setRelatedOpen] = useState(false);
   const paramsRef = useRef<FilterParams>({ days: 7, limit: DEFAULT_LIMIT_NUM });
   const listRef = useRef<HTMLDivElement | null>(null);
+  // Bumped at the start of every loadAlertsImpl call so a response that
+  // resolves after a newer request has already started can be told apart
+  // from the latest one — see requestId check below.
+  const requestIdRef = useRef(0);
 
   const loadAlertsImpl = useCallback(async (app: McpApp, overrideParams?: Partial<FilterParams>) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const args = { ...paramsRef.current, ...overrideParams };
       if (overrideParams) paramsRef.current = { ...paramsRef.current, ...overrideParams };
       const result = await app.callServerTool({ name: "poll-alerts", arguments: args });
+      // A newer call started while this one was in flight (e.g. the 60s poll,
+      // or the user clearing/changing the filter) — its response should win,
+      // so discard this now-stale one rather than overwrite fresher data.
+      if (requestId !== requestIdRef.current) return;
       const text = extractCallResult(result);
       if (text) setSummary(JSON.parse(text));
     } catch (e) {
       console.error("Load alerts failed:", e);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
 
@@ -433,6 +446,22 @@ function AppContent() {
   }, [loadAlerts]);
 
   /**
+   * `SearchInput`'s onChange fires on every keystroke but only updates local
+   * text state — it does not, by itself, clear the actual filter
+   * (`paramsRef.current.query`). Pressing Enter/Escape or clicking the chip's
+   * "x" all correctly clear it via `clearQuery`, but a user who selects the
+   * text and deletes it (or backspaces to empty) without pressing Enter would
+   * see an empty box and no chip while the list stayed filtered on the old
+   * value. Treat "input became empty" the same as clicking the chip's "x".
+   */
+  const handleInputChange = useCallback((value: string) => {
+    setSearchInput(value);
+    if (value === "" && paramsRef.current.query) {
+      loadAlerts({ query: undefined });
+    }
+  }, [loadAlerts]);
+
+  /**
    * Filter the alert list by a specific ECS field/value pair.
    * Called when the user clicks a dotted-underline fact value on a card or in the detail pane.
    *
@@ -647,7 +676,7 @@ function AppContent() {
         actions={
           <SearchInput
             value={searchInput}
-            onChange={setSearchInput}
+            onChange={handleInputChange}
             onSubmit={handleSearch}
             onClear={clearQuery}
           />
