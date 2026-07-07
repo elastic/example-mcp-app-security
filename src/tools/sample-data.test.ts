@@ -9,12 +9,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+// `sample-data.ts` → `service/index.ts` → `telemetryService.ts` →
+// `analytics/index.ts` → `create-analytics-client.ts` → `@elastic/ebt`.
+// The `vi.resetModules()` pattern in this file causes a fresh CJS load of
+// `@elastic/ebt` on every dynamic re-import, which fails in vitest's ESM
+// context. Mocking the boundary that imports ebt prevents the load entirely;
+// the mock persists across `vi.resetModules()` calls.
+vi.mock("../elastic/analytics/create-analytics-client.js", () => ({
+  createAnalyticsClient: vi.fn(),
+  resolveTelemetrySendTo: vi.fn().mockReturnValue("production"),
+}));
+
 import {
   createMockMcpServer,
+  parseBootstrapToolText,
   parseToolText,
   type MockMcpServer,
 } from "../test/helpers/mockMcpServer.js";
 import { createMockSampleDataService } from "../test/helpers/mockServices.js";
+import { noopAnalyticsClient } from "../test/helpers/mockAnalytics.js";
 import type { SampleDataService } from "../elastic/service/index.js";
 
 const RESOURCE_URI = "ui://generate-sample-data/mcp-app.html";
@@ -32,7 +45,10 @@ async function setup(): Promise<{
   const { registerSampleDataTools } = await import("./sample-data.js");
   const server = createMockMcpServer();
   const sampleDataService = createMockSampleDataService();
-  registerSampleDataTools(server as unknown as McpServer, { sampleDataService });
+  registerSampleDataTools(server as unknown as McpServer, {
+    sampleDataService,
+    analytics: noopAnalyticsClient,
+  });
   return { server, sampleDataService };
 }
 
@@ -57,13 +73,19 @@ describe("registerSampleDataTools", () => {
   });
 
   describe("generate-sample-data", () => {
-    it("returns the static `ready` envelope listing every supported scenario", async () => {
-      const { server } = await setup();
+    it("returns a bootstrap payload listing scenarios and current sample data", async () => {
+      const { server, sampleDataService } = await setup();
+      vi.mocked(sampleDataService.checkExistingData).mockResolvedValueOnce({
+        totalDocs: 42,
+        totalAlerts: 5,
+        existingRules: 3,
+        byScenario: {},
+      });
       const out = await server.tool("generate-sample-data").callback({});
-      const body = parseToolText<{ status: string; scenarios: string[] }>(out);
-      expect(body.status).toBe("ready");
+      const body = parseBootstrapToolText(out, "sample-data");
       expect(body.scenarios).toContain("ransomware-kill-chain");
       expect(body.scenarios.length).toBeGreaterThan(5);
+      expect(body.existingData.totalDocs).toBe(42);
     });
 
     it("documents the supported scenarios in the tool description", async () => {

@@ -2,6 +2,8 @@
 
 Verifies that the role definitions documented in [`docs/permissions.md`](../../docs/permissions.md) actually work end-to-end against a real Elasticsearch + Kibana cluster. Provisions both documented roles, creates scoped API keys, and exercises every documented operation through the existing `src/elastic/*` business-logic modules.
 
+Supports both **stateful** (default) and **serverless** deployment modes — see [Serverless mode](#serverless-mode) below.
+
 ## Quick Start
 
 ```bash
@@ -20,13 +22,84 @@ Exit code is `0` if every check passes (or is skipped); `1` otherwise.
 
 | Flag | Description |
 |---|---|
-| `--role full\|readonly\|both` | Which role(s) to test (default: `both`). |
+| `--mode stateful\|serverless` | Deployment mode (default: `stateful`). Changes the default admin username and enables serverless role aliases. |
+| `--role <name\|alias>` | Which role(s) to test (default: `both`). See below for valid names and aliases. |
 | `--cleanup-stale` | Delete leftover `mcp-app-test-*` roles and API keys before running. Useful after a crashed run. |
 | `--no-cleanup` | Skip cleanup at the end and print the provisioned API keys so you can re-use them for manual debugging. |
 | `--verbose`, `-v` | Print fixtures, stale-cleanup actions, and other debug info. |
 | `-h`, `--help` | Show help. |
 
+**`--role` values:**
+
+| Value | Expands to |
+|---|---|
+| `full` | Custom full-access role |
+| `readonly` | Custom read-only role |
+| `both` (default) | `full` + `readonly` |
+| `all` | `full` + `readonly` + `quickstart_full` + `quickstart_readonly` |
+| `quickstart_full` | Quickstart built-in `editor` + companion role |
+| `quickstart_readonly` | Quickstart built-in `viewer` + companion role |
+| `quickstart` | `quickstart_full` + `quickstart_readonly` |
+| `serverless_t1_analyst` | Serverless built-in `t1_analyst` user (observe-only) |
+| `serverless_t2_analyst` | Serverless built-in `t2_analyst` user (observe-only) |
+| `serverless_soc_manager` | Serverless built-in `soc_manager` user (observe-only) |
+| `serverless` | All 3 serverless built-in roles |
+| `serverless_all` | All stateful asserted + all serverless observe-only |
+| `none` | No roles (cleanup-stale only) |
+
 Pass flags via `--`, e.g. `npm run test:permissions -- --role readonly --verbose`.
+
+## Serverless mode
+
+For Elastic Cloud Serverless (Security project type), start a local serverless cluster and then run:
+
+```bash
+# Start serverless ES (port 9200)
+yarn es serverless --projectType=security
+
+# Start serverless Kibana (port 5601)
+yarn start --serverless=security
+
+# In example-mcp-app-security, configure .env:
+# ELASTICSEARCH_URL=http://localhost:9200
+# KIBANA_URL=http://localhost:5601/kbn
+# ELASTIC_PASSWORD=changeme
+# (ELASTIC_USERNAME defaults to "elastic_serverless" in serverless mode)
+
+npm run test:permissions:serverless
+```
+
+The serverless runner uses `--mode serverless`, which:
+- Defaults admin username to `elastic_serverless` (instead of `elastic`)
+- Authenticates the three built-in role users (`t1_analyst`, `t2_analyst`, `soc_manager`) via `grant_api_key` — they exist as file-realm users with password `changeme`
+- Runs each built-in role in **observe-only mode**: all operations are exercised and results are printed, but no assertions are made. The exit code is only affected by the asserted custom roles (`full`, `readonly`) if those are also included
+
+Custom roles (`full`, `readonly`) work on serverless too — `PUT /_security/role` is supported since the GA of custom roles in Serverless Security (Oct 2024).
+
+To run both built-in observed roles and custom asserted roles against serverless in one pass:
+
+```bash
+npm run test:permissions:serverless:all
+```
+
+### Output for serverless built-in roles
+
+Observed reports look like:
+
+```
+── SERVERLESS_T1_ANALYST (observe-only) ──
+  Layer A: skipped (built-in role — privileges not enumerable from a role descriptor)
+  Layer B (operations, observed — no pass/fail assertions):
+    [alerts]
+      ✓ fetchAlerts — pass: array(1)
+      ✓ acknowledgeAlert — pass: ok
+      ...
+    [rules]
+      ✗ createRule — 403: denied (403/401)
+      ...
+```
+
+Symbols show what actually happened: `✓` = call succeeded, `✗` = 403/401, `→` = skipped or other. These results inform [`docs/permissions-serverless.md`](../../docs/permissions-serverless.md).
 
 ## What it does
 
@@ -69,7 +142,7 @@ A privilege documented in the full role is missing from `roles.ts`. Diff against
 The role descriptor sent in the `PUT /_security/role` body doesn't include the listed privileges, or Elasticsearch rejected one of them (typo / removed feature). Check that the Kibana feature names match your stack version. The defaults target 9.4+ — see the version-specific tables in `docs/permissions.md`.
 
 **`Fatal error: ELASTICSEARCH_URL, KIBANA_URL, and ELASTIC_PASSWORD must be set...`**
-`.env` isn't loading or is missing one of `ELASTICSEARCH_URL`, `KIBANA_URL`, `ELASTIC_PASSWORD`. `ELASTIC_USERNAME` is optional (defaults to `elastic`). The script reads them via `dotenv/config`.
+`.env` isn't loading or is missing one of `ELASTICSEARCH_URL`, `KIBANA_URL`, `ELASTIC_PASSWORD`. `ELASTIC_USERNAME` is optional (defaults to `elastic` in stateful mode, `elastic_serverless` in serverless mode). The script reads them via `dotenv/config`.
 
 **`Seeding completed but no security alerts were created.`**
 `generateSampleData` ran but didn't end up writing alerts. Usually means the admin key lacks `write` on `.alerts-security.alerts-default`. Use a key with at least the privileges in the full role.

@@ -14,6 +14,7 @@ import {
   QUICKSTART_BUILTINS,
   QUICKSTART_COMPANION_DESCRIPTORS,
   ROLE_DESCRIPTORS,
+  SERVERLESS_BUILTINS,
   operationChecks,
   type AnyRoleName,
   type AssertedRoleName,
@@ -23,6 +24,7 @@ import {
   type RoleName,
   type RunOutcome,
   type SeedFixtures,
+  type ServerlessRoleName,
 } from "./roles.js";
 import {
   bootstrapAdminApiKey,
@@ -47,8 +49,11 @@ const TEST_RESOURCE_PREFIX = "mcp-app-test-";
 const ADMIN_CLUSTER_NAME = "test-permissions-admin";
 const SCOPED_CLUSTER_NAME = "test-permissions-scoped";
 
+type DeploymentMode = "stateful" | "serverless";
+
 interface CliOptions {
   roles: RoleName[];
+  mode: DeploymentMode;
   cleanupStale: boolean;
   cleanup: boolean;
   verbose: boolean;
@@ -108,32 +113,49 @@ const ALL_ASSERTED_ROLES: AssertedRoleName[] = [
   "quickstart_readonly",
 ];
 
+const ALL_SERVERLESS_ROLES: ServerlessRoleName[] = [
+  "serverless_t1_analyst",
+  "serverless_t2_analyst",
+  "serverless_soc_manager",
+];
+
 function parseArgs(argv: string[]): CliOptions {
   const opts: CliOptions = {
     roles: ["full", "readonly"],
+    mode: "stateful",
     cleanupStale: false,
     cleanup: true,
     verbose: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--role") {
+    if (arg === "--mode") {
+      const value = argv[++i];
+      if (value === "stateful" || value === "serverless") opts.mode = value;
+      else die(`Unknown --mode value: ${value} (expected stateful|serverless)`);
+    } else if (arg === "--role") {
       const value = argv[++i];
       if (value === "both") opts.roles = ["full", "readonly"];
       else if (value === "all") opts.roles = [...ALL_ASSERTED_ROLES];
       else if (value === "quickstart")
         opts.roles = ["quickstart_full", "quickstart_readonly"];
+      else if (value === "serverless") opts.roles = [...ALL_SERVERLESS_ROLES];
+      else if (value === "serverless_all")
+        opts.roles = [...ALL_ASSERTED_ROLES, ...ALL_SERVERLESS_ROLES];
       else if (value === "none") opts.roles = [];
       else if (
         value === "full" ||
         value === "readonly" ||
         value === "quickstart_full" ||
-        value === "quickstart_readonly"
+        value === "quickstart_readonly" ||
+        value === "serverless_t1_analyst" ||
+        value === "serverless_t2_analyst" ||
+        value === "serverless_soc_manager"
       )
         opts.roles = [value];
       else
         die(
-          `Unknown --role value: ${value} (expected full|readonly|quickstart_full|quickstart_readonly|both|quickstart|all|none)`
+          `Unknown --role value: ${value} (expected full|readonly|quickstart_full|quickstart_readonly|both|quickstart|all|none|serverless|serverless_all|serverless_t1_analyst|serverless_t2_analyst|serverless_soc_manager)`
         );
     } else if (arg === "--cleanup-stale") {
       opts.cleanupStale = true;
@@ -155,11 +177,15 @@ function printHelp() {
   console.log(`Usage: npm run test:permissions -- [options]
 
 Options:
-  --role <name|both|quickstart|all|none>
-                                Role(s) to test (default: both).
-                                Names: full, readonly, quickstart_full, quickstart_readonly.
-                                "both" = full,readonly. "quickstart" = quickstart_full,quickstart_readonly.
-                                "all" = all four. "none" = no roles (cleanup-stale only).
+  --mode <stateful|serverless>  Deployment mode (default: stateful).
+  --role <name|alias>           Role(s) to test (default: both).
+                                Stateful names: full, readonly, quickstart_full, quickstart_readonly.
+                                Stateful aliases: "both" = full,readonly. "quickstart" = quickstart_*.
+                                  "all" = all four stateful roles.
+                                Serverless names: serverless_t1_analyst, serverless_t2_analyst, serverless_soc_manager.
+                                Serverless aliases: "serverless" = all 3 built-in roles.
+                                  "serverless_all" = all stateful + all serverless.
+                                "none" = no roles (cleanup-stale only).
   --cleanup-stale               Delete leftover ${TEST_RESOURCE_PREFIX}* roles/users/keys before running
   --no-cleanup                  Skip cleanup at end (prints API keys for reuse)
   --verbose                     Verbose output
@@ -178,17 +204,18 @@ interface AdminBasics {
   basicAuth: { username: string; password: string };
 }
 
-function loadAdminBasics(): AdminBasics {
+function loadAdminBasics(mode: DeploymentMode): AdminBasics {
   const elasticsearchUrl = process.env.ELASTICSEARCH_URL;
   const kibanaUrl = process.env.KIBANA_URL;
-  // Default to "elastic" — by far the most common admin user for local
-  // dev clusters. Override via env if needed.
-  const username = process.env.ELASTIC_USERNAME || "elastic";
+  // Serverless local dev uses "elastic_serverless"; stateful uses "elastic".
+  // Both can be overridden via ELASTIC_USERNAME env var.
+  const defaultUsername = mode === "serverless" ? "elastic_serverless" : "elastic";
+  const username = process.env.ELASTIC_USERNAME || defaultUsername;
   const password = process.env.ELASTIC_PASSWORD;
   if (!elasticsearchUrl || !kibanaUrl || !password) {
     die(
       "ELASTICSEARCH_URL, KIBANA_URL, and ELASTIC_PASSWORD must be set in .env or the environment. " +
-        "ELASTIC_USERNAME defaults to 'elastic'."
+        `ELASTIC_USERNAME defaults to '${defaultUsername}' in ${mode} mode.`
     );
   }
   return {
@@ -204,6 +231,7 @@ function adminServices(admin: AdminConfig): Services {
     elasticsearchUrl: admin.elasticsearchUrl,
     kibanaUrl: admin.kibanaUrl,
     elasticsearchApiKey: admin.elasticsearchApiKey,
+    sslVerify: true,
   };
   return buildServices(creds);
 }
@@ -214,6 +242,7 @@ function scopedServices(admin: AdminConfig, scopedKey: string): Services {
     elasticsearchUrl: admin.elasticsearchUrl,
     kibanaUrl: admin.kibanaUrl,
     elasticsearchApiKey: scopedKey,
+    sslVerify: true,
   };
   return buildServices(creds);
 }
@@ -612,6 +641,45 @@ async function provisionRole(
   return { role, roleName, apiKey };
 }
 
+interface ServerlessBuiltinArtifacts {
+  role: ServerlessRoleName;
+  apiKey: CreatedApiKey;
+}
+
+interface ServerlessBuiltinUnavailable {
+  role: ServerlessRoleName;
+  reason: string;
+}
+
+/**
+ * Provisions a scoped API key for a serverless built-in role user. The user
+ * already exists as a file-realm user in the local serverless cluster — no
+ * role or user creation needed. The key is invalidated on cleanup.
+ */
+async function provisionServerlessBuiltin(
+  admin: AdminConfig,
+  role: ServerlessRoleName,
+  suffix: string
+): Promise<ServerlessBuiltinArtifacts | ServerlessBuiltinUnavailable> {
+  const { roleName, password } = SERVERLESS_BUILTINS[role];
+  const keyName = `${TEST_RESOURCE_PREFIX}serverless-${roleName}-${suffix}`;
+  try {
+    const apiKey = await grantApiKeyForUser(
+      {
+        elasticsearchUrl: admin.elasticsearchUrl,
+        username: admin.basicAuth.username,
+        password: admin.basicAuth.password,
+      },
+      roleName,
+      password,
+      keyName
+    );
+    return { role, apiKey };
+  } catch (err) {
+    return { role, reason: formatError(err) };
+  }
+}
+
 interface LayerAResult {
   role: "full" | "readonly";
   outcome: "pass" | "fail";
@@ -816,7 +884,7 @@ function symbolFor(outcome: "pass" | "fail" | "skipped"): string {
 }
 
 function printRoleReport(
-  role: RoleName,
+  role: AssertedRoleName,
   layerA: LayerAResult | null,
   layerB: CheckResult[]
 ) {
@@ -847,10 +915,35 @@ function printRoleReport(
   }
 }
 
+function outcomeSymbol(outcome: RunOutcome): string {
+  if (outcome === "pass") return SYM_OK;
+  if (outcome === "403") return SYM_FAIL;
+  return SYM_SKIP;
+}
+
+function printObservedReport(role: ServerlessRoleName, observed: ObservedRun[]) {
+  console.log(`\n── ${role.toUpperCase()} (observe-only) ──`);
+  console.log(
+    "  Layer A: skipped (built-in role — privileges not enumerable from a role descriptor)"
+  );
+  console.log("  Layer B (operations, observed — no pass/fail assertions):");
+  for (const group of GROUP_ORDER) {
+    const inGroup = observed.filter((r) => r.check.group === group);
+    if (inGroup.length === 0) continue;
+    console.log(`    [${group}]`);
+    for (const r of inGroup) {
+      console.log(
+        `      ${outcomeSymbol(r.outcome)} ${r.check.name} — ${r.outcome}: ${r.detail}`
+      );
+    }
+  }
+}
+
 async function cleanupRoleArtifacts(
   adminSvc: Services,
   artifacts: RoleArtifacts[],
   quickstartArtifacts: QuickstartArtifacts[],
+  serverlessArtifacts: ServerlessBuiltinArtifacts[],
   exceptionListId: string | undefined,
   opts: CliOptions
 ) {
@@ -866,6 +959,11 @@ async function cleanupRoleArtifacts(
       console.log(`    role:    ${q.companionRoleName}`);
       console.log(`    api key: ${q.apiKey.name} (id=${q.apiKey.id})`);
       console.log(`    encoded: ${q.apiKey.encoded}`);
+    }
+    for (const s of serverlessArtifacts) {
+      console.log(`    serverless role: ${s.role}`);
+      console.log(`    api key: ${s.apiKey.name} (id=${s.apiKey.id})`);
+      console.log(`    encoded: ${s.apiKey.encoded}`);
     }
     if (exceptionListId) {
       console.log(`    exception list: ${exceptionListId} (namespace_type=single)`);
@@ -914,11 +1012,24 @@ async function cleanupRoleArtifacts(
       );
     }
   }
+  for (const s of serverlessArtifacts) {
+    try {
+      await deleteApiKey(adminSvc.esClient, s.apiKey.id);
+    } catch (err) {
+      console.warn(
+        `  warning: failed to invalidate API key ${s.apiKey.id}: ${formatError(err)}`
+      );
+    }
+  }
+}
+
+function isServerlessRole(role: RoleName): role is ServerlessRoleName {
+  return role in SERVERLESS_BUILTINS;
 }
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const basics = loadAdminBasics();
+  const basics = loadAdminBasics(opts.mode);
 
   // Bootstrap an admin API key via Basic auth. Two reasons:
   //  1. The standard ES + Kibana client factories only support
@@ -951,6 +1062,7 @@ async function main() {
 
   const provisioned: RoleArtifacts[] = [];
   const provisionedQuickstarts: QuickstartArtifacts[] = [];
+  const provisionedServerless: ServerlessBuiltinArtifacts[] = [];
   let seededExceptionListId: string | undefined;
   let interrupted = false;
 
@@ -971,6 +1083,7 @@ async function main() {
       adminSvc,
       provisioned,
       provisionedQuickstarts,
+      provisionedServerless,
       seededExceptionListId,
       opts
     )
@@ -1005,11 +1118,32 @@ async function main() {
       layerA: LayerAResult | null;
       layerB: CheckResult[];
     }
+    interface ObservedRoleRun {
+      role: ServerlessRoleName;
+      observed: ObservedRun[];
+    }
     const assertedRuns: AssertedRun[] = [];
+    const observedRoleRuns: ObservedRoleRun[] = [];
     const unavailableQuickstarts: UnavailableQuickstart[] = [];
+    const unavailableServerless: ServerlessBuiltinUnavailable[] = [];
 
     for (const role of opts.roles) {
       console.log(`\n→ Provisioning role "${role}"…`);
+
+      if (isServerlessRole(role)) {
+        const result = await provisionServerlessBuiltin(admin, role, fixtures.suffix);
+        if ("reason" in result) {
+          console.warn(`  ! ${role} unavailable: ${result.reason}`);
+          unavailableServerless.push(result);
+          continue;
+        }
+        provisionedServerless.push(result);
+        const scopedSvc = scopedServices(admin, result.apiKey.encoded);
+        const observed = await runOpsObserve(scopedSvc, role, fixtures);
+        observedRoleRuns.push({ role, observed });
+        continue;
+      }
+
       let apiKey: CreatedApiKey;
       let layerA: LayerAResult | null = null;
       if (role === "full" || role === "readonly") {
@@ -1052,9 +1186,25 @@ async function main() {
       }
     }
 
+    for (const { role, observed } of observedRoleRuns) {
+      printObservedReport(role, observed);
+    }
+
+    if (unavailableServerless.length > 0) {
+      console.log("\nUnavailable serverless built-in roles (skipped):");
+      for (const u of unavailableServerless) {
+        console.log(`  ! ${u.role}: ${u.reason}`);
+      }
+    }
+
     if (assertedRuns.length > 0) {
       console.log(
-        `\nSummary: ${passed} passed, ${failed} failed, ${skipped} skipped`
+        `\nSummary (asserted roles): ${passed} passed, ${failed} failed, ${skipped} skipped`
+      );
+    }
+    if (observedRoleRuns.length > 0) {
+      console.log(
+        `Observed (serverless built-ins): ${observedRoleRuns.length} role(s) run — see reports above for details.`
       );
     }
 
@@ -1082,6 +1232,7 @@ async function main() {
           adminSvc,
           provisioned,
           provisionedQuickstarts,
+          provisionedServerless,
           seededExceptionListId,
           opts
         );

@@ -13,12 +13,30 @@ import type {
   CredentialClient,
 } from "./credential-client.js";
 
-const ClusterSchema = z.object({
-  name: z.string().min(1),
-  elasticsearchUrl: z.url(),
-  kibanaUrl: z.url(),
-  elasticsearchApiKey: z.string().min(1),
-});
+const SslVerifySchema = z
+  .union([z.boolean(), z.literal("true"), z.literal("false")])
+  .optional()
+  .default(true)
+  .transform((value) => (typeof value === "boolean" ? value : value === "true"));
+
+const ClusterSchema = z
+  .object({
+    name: z.string().min(1),
+    elasticsearchUrl: z.url(),
+    kibanaUrl: z.url(),
+    elasticsearchApiKey: z.string().min(1),
+    sslVerify: SslVerifySchema,
+    caCertPath: z.string().min(1).optional(),
+  })
+  .superRefine((cluster, ctx) => {
+    if (cluster.sslVerify === false && cluster.caCertPath !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "sslVerify is false but caCertPath is set — pick one. Set sslVerify to true (the default) when using a CA bundle.",
+      });
+    }
+  });
 
 /**
  * The exact placeholder values shipped in our install templates
@@ -202,14 +220,27 @@ function parseClusters({ raw, source }: RawSource): ParsedClusters {
   }
 
   const clusters = Object.freeze(
-    result.data.map((c) =>
-      Object.freeze({
+    result.data.map((c) => {
+      let caCert: Buffer | undefined;
+      if (c.caCertPath) {
+        try {
+          caCert = readFileSync(c.caCertPath);
+        } catch (e) {
+          throw new Error(
+            `${source}: cannot read caCertPath for cluster ${c.name}: ${(e as Error).message}`
+          );
+        }
+      }
+
+      return Object.freeze({
         name: c.name,
         elasticsearchUrl: stripTrailingSlash(c.elasticsearchUrl),
         kibanaUrl: stripTrailingSlash(c.kibanaUrl),
         elasticsearchApiKey: c.elasticsearchApiKey,
-      })
-    )
+        sslVerify: c.sslVerify,
+        ...(caCert ? { caCert } : {}),
+      });
+    })
   );
 
   return Object.freeze({ clusters, defaultName: clusters[0].name });

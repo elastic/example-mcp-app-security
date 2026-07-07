@@ -5,107 +5,113 @@
  * 2.0.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { App as McpApp } from "@modelcontextprotocol/ext-apps";
-import { applyTheme } from "../theme";
+import { useContext, useEffect, useMemo, useRef } from "react";
+import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
+import type {
+  McpAppBootstrapEnvelope,
+  McpAppBootstrapErrorState,
+  McpAppBootstrapIdleState,
+  ViewBootstrapPayloads,
+} from "../mcp-app-bootstrap.js";
+import type { ViewId } from "../analytics-events.js";
+import {
+  McpAppContext,
+  type McpAppContextValue,
+  type OnToolResult,
+} from "./McpAppContext";
 
-type ToolResultParams = Parameters<NonNullable<McpApp["ontoolresult"]>>[0];
-
-export interface UseMcpAppOptions {
-  /** App identification — passed to `new McpApp({ name, version })`. */
-  name: string;
-  version: string;
-  /**
-   * Called when the host pushes an initial tool result. Use this to seed
-   * params/state from `params._meta` etc. before falling through to the
-   * view's own loader.
-   */
-  onToolResult?: (params: ToolResultParams, app: McpApp) => void;
-  /**
-   * Called once the connection is up. Receives whether `onToolResult` already
-   * fired (via the 1500ms grace timer) so the view can decide to issue its
-   * own initial fetch when nothing was pushed.
-   */
-  onConnect?: (app: McpApp, gotResult: boolean) => void;
-}
+export type { OnToolResult } from "./McpAppContext";
 
 export interface UseMcpAppState {
-  /** The underlying MCP app instance, or null until React mounts. */
-  app: McpApp | null;
-  /** Stable ref accessor — useful inside `useCallback`s where the value can be null until connect. */
-  getApp: () => McpApp | null;
-  /** True once `app.connect()` resolves. Views typically gate their UI on this. */
-  connected: boolean;
+  readonly app: McpApp | null;
+  readonly getApp: () => McpApp | null;
+  readonly connected: boolean;
+  readonly bootstrapState: McpAppContextValue["bootstrapState"];
 }
 
-/**
- * Standard MCP app bootstrap: instantiate, apply the design-system theme,
- * register the `ontoolresult` handler, connect, and tear down on unmount.
- *
- * Replaces the ~30-line copy-pasted `useEffect` block at the top of every
- * view's `App.tsx`.
- */
-export function useMcpApp({ name, version, onToolResult, onConnect }: UseMcpAppOptions): UseMcpAppState {
-  const appRef = useRef<McpApp | null>(null);
-  const [connected, setConnected] = useState(false);
-  // Refs stash the latest callbacks so the connect effect runs once, even
-  // when consumers pass new function identities on every render.
-  const onToolResultRef = useRef(onToolResult);
-  const onConnectRef = useRef(onConnect);
-  onToolResultRef.current = onToolResult;
-  onConnectRef.current = onConnect;
+export function useMcpApp(): UseMcpAppState {
+  const ctx = useContext(McpAppContext);
+  if (!ctx) {
+    throw new Error(
+      "useMcpApp() must be used inside <McpAppProvider>. Wrap your view's root in <McpAppProvider name=… version=…>.",
+    );
+  }
+  return {
+    app: ctx.app,
+    getApp: ctx.getApp,
+    connected: ctx.connected,
+    bootstrapState: ctx.bootstrapState,
+  };
+}
+
+export interface UseMcpAppEventsOptions {
+  /**
+   * Called whenever the host pushes a tool result after transport
+   * connection. Startup bootstrap payloads are delivered on this same
+   * channel, so consumers that rely on `useMcpAppBootstrap()` should
+   * ignore the explicit bootstrap envelope here.
+   */
+  onToolResult?: OnToolResult;
+}
+
+export function useMcpAppEvents(options: UseMcpAppEventsOptions): void {
+  const ctx = useContext(McpAppContext);
+  if (!ctx) {
+    throw new Error(
+      "useMcpAppEvents() must be used inside <McpAppProvider>.",
+    );
+  }
+
+  const onToolResultRef = useRef(options.onToolResult);
+  onToolResultRef.current = options.onToolResult;
 
   useEffect(() => {
-    const app = new McpApp({ name, version });
-    appRef.current = app;
-    applyTheme(app);
-
-    let gotResult = false;
-    let cancelled = false;
-    let graceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    app.ontoolresult = (params) => {
-      gotResult = true;
-      try {
-        onToolResultRef.current?.(params, app);
-      } catch (e) {
-        console.error("ontoolresult handler failed:", e);
-      }
-    };
-
-    app.connect()
-      .then(() => {
-        if (cancelled) return;
-        setConnected(true);
-        // Give the host a 1.5s grace period to push a tool result before
-        // falling back to whatever the view's own loader wants to do.
-        graceTimer = setTimeout(() => {
-          graceTimer = null;
-          if (cancelled) return;
-          onConnectRef.current?.(app, gotResult);
-        }, 1500);
-      })
-      .catch((err) => {
-        // If the host never connects we surface the error and leave
-        // `connected` false so views can keep their own fallback UI in place
-        // instead of being stuck on the "Connecting…" placeholder.
-        if (cancelled) return;
-        console.error("MCP app connect() failed:", err);
-      });
-
+    const unsubscribeToolResult = ctx.subscribeToToolResult((params, app) => {
+      onToolResultRef.current?.(params, app);
+    });
     return () => {
-      cancelled = true;
-      if (graceTimer !== null) {
-        clearTimeout(graceTimer);
-        graceTimer = null;
-      }
-      app.close();
+      unsubscribeToolResult();
     };
-  }, [name, version]);
+  }, [ctx]);
+}
 
-  return {
-    app: appRef.current,
-    getApp: () => appRef.current,
-    connected,
-  };
+type ViewBootstrapReadyState<V extends ViewId> = {
+  readonly status: "ready";
+  readonly envelope: McpAppBootstrapEnvelope<V>;
+  readonly payload: ViewBootstrapPayloads[V];
+};
+
+export type UseMcpAppBootstrapState<V extends ViewId> =
+  | McpAppBootstrapIdleState
+  | McpAppBootstrapErrorState
+  | ViewBootstrapReadyState<V>;
+
+/**
+ * Read the host-owned startup payload for a specific view.
+ *
+ * The provider persists bootstrap state in context, so late subscribers
+ * do not need a separate replay subscription: they synchronously read
+ * the current state on mount.
+ */
+export function useMcpAppBootstrap<V extends ViewId>(
+  viewId: V,
+): UseMcpAppBootstrapState<V> {
+  const { bootstrapState } = useMcpApp();
+  return useMemo(() => {
+    if (bootstrapState.status !== "ready") {
+      return bootstrapState;
+    }
+    if (bootstrapState.envelope.viewId !== viewId) {
+      return {
+        status: "error",
+        reason: `Bootstrap for ${bootstrapState.envelope.viewId} does not match ${viewId}.`,
+      };
+    }
+    return {
+      status: "ready",
+      // The runtime check above narrows the envelope to the requested view.
+      envelope: bootstrapState.envelope as McpAppBootstrapEnvelope<V>,
+      payload: bootstrapState.envelope.payload as ViewBootstrapPayloads[V],
+    };
+  }, [bootstrapState, viewId]);
 }

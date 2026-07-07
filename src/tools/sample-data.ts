@@ -7,7 +7,6 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  registerAppTool,
   registerAppResource,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
@@ -19,23 +18,27 @@ import {
   type SampleDataService,
   type ScenarioName,
 } from "../elastic/service/index.js";
+import { createMcpAppBootstrap } from "../shared/mcp-app-bootstrap.js";
+import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://generate-sample-data/mcp-app.html";
 
 const _pendingRuleIdMap: Record<string, string> = {};
 
-/** Services the sample-data tools depend on (default cluster only, for now). */
 export interface SampleDataToolDeps {
   readonly sampleDataService: SampleDataService;
+  readonly analytics: AnalyticsClient;
 }
 
 export function registerSampleDataTools(
   server: McpServer,
   deps: SampleDataToolDeps
 ) {
-  const { sampleDataService } = deps;
-  registerAppTool(
+  const { sampleDataService, analytics } = deps;
+  registerTrackedAppTool(
+    analytics,
     server,
     "generate-sample-data",
     {
@@ -45,13 +48,23 @@ export function registerSampleDataTools(
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async () => {
+      const existingData = await sampleDataService.checkExistingData();
       return {
-        content: [{ type: "text" as const, text: JSON.stringify({ status: "ready", scenarios: SCENARIO_NAMES }) }],
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(
+            createMcpAppBootstrap("sample-data", {
+              scenarios: SCENARIO_NAMES,
+              existingData,
+            }),
+          ),
+        }],
       };
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "generate-scenario",
     {
@@ -76,7 +89,8 @@ export function registerSampleDataTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "cleanup-sample-data",
     {
@@ -91,7 +105,8 @@ export function registerSampleDataTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "create-rules-for-scenario",
     {
@@ -113,7 +128,8 @@ export function registerSampleDataTools(
     }
   );
 
-  registerAppTool(
+  registerTrackedAppTool(
+    analytics,
     server,
     "check-existing-sample-data",
     {

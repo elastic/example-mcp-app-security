@@ -7,6 +7,12 @@
 
 import { vi, type Mock } from "vitest";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  MCP_APP_BOOTSTRAP_KIND,
+  type McpAppBootstrapEnvelope,
+  type ViewBootstrapPayloads,
+} from "../../shared/mcp-app-bootstrap.js";
+import type { ViewId } from "../../shared/analytics-events.js";
 
 /**
  * Captured tool registration. The third argument of `registerTool` is the
@@ -128,4 +134,24 @@ export function parseToolText<T = unknown>(result: {
     );
   }
   return JSON.parse(result.content[0].text) as T;
+}
+
+export function parseBootstrapToolText<V extends ViewId>(
+  result: {
+    content: { type: "text"; text: string }[];
+  },
+  viewId: V,
+): ViewBootstrapPayloads[V] {
+  const envelope = parseToolText<McpAppBootstrapEnvelope<V>>(result);
+  if (envelope.kind !== MCP_APP_BOOTSTRAP_KIND) {
+    throw new Error(
+      `Expected bootstrap envelope, got kind ${String(envelope.kind)}`,
+    );
+  }
+  if (envelope.viewId !== viewId) {
+    throw new Error(
+      `Expected bootstrap for ${viewId}, got ${String(envelope.viewId)}`,
+    );
+  }
+  return envelope.payload as ViewBootstrapPayloads[V];
 }

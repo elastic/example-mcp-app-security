@@ -42,3 +42,6 @@ The `generate-attack-discovery` tool triggers Kibana's Attack Discovery API with
 
 ### Kibana 9.x Compatibility
 All Kibana API calls include `elastic-api-version: 2023-10-31` headers, `x-elastic-internal-origin: Kibana` for internal APIs, and camelCase field names.
+
+### Telemetry
+The MCP App emits a small set of anonymised usage events via `@elastic/ebt`, mirrored to the user's Kibana telemetry opt-in. The shipper is fail-closed: events never leave the process unless Kibana reports `optIn === true`. See [`docs/telemetry.md`](./telemetry.md) for the event catalog and opt-out story.

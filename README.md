@@ -1,6 +1,6 @@
 # Elastic Security MCP App
 
-[![Latest Release](https://img.shields.io/github/v/release/elastic/example-mcp-app-security?label=Download%20.mcpb&color=00bfb3)](https://github.com/elastic/example-mcp-app-security/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/elastic/example-mcp-app-security?label=Download%20.mcpb&color=00bfb3&cacheSeconds=3600)](https://github.com/elastic/example-mcp-app-security/releases/latest)
 
 ## Quick Demo
 
@@ -34,7 +34,7 @@ See [docs/features.md](docs/features.md) for a full breakdown of each tool's cap
 >
 > Claude Desktop handles the rest — during install, fill in your Elasticsearch URL, Kibana URL, and API key. See [Creating an API key](docs/setup-local.md#creating-an-api-key) if you need to generate one first.
 >
-> For the API key's permissions, see [Required permissions](docs/permissions.md). The recommended Quickstart there uses Kibana's built-in **editor** (full-featured) or **viewer** (read-only) role plus a small companion role for index access — fastest unless you need a fully scripted custom role.
+> For the API key's permissions, see [Required permissions](docs/permissions.md) (stateful) or [Serverless permissions](docs/permissions-serverless.md) (Elastic Cloud Serverless Security projects). The stateful Quickstart uses Kibana's built-in **editor** (full-featured) or **viewer** (read-only) role plus a small companion role for index access — fastest unless you need a fully scripted custom role.
 
 For other hosts (Cursor, VS Code, Claude Code) or building from source, see [Installation](#installation) below.
 
@@ -45,6 +45,10 @@ For other hosts (Cursor, VS Code, Claude Code) or building from source, see [Ins
 When a user asks Claude to triage alerts or run a threat hunt, Claude calls a model-facing tool on this server. The tool returns a compact text summary to Claude **and** an interactive React UI that renders inline in the conversation. The UI then calls app-only tools directly for all subsequent interactions — keeping the LLM context small while the UI has full data access.
 
 See [docs/architecture.md](docs/architecture.md) for details on how views are built, how the UI communicates with the server, and key design decisions.
+
+### Telemetry
+
+The MCP App emits anonymised usage events via `@elastic/ebt`. Shipping is mirrored to the user's Kibana telemetry opt-in — nothing leaves the process unless Kibana reports `optIn === true`. See [docs/telemetry.md](docs/telemetry.md) for the event catalog, what's collected, and how to opt out.
 
 ### Skills
 

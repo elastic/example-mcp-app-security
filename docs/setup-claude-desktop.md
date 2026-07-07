@@ -13,6 +13,7 @@ Claude Desktop installs the extension and then opens a configuration dialog. Fil
 - **Elasticsearch URL**
 - **Elasticsearch API Key** — see [Creating an API key](./setup-local.md#creating-an-api-key)
 - **Kibana URL**
+- **Verify SSL/TLS Certificates** — leave checked for production clusters; uncheck only for trusted self-signed dev clusters. See [TLS verification options](./setup-local.md#tls-verification-options).
 
 > **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
@@ -33,7 +34,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["/path/to/example-mcp-app-security/dist/main.js", "--stdio"],
       "env": {
-        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\"}]"
+        "CLUSTERS_JSON": "[{\"name\":\"primary\",\"elasticsearchUrl\":\"https://your-cluster.es.cloud.example.com\",\"kibanaUrl\":\"https://your-cluster.kb.cloud.example.com\",\"elasticsearchApiKey\":\"your-api-key\",\"sslVerify\":true}]"
       }
     }
   }

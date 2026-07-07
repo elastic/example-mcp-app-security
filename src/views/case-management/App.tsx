@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { timeAgo } from "../../shared/theme";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
+import { inspectMcpAppBootstrapResult } from "../../shared/mcp-app-bootstrap";
 import { renderMarkdown } from "../../shared/markdown";
 import type { KibanaCase } from "../../shared/types";
 import { CaseForm } from "./components/CaseForm";
@@ -39,12 +40,14 @@ import {
 } from "../../shared/components";
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppBootstrap, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
+import { FactIcon } from "../../shared/components/icons/icons";
 import "./styles.css";
 
 type SeverityKey = Severity;
 type StatusKey = "open" | "in-progress" | "closed";
-/** StatusKey plus the UI-only "all" sentinel used by the filter dropdown. */
 type StatusFilterKey = StatusKey | "all";
 type SortKey = "severity" | "newest" | "oldest" | "title" | "alerts" | "comments";
 type GroupKey = "none" | "status" | "severity" | "creator" | "tag";
@@ -129,7 +132,9 @@ function normalizeCase(raw: unknown): KibanaCase | null {
 export function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <McpAppProvider name="case-management" version="1.0.0">
+        <AppContent />
+      </McpAppProvider>
     </ToastProvider>
   );
 }
@@ -180,10 +185,13 @@ function AppContent() {
     }
   }, []);
 
-  const { connected, getApp } = useMcpApp({
-    name: "case-management",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  const bootstrap = useMcpAppBootstrap("case-management");
+  useMcpAppEvents({
     onToolResult: (result, app) => {
+      if (inspectMcpAppBootstrapResult(result).status !== "not_bootstrap") {
+        return;
+      }
       try {
         const text = extractToolText(result);
         if (text) {
@@ -202,10 +210,38 @@ function AppContent() {
       } catch { /* ignore */ }
       loadCasesImpl(app);
     },
-    onConnect: (app, gotResult) => {
-      if (!gotResult) loadCasesImpl(app);
-    },
   });
+
+  useEffect(() => {
+    if (bootstrap.status === "idle") {
+      return;
+    }
+    if (bootstrap.status === "error") {
+      setLoading(false);
+      return;
+    }
+    const { cases: nextCases, total: nextTotal, params } = bootstrap.payload;
+    setCases(nextCases.map(normalizeCase).filter(Boolean) as KibanaCase[]);
+    setTotal(nextTotal);
+    paramsRef.current = {
+      status: params.status,
+      search: params.search,
+    };
+    setStatusFilter((params.status as StatusFilterKey | undefined) ?? "open");
+    setSearchInput(params.search ?? "");
+    setLoading(false);
+  }, [bootstrap]);
+
+  const { trackEvent } = useAnalytics();
+  useEffect(() => {
+    trackEvent({ eventType: "view_rendered", viewId: "case-management" });
+  }, [trackEvent]);
+
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadCasesImpl(app);
+  }, [connected, bootstrap.status, getApp, loadCasesImpl]);
 
   const fullscreen = useFullscreen(getApp);
   const toast = useToast();
@@ -321,8 +357,6 @@ function AppContent() {
     return arr;
   }, [cases, sortBy]);
 
-  // Group cases into buckets by the selected grouping key. Each bucket carries a display
-  // name, optional subtitle, the highest-severity case in the group, and the cases themselves.
   const groupedCases = useMemo(() => {
     if (groupBy === "none") return null;
     const buckets = new Map<string, {
@@ -359,7 +393,6 @@ function AppContent() {
         }
       }
     }
-    // Sort groups: highest severity first, then by case count desc, then alphabetically.
     return [...buckets.values()].sort((a, b) => {
       const d = (SEV_RANK[b.topSeverity] || 0) - (SEV_RANK[a.topSeverity] || 0);
       if (d !== 0) return d;
@@ -482,6 +515,8 @@ function AppContent() {
       <div className="case-list-content">
         {loading && !cases.length ? (
           <LoadingState>Loading cases…</LoadingState>
+        ) : bootstrap.status === "error" && !cases.length ? (
+          <EmptyState>{bootstrap.reason}</EmptyState>
         ) : isCreating ? (
           <EmptyState>Fill in the form on the right to create a case.</EmptyState>
         ) : !cases.length ? (
@@ -643,8 +678,6 @@ function AppContent() {
   );
 }
 
-// ─── Card ─────────────────────────────────────────────────────────────────────
-
 function CaseCard({ caseData, compact, selected, showDetails = true, onClick, onFilter }: {
   caseData: KibanaCase; compact?: boolean; selected?: boolean; showDetails?: boolean; onClick?: () => void; onFilter?: (q: string) => void;
 }) {
@@ -736,8 +769,6 @@ function CaseCard({ caseData, compact, selected, showDetails = true, onClick, on
     </div>
   );
 }
-
-// ─── Detail view ─────────────────────────────────────────────────────────────
 
 const ALERTS_PREVIEW = 3;
 const COMMENTS_PREVIEW = 3;
@@ -936,53 +967,6 @@ function FactCol({ label, value, icon, onFilter }: { label: string; value?: stri
     </div>
   );
 }
-
-// ─── Fact icons ──────────────────────────────────────────────────────────────
-
-const FactIcon = {
-  status: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-      <circle cx="8" cy="8" r="5.5" />
-      <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none" />
-    </svg>
-  ),
-  severity: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 2.5 1.5 13.5h13z" />
-      <path d="M8 7v3" />
-      <circle cx="8" cy="12" r="0.4" fill="currentColor" stroke="none" />
-    </svg>
-  ),
-  alerts: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 12.5V7a5 5 0 0 1 10 0v5.5z" />
-      <path d="M6.5 14.5a1.5 1.5 0 0 0 3 0" />
-    </svg>
-  ),
-  comments: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 3h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2v-2H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-    </svg>
-  ),
-  createdBy: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-      <circle cx="8" cy="6" r="2.5" />
-      <path d="M3 13c0-2.5 2.2-4 5-4s5 1.5 5 4" />
-    </svg>
-  ),
-  created: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="8" cy="8" r="6" />
-      <path d="M8 4.5V8l2.2 1.5" />
-    </svg>
-  ),
-  updated: (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M13 8a5 5 0 1 1-1.5-3.5" />
-      <path d="M13 2.5V5H10.5" />
-    </svg>
-  ),
-};
 
 function ExpandSection({ title, count, expanded, onToggle, previewCount, children }: {
   title: string; count: number; expanded: boolean; onToggle: () => void; previewCount: number; children: React.ReactNode;

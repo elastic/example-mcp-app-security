@@ -8,13 +8,15 @@ Requires Node.js 22+. The server is downloaded and run automatically by Claude C
 
 ```bash
 claude mcp add elastic-security \
-  -e 'CLUSTERS_JSON=[{"name":"primary","elasticsearchUrl":"https://your-cluster.es.cloud.example.com","kibanaUrl":"https://your-cluster.kb.cloud.example.com","elasticsearchApiKey":"your-api-key"}]' \
+  -e 'CLUSTERS_JSON=[{"name":"primary","elasticsearchUrl":"https://your-cluster.es.cloud.example.com","kibanaUrl":"https://your-cluster.kb.cloud.example.com","elasticsearchApiKey":"your-api-key","sslVerify":true}]' \
   -- npx -y https://github.com/elastic/example-mcp-app-security/releases/latest/download/elastic-security-mcp-app.tgz --stdio
 ```
 
 > **Pinning a version:** Replace `elastic-security-mcp-app.tgz` with `elastic-security-mcp-app-<version>.tgz` (e.g., `elastic-security-mcp-app-0.2.0.tgz`).
 >
 > **Keeping secrets out of shell history:** swap `CLUSTERS_JSON` for `CLUSTERS_FILE=/absolute/path/to/clusters.json` pointing at a JSON file with the same array. See [Creating an API key](./setup-local.md#creating-an-api-key) and [Cluster configuration](./setup-local.md#cluster-configuration).
+>
+> **Self-signed TLS:** see [TLS verification options](./setup-local.md#tls-verification-options) for `sslVerify` and `caCertPath`.
 >
 > **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
@@ -24,7 +26,7 @@ Requires the project to be [built locally](./setup-local.md). Claude Code launch
 
 ```bash
 claude mcp add elastic-security \
-  -e 'CLUSTERS_JSON=[{"name":"primary","elasticsearchUrl":"https://your-cluster.es.cloud.example.com","kibanaUrl":"https://your-cluster.kb.cloud.example.com","elasticsearchApiKey":"your-api-key"}]' \
+  -e 'CLUSTERS_JSON=[{"name":"primary","elasticsearchUrl":"https://your-cluster.es.cloud.example.com","kibanaUrl":"https://your-cluster.kb.cloud.example.com","elasticsearchApiKey":"your-api-key","sslVerify":true}]' \
   -- node /path/to/example-mcp-app-security/dist/main.js --stdio
 ```
 

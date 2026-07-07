@@ -5,9 +5,10 @@
  * 2.0.
  */
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import type { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { extractToolText, extractCallResult } from "../../shared/extract-tool-text";
+import { inspectMcpAppBootstrapResult } from "../../shared/mcp-app-bootstrap";
 import type { DetectionRule } from "../../shared/types";
 import { RuleTestPanel } from "./components/RuleTestPanel";
 import { FactCol } from "./components/FactCol";
@@ -35,7 +36,9 @@ import {
 } from "../../shared/components";
 import type { Severity } from "../../shared/components";
 import { useFullscreen } from "../../shared/hooks/useFullscreen";
-import { useMcpApp } from "../../shared/hooks/useMcpApp";
+import { useMcpApp, useMcpAppBootstrap, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
+import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
+import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import "./styles.css";
 
 type SeverityKey = Severity;
@@ -74,6 +77,14 @@ const GROUP_LABEL: Record<GroupKey, string> = Object.fromEntries(
 ) as Record<GroupKey, string>;
 
 export function App() {
+  return (
+    <McpAppProvider name="detection-rules" version="1.0.0">
+      <AppContent />
+    </McpAppProvider>
+  );
+}
+
+function AppContent() {
   const [rules, setRules] = useState<DetectionRule[]>([]);
   const [total, setTotal] = useState(0);
   const [selectedRule, setSelectedRule] = useState<DetectionRule | null>(null);
@@ -109,10 +120,13 @@ export function App() {
     }
   }, []);
 
-  const { connected, getApp } = useMcpApp({
-    name: "detection-rules",
-    version: "1.0.0",
+  const { connected, getApp } = useMcpApp();
+  const bootstrap = useMcpAppBootstrap("detection-rules");
+  useMcpAppEvents({
     onToolResult: (params, app) => {
+      if (inspectMcpAppBootstrapResult(params).status !== "not_bootstrap") {
+        return;
+      }
       try {
         const text = extractToolText(params);
         if (text) {
@@ -125,10 +139,68 @@ export function App() {
       } catch { /* ignore */ }
       loadRulesImpl(app);
     },
-    onConnect: (app, gotResult) => {
-      if (!gotResult) loadRulesImpl(app);
-    },
   });
+
+  useEffect(() => {
+    if (bootstrap.status === "idle") {
+      return;
+    }
+    if (bootstrap.status === "error") {
+      setListLoading(false);
+      return;
+    }
+    const { rules: nextRules, total: nextTotal, params } = bootstrap.payload;
+    setRules(nextRules.map((rule) => ({
+      id: rule.id,
+      rule_id: rule.id,
+      name: rule.name,
+      description: rule.description ?? "",
+      severity:
+        rule.severity === "medium" ||
+        rule.severity === "high" ||
+        rule.severity === "critical" ||
+        rule.severity === "low"
+          ? rule.severity
+          : "low",
+      risk_score: rule.risk_score ?? 0,
+      type: rule.type ?? "",
+      enabled: rule.enabled ?? false,
+      query: rule.query,
+      language: rule.language,
+      tags: rule.tags ? [...rule.tags] : undefined,
+      threat: rule.threat?.map((threat) => ({
+        framework: "MITRE ATT&CK",
+        tactic: { id: "", name: threat.tactic ?? "", reference: "" },
+        technique: threat.techniques.map((technique) => {
+          const [id, ...nameParts] = technique.split(" ");
+          return {
+            id,
+            name: nameParts.join(" "),
+            reference: "",
+          };
+        }),
+      })),
+      created_at: "",
+      updated_at: "",
+      created_by: "",
+    })));
+    setTotal(nextTotal);
+    const filter = params.filter ?? "";
+    setSearchInput(filter);
+    setActiveFilter(filter);
+    setListLoading(false);
+  }, [bootstrap]);
+
+  const { trackEvent } = useAnalytics();
+  useEffect(() => {
+    trackEvent({ eventType: "view_rendered", viewId: "detection-rules" });
+  }, [trackEvent]);
+
+  useEffect(() => {
+    if (!connected || bootstrap.status !== "idle") return;
+    const app = getApp();
+    if (app) loadRulesImpl(app);
+  }, [connected, bootstrap.status, getApp, loadRulesImpl]);
 
   const loadRules = useCallback((filter?: string) => {
     const app = getApp();
@@ -238,8 +310,6 @@ export function App() {
     return sorted;
   }, [rules, statusFilter, sortBy]);
 
-  // Group filtered rules by the selected key. A rule can land in multiple buckets
-  // when grouping by tag (since a rule may carry several tags).
   const groupedRules = useMemo(() => {
     if (groupBy === "none") return null;
     const buckets = new Map<string, {
@@ -375,6 +445,8 @@ export function App() {
       <div className="rules-list-content">
         {listLoading && !rules.length ? (
           <LoadingState>Loading rules…</LoadingState>
+        ) : bootstrap.status === "error" && !rules.length ? (
+          <EmptyState>{bootstrap.reason}</EmptyState>
         ) : !rules.length ? (
           <EmptyState>{activeFilter ? `No rules matching "${activeFilter}"` : "No rules available"}</EmptyState>
         ) : groupedRules ? (
@@ -503,8 +575,6 @@ export function App() {
   );
 }
 
-// ─── Rule Card ───────────────────────────────────────────────────────────────
-
 function RuleCard({ rule, compact, selected, showDetails = true, onClick, onToggle }: {
   rule: DetectionRule; compact?: boolean; selected?: boolean; showDetails?: boolean;
   onClick?: () => void; onToggle?: (enabled: boolean) => void;
@@ -588,8 +658,6 @@ function RuleCard({ rule, compact, selected, showDetails = true, onClick, onTogg
     </div>
   );
 }
-
-// ─── Rule Detail View ───────────────────────────────────────────────────────
 
 function RuleDetailView({ rule, onToggle, onValidate }: {
   rule: DetectionRule;

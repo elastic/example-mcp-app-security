@@ -7,6 +7,7 @@
 
 import axios, { AxiosError } from "axios";
 import type { ClusterCredentials } from "../credential-client/index.js";
+import { createHttpsAgent } from "../shared/https-agent.js";
 import type { EsClient } from "./es-client.js";
 
 const USER_AGENT = "elastic-security-mcp-app";
@@ -32,6 +33,7 @@ export function createEsClient(creds: ClusterCredentials): EsClient {
   const instance = axios.create({
     baseURL: creds.elasticsearchUrl,
     timeout: DEFAULT_TIMEOUT_MS,
+    httpsAgent: createHttpsAgent(creds),
     headers: {
       "User-Agent": USER_AGENT,
       Authorization: `ApiKey ${creds.elasticsearchApiKey}`,

@@ -19,6 +19,7 @@ import fs from "fs";
 import { createServer } from "../../server.js";
 import { MockAxios } from "../helpers/mockAxios.js";
 import { connectInProcess } from "../helpers/integrationServer.js";
+import { noopAnalyticsClient } from "../helpers/mockAnalytics.js";
 
 const ES_BASE_URL = "https://es.example.com";
 const KIBANA_BASE_URL = "https://kb.example.com";
@@ -78,7 +79,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
 
   /** Boot a fresh in-process server / client pair for one test. */
   function bootHarness() {
-    return connectInProcess(createServer());
+    return connectInProcess(createServer({ analytics: noopAnalyticsClient }));
   }
 
   it("advertises every registered tool over `tools/list`", async () => {
@@ -139,6 +140,8 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "generate-attack-discovery",
           "get-generation-status",
           "list-ai-connectors",
+          // analytics
+          "report-analytics-event",
         ].sort()
       );
     } finally {
@@ -251,14 +254,18 @@ describe("MCP server integration (in-process Client + Server)", () => {
         expect(result.isError).toBeFalsy();
         const content = result.content as { type: "text"; text: string }[];
         const body = JSON.parse(content[0].text) as {
-          total: number;
-          alerts: { id: string; rule: string }[];
-          bySeverity: Record<string, number>;
-          params: { severity: string };
+          payload: {
+            summary: {
+              total: number;
+              alerts: { _id: string; _source: { "kibana.alert.rule.name": string } }[];
+              bySeverity: Record<string, number>;
+            };
+            params: { severity: string };
+          };
         };
-        expect(body.total).toBe(2);
-        expect(body.bySeverity).toEqual({ high: 1, critical: 1 });
-        expect(body.alerts).toEqual([
+        expect(body.payload.summary.total).toBe(2);
+        expect(body.payload.summary.bySeverity).toEqual({ high: 1, critical: 1 });
+        expect(body.payload.summary.alerts).toEqual([
           expect.objectContaining({
             id: "alert-1",
             rule: "Suspicious PowerShell",
@@ -268,7 +275,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
             rule: "LSASS dump",
           }),
         ]);
-        expect(body.params.severity).toBe("high");
+        expect(body.payload.params.severity).toBe("high");
 
         const calls = mockAxios.history();
         expect(calls).toHaveLength(1);
@@ -323,12 +330,14 @@ describe("MCP server integration (in-process Client + Server)", () => {
 
         const content = result.content as { type: "text"; text: string }[];
         const body = JSON.parse(content[0].text) as {
-          total: number;
-          rules: { id: string; name: string }[];
-          params: { page: number; perPage: number };
+          payload: {
+            total: number;
+            rules: { id: string; name: string }[];
+            params: { page: number; perPage: number };
+          };
         };
-        expect(body.total).toBe(1);
-        expect(body.rules[0]).toMatchObject({
+        expect(body.payload.total).toBe(1);
+        expect(body.payload.rules[0]).toMatchObject({
           id: "r-1",
           name: "Suspicious PowerShell",
         });
@@ -617,25 +626,31 @@ describe("MCP server integration (in-process Client + Server)", () => {
       }
     }
 
+    it("boots successfully when analytics is omitted (defaults to noop)", () => {
+      expect(() => createServer({})).not.toThrow();
+    });
+
     it("crashes with a clear error when no cluster config is set", () => {
       withClustersJson(undefined, () => {
-        expect(() => createServer()).toThrowError(/No clusters configured/);
+        expect(() =>
+          createServer({ analytics: noopAnalyticsClient })
+        ).toThrowError(/No clusters configured/);
       });
     });
 
     it("crashes when CLUSTERS_JSON is an empty array", () => {
       withClustersJson("[]", () => {
-        expect(() => createServer()).toThrowError(
-          /at least one cluster is required/
-        );
+        expect(() =>
+          createServer({ analytics: noopAnalyticsClient })
+        ).toThrowError(/at least one cluster is required/);
       });
     });
 
     it("crashes when CLUSTERS_JSON is malformed JSON", () => {
       withClustersJson("{not json", () => {
-        expect(() => createServer()).toThrowError(
-          /CLUSTERS_JSON: invalid JSON/
-        );
+        expect(() =>
+          createServer({ analytics: noopAnalyticsClient })
+        ).toThrowError(/CLUSTERS_JSON: invalid JSON/);
       });
     });
 
@@ -656,7 +671,9 @@ describe("MCP server integration (in-process Client + Server)", () => {
         delete cluster[field];
 
         withClustersJson(JSON.stringify([cluster]), () => {
-          expect(() => createServer()).toThrowError(
+          expect(() =>
+            createServer({ analytics: noopAnalyticsClient })
+          ).toThrowError(
             new RegExp(`invalid clusters config[\\s\\S]*0\\.${field}`)
           );
         });

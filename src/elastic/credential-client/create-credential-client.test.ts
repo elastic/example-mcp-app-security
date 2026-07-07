@@ -23,6 +23,8 @@ const validCluster = (overrides: Partial<{
   elasticsearchUrl: string;
   kibanaUrl: string;
   elasticsearchApiKey: string;
+  sslVerify: boolean | "true" | "false";
+  caCertPath: string;
 }> = {}) => ({
   name: "primary",
   elasticsearchUrl: "https://es.example.com",
@@ -363,6 +365,76 @@ describe("createCredentialClient", () => {
       expect(Object.isFrozen(creds)).toBe(true);
       expect(Object.isFrozen(summary)).toBe(true);
       expect(Object.isFrozen(summary[0])).toBe(true);
+    });
+  });
+
+  describe("TLS options", () => {
+    it("defaults sslVerify to true when omitted", () => {
+      setClustersJson([validCluster()]);
+      const client = createCredentialClient();
+      expect(client.get().sslVerify).toBe(true);
+      expect(client.get().caCert).toBeUndefined();
+    });
+
+    it("parses sslVerify: false", () => {
+      setClustersJson([validCluster({ sslVerify: false })]);
+      const client = createCredentialClient();
+      expect(client.get().sslVerify).toBe(false);
+    });
+
+    it("coerces stringified boolean sslVerify from MCPB substitution", () => {
+      setClustersJson([validCluster({ sslVerify: "false" })]);
+      const client = createCredentialClient();
+      expect(client.get().sslVerify).toBe(false);
+
+      setClustersJson([validCluster({ sslVerify: "true" })]);
+      expect(createCredentialClient().get().sslVerify).toBe(true);
+    });
+
+    it("loads caCert from caCertPath when the file exists", () => {
+      const dir = mkdtempSync(join(tmpdir(), "creds-test-"));
+      try {
+        const caFile = join(dir, "ca.pem");
+        const pem = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----";
+        writeFileSync(caFile, pem);
+        setClustersJson([validCluster({ caCertPath: caFile })]);
+
+        const client = createCredentialClient();
+        const creds = client.get();
+        expect(creds.caCert).toBeInstanceOf(Buffer);
+        expect(creds.caCert!.length).toBeGreaterThan(0);
+        expect(creds.caCert!.toString("utf-8")).toBe(pem);
+        expect(creds.sslVerify).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("throws when caCertPath points at a missing file", () => {
+      setClustersJson([
+        validCluster({ caCertPath: "/path/that/does/not/exist/ca.pem" }),
+      ]);
+
+      expect(() => createCredentialClient()).toThrow(
+        /CLUSTERS_JSON: cannot read caCertPath for cluster primary/
+      );
+    });
+
+    it("rejects sslVerify false together with caCertPath", () => {
+      const dir = mkdtempSync(join(tmpdir(), "creds-test-"));
+      try {
+        const caFile = join(dir, "ca.pem");
+        writeFileSync(caFile, "pem");
+        setClustersJson([
+          validCluster({ sslVerify: false, caCertPath: caFile }),
+        ]);
+
+        expect(() => createCredentialClient()).toThrow(
+          /sslVerify is false but caCertPath is set/
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 });
