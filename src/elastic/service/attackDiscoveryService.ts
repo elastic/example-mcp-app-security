@@ -75,6 +75,8 @@ export class AttackDiscoveryService {
     limit?: number;
   }): Promise<DiscoverySummary> {
     const { days = 1, limit = 50 } = options;
+    const debug = process.env.MCP_DEBUG_ESQL === "1";
+    const callTime = new Date().toISOString();
 
     const query = `FROM ${SCHEDULED_INDEX}, ${ADHOC_INDEX} METADATA _id
 | WHERE kibana.alert.workflow_status == "open"
@@ -117,7 +119,18 @@ export class AttackDiscoveryService {
     }
 
     if (!result || result.values.length === 0) {
+      if (debug) {
+        console.error(
+          `[getDiscoveries] ${callTime} days=${days} limit=${limit} -> 0 rows (result=${result ? "empty" : "null"})`
+        );
+      }
       return { total: 0, discoveries: [] };
+    }
+
+    if (debug) {
+      console.error(
+        `[getDiscoveries] ${callTime} days=${days} limit=${limit} -> ${result.values.length} rows`
+      );
     }
 
     const finalResult = result;
@@ -588,8 +601,10 @@ export class AttackDiscoveryService {
     options: GenerateAttackDiscoveryInput
   ): Promise<GenerationResult> {
     const anonymizationFields = await this.getAnonymizationFields();
+    const debug = process.env.MCP_DEBUG_ESQL === "1";
+    const callTime = new Date().toISOString();
 
-    return this.options.attackDiscoveryClient.generate({
+    const result = await this.options.attackDiscoveryClient.generate({
       alertsIndexPattern: ".alerts-security.alerts-default",
       anonymizationFields,
       apiConfig: {
@@ -604,6 +619,14 @@ export class AttackDiscoveryService {
       replacements: {},
       ...(options.filter ? { filter: options.filter } : {}),
     });
+
+    if (debug) {
+      console.error(
+        `[generateAttackDiscovery] ${callTime} execution_uuid=${result.execution_uuid}`
+      );
+    }
+
+    return result;
   }
 
   /**
@@ -612,7 +635,7 @@ export class AttackDiscoveryService {
    * Returns the raw envelope from Kibana — the UI consumes the shape
    * directly and we deliberately don't narrow it here.
    */
-  getGenerations(options: {
+  async getGenerations(options: {
     size?: number;
     start?: string;
     end?: string;
@@ -621,7 +644,19 @@ export class AttackDiscoveryService {
     if (options.size) params.size = String(options.size);
     if (options.start) params.start = options.start;
     if (options.end) params.end = options.end;
-    return this.options.attackDiscoveryClient.getGenerations(params);
+    const result = await this.options.attackDiscoveryClient.getGenerations(params);
+
+    if (process.env.MCP_DEBUG_ESQL === "1") {
+      const callTime = new Date().toISOString();
+      const generations = (result as { generations?: Array<{ execution_uuid: string; status: string; discoveries?: number; start?: string; end?: string }> })?.generations || [];
+      for (const g of generations) {
+        console.error(
+          `[getGenerations] ${callTime} execution_uuid=${g.execution_uuid} status=${g.status} discoveries=${g.discoveries ?? "n/a"} start=${g.start} end=${g.end ?? "running"}`
+        );
+      }
+    }
+
+    return result;
   }
 
   async listAIConnectors(): Promise<
@@ -645,6 +680,8 @@ export class AttackDiscoveryService {
       await this.options.attackDiscoveryClient.findAnonymizationFields();
     const fields = result.data || [];
 
+    this.warnIfAnonymizationFieldsLookTruncated(fields);
+
     const hasId = fields.some((f) => f.field === "_id");
     if (!hasId) {
       fields.push({
@@ -665,10 +702,45 @@ export class AttackDiscoveryService {
     return fields;
   }
 
+  /**
+   * Fail-loud guard against a repeat of #46: a silently-dropped/mis-cased
+   * query param on `findAnonymizationFields` truncated the field list to
+   * Kibana's default page size (20) and starved the LLM prompt of the
+   * ECS fields it needs to find anything. This can't distinguish "small
+   * on purpose" from "silently truncated", so it only warns — but a warning
+   * that fires every run is a strong signal something upstream regressed.
+   */
+  private warnIfAnonymizationFieldsLookTruncated(
+    fields: AnonymizationField[]
+  ): void {
+    const KIBANA_DEFAULT_PAGE_SIZE = 20;
+    const KEY_ECS_FIELDS = ["host.name", "user.name", "rule.name"];
+
+    const missingKeyFields = KEY_ECS_FIELDS.filter(
+      (name) => !fields.some((f) => f.field === name)
+    );
+
+    if (fields.length <= KIBANA_DEFAULT_PAGE_SIZE || missingKeyFields.length > 0) {
+      console.error(
+        `[getAnonymizationFields] WARNING: anonymization field list looks truncated ` +
+          `(count=${fields.length}, missing=[${missingKeyFields.join(", ")}]). ` +
+          `This is the failure mode of github.com/elastic/example-mcp-app-security#46 ` +
+          `(a param sent to the Kibana _find endpoint was silently dropped/mis-cased, ` +
+          `falling back to the default page size of ${KIBANA_DEFAULT_PAGE_SIZE}). ` +
+          `Verify findAnonymizationFields() in attackDiscoveryClient.ts still sends ` +
+          `per_page (snake_case) and check for upstream schema changes.`
+      );
+    }
+  }
+
   private async safeEsql(query: string): Promise<EsqlResult | null> {
     try {
       return await this.options.attackDiscoveryClient.runEsql(query);
-    } catch {
+    } catch (err) {
+      if (process.env.MCP_DEBUG_ESQL === "1") {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[safeEsql] query failed: ${message}\nquery: ${query}`);
+      }
       return null;
     }
   }

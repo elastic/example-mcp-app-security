@@ -79,7 +79,7 @@ describe("AttackDiscoveryClient", () => {
     );
   });
 
-  it("findAnonymizationFields GETs the anonymization fields _find endpoint with perPage=500", async () => {
+  it("findAnonymizationFields GETs the anonymization fields _find endpoint with per_page=1000", async () => {
     const esClient = createMockEsClient();
     const kibanaClient = createMockKibanaClient();
     kibanaClient.get.mockResolvedValueOnce(dataEnvelope({ data: [] }));
@@ -87,9 +87,12 @@ describe("AttackDiscoveryClient", () => {
     const client = new AttackDiscoveryClient({ esClient, kibanaClient });
     await client.findAnonymizationFields();
 
+    // The route's query schema only accepts snake_case `per_page` (Zod
+    // silently drops unrecognized keys like `perPage` and defaults to 20),
+    // so this must be snake_case or the field list gets truncated.
     expect(kibanaClient.get).toHaveBeenCalledWith(
       "/api/security_ai_assistant/anonymization_fields/_find",
-      { params: { perPage: "500" }, headers: KIBANA_HEADERS }
+      { params: { per_page: "1000" }, headers: KIBANA_HEADERS }
     );
   });
 

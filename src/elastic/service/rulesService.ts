@@ -44,6 +44,10 @@ export class RulesService {
   async findRules(
     options: FindRulesOptions
   ): Promise<FindResponse<DetectionRule>> {
+    // snake_case param names verified against `FindRulesRequestQuery` in
+    // find_rules_route.gen.ts (page, per_page, sort_field, sort_order) —
+    // see the #46 postmortem in CONTRIBUTING.md: a camelCase param here is
+    // silently dropped by Zod, not rejected.
     const params: Record<string, string> = {
       page: String(options.page || 1),
       per_page: String(options.perPage || 20),
@@ -105,6 +109,8 @@ export class RulesService {
   listExceptions(
     listId: string
   ): Promise<{ data: RuleException[]; total: number }> {
+    // snake_case param names verified against `FindExceptionListItemsRequestQuery`
+    // in find_exception_list_items.gen.ts (list_id, namespace_type).
     return this.options.rulesClient.listExceptions({
       list_id: listId,
       namespace_type: "single",
