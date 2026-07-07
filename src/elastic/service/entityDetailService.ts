@@ -7,6 +7,7 @@
 
 import type { EntityDetailClient } from "../client/entityDetailClient.js";
 import type { EntityDetail } from "../client/entityDetailClient.js";
+import { toScalar } from "../../shared/field-utils.js";
 
 interface EntityDetailServiceOptions {
   readonly entityDetailClient: EntityDetailClient;
@@ -184,11 +185,11 @@ export class EntityDetailService {
     if (firstProc) {
       const os = firstProc["host.os.name"] || firstProc["host.os.platform"];
       if (os) fields.push({ label: "OS", value: String(os) });
-      const ips = firstProc["host.ip"];
-      if (ips) {
+      const ip = toScalar(firstProc["host.ip"] as string | string[] | undefined);
+      if (ip) {
         fields.push({
           label: "IP",
-          value: String(Array.isArray(ips) ? ips[0] : ips),
+          value: String(ip),
           mono: true,
         });
       }
