@@ -12,7 +12,5 @@ dist/
 .claude/
 .agents/
 .cursor/
-.treadmill/
-context/
 coverage/
 openspec/
