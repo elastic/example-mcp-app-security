@@ -103,11 +103,16 @@ This script (`scripts/build-skill-zips.sh`) iterates over `skills/*/`, zipping e
 
 ## Release Process
 
-Releases are automated via GitHub Actions (`.github/workflows/release.yml`). To create a release:
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`), triggered by pushing a `vX.Y.Z` tag. `main` is a protected branch, so the version bump must be merged via PR *before* the tag is created — otherwise the tag can end up pointing at a commit that never lands on `main`.
 
 ```bash
-npm version patch  # or minor/major — bumps package.json + manifest.json, commits, and tags
-git push origin --tags
+npm version patch --no-git-tag-version  # or minor/major — bumps package.json + manifest.json, no commit/tag yet
+git add package.json manifest.json
+git commit -m "vX.Y.Z"
+git push origin HEAD  # push the branch and open a PR
+# after the PR is merged into main:
+git checkout main && git pull
+git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
 The workflow will:
