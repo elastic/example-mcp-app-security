@@ -41,13 +41,12 @@ export type {
 export { RulesClient } from "./rulesClient.js";
 
 export type {
+  AlertSearchHit,
   CaseComment,
   FindCasesResponse,
   FindCommentsResponse,
-  MgetAlertDoc,
-  MgetAlertsResponse,
-  RawAlertDocument,
   RawCaseAlert,
+  SearchAlertsResponse,
   UserAvatar,
   UserProfileResponse,
 } from "./casesClient.js";

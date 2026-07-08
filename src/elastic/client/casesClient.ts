@@ -63,22 +63,16 @@ export interface RawCaseAlert {
   readonly attached_at: string;
 }
 
-/** Raw `_doc/{id}` envelope from Elasticsearch, narrowed to `_source`. */
-export interface RawAlertDocument {
-  readonly _source: Record<string, unknown>;
-}
-
-/** A single document entry in an `_mget` response. */
-export interface MgetAlertDoc {
+/** A single hit from the alerts `ids`-query search. */
+export interface AlertSearchHit {
   readonly _index: string;
   readonly _id: string;
-  readonly found: boolean;
   readonly _source?: Record<string, unknown>;
 }
 
-/** Envelope returned by `/.alerts-security.alerts-default/_mget`. */
-export interface MgetAlertsResponse {
-  readonly docs: MgetAlertDoc[];
+/** `_search` envelope, narrowed to the hits the service consumes. */
+export interface SearchAlertsResponse {
+  readonly hits: { readonly hits: AlertSearchHit[] };
 }
 
 interface CasesClientOptions {
@@ -87,8 +81,8 @@ interface CasesClientOptions {
 }
 
 /**
- * Typed transport for Kibana cases plus the Elasticsearch `_doc` lookup
- * used to enrich alert attachments.
+ * Typed transport for Kibana cases plus the Elasticsearch `ids`-query
+ * search used to resolve and enrich alert attachments.
  *
  * Bound to a single cluster via the injected {@link EsClient} and
  * {@link KibanaClient}. Each method maps 1:1 to an HTTP endpoint.
@@ -192,26 +186,30 @@ export class CasesClient {
     return data;
   }
 
-  /** GET `/{index}/_doc/{id}` on Elasticsearch — used to enrich attachments. */
-  async getAlertDocument(
-    index: string,
-    id: string
-  ): Promise<RawAlertDocument> {
-    const { data } = await this.options.esClient.get<RawAlertDocument>(
-      `/${index}/_doc/${id}`
-    );
-    return data;
-  }
-
   /**
-   * POST `/.alerts-security.alerts-default/_mget` on Elasticsearch — bulk
-   * fetch alert documents by id when attaching alerts to a case.
+   * POST `/{indices}/_search` with an `ids` query on Elasticsearch — bulk
+   * fetch alert documents by id.
+   *
+   * Deliberately a search rather than `GET _doc` / `_mget`: single-document
+   * lookups must resolve to exactly one concrete index, so they fail with
+   * `alias [...] has more than one index associated with it` as soon as the
+   * alerts alias rolls over (which ILM does on any long-lived cluster). A
+   * search fans out across all backing indices.
    */
-  async mgetAlerts(alertIds: readonly string[]): Promise<MgetAlertsResponse> {
-    const { data } = await this.options.esClient.post<MgetAlertsResponse>(
-      "/.alerts-security.alerts-default/_mget",
-      { ids: alertIds }
+  async searchAlertsByIds(
+    indices: readonly string[],
+    alertIds: readonly string[]
+  ): Promise<AlertSearchHit[]> {
+    const { data } = await this.options.esClient.post<SearchAlertsResponse>(
+      `/${indices.join(",")}/_search`,
+      {
+        query: { ids: { values: alertIds } },
+        // `size` must stay within `index.max_result_window` (default 10 000)
+        // or the search rejects the request outright.
+        size: Math.min(alertIds.length, 10_000),
+      },
+      { params: { ignore_unavailable: "true", allow_no_indices: "true" } }
     );
-    return data;
+    return data.hits.hits;
   }
 }

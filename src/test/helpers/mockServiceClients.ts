@@ -62,8 +62,7 @@ export function createMockCasesClient(): CasesClient {
     "getCommentsFind",
     "getCasesForAlert",
     "getUserProfile",
-    "getAlertDocument",
-    "mgetAlerts",
+    "searchAlertsByIds",
   ]);
 }
 

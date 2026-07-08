@@ -149,30 +149,26 @@ describe("CasesClient", () => {
     );
   });
 
-  it("getAlertDocument GETs /{index}/_doc/{id} on esClient", async () => {
+  it("searchAlertsByIds POSTs an `ids` query to a multi-index _search", async () => {
     const esClient = createMockEsClient();
     const kibanaClient = createMockKibanaClient();
-    esClient.get.mockResolvedValueOnce(dataEnvelope({ _source: {} }));
-
-    const client = new CasesClient({ esClient, kibanaClient });
-    await client.getAlertDocument(".alerts-security.alerts-default", "a1");
-
-    expect(esClient.get).toHaveBeenCalledWith(
-      "/.alerts-security.alerts-default/_doc/a1"
+    esClient.post.mockResolvedValueOnce(
+      dataEnvelope({ hits: { hits: [{ _id: "a", _index: "i", _source: {} }] } })
     );
-  });
-
-  it("mgetAlerts POSTs an `ids` body to the alerts _mget endpoint", async () => {
-    const esClient = createMockEsClient();
-    const kibanaClient = createMockKibanaClient();
-    esClient.post.mockResolvedValueOnce(dataEnvelope({ docs: [] }));
 
     const client = new CasesClient({ esClient, kibanaClient });
-    await client.mgetAlerts(["a", "b"]);
+    const hits = await client.searchAlertsByIds(
+      [".alerts-security.alerts-default", ".internal.alerts-security.alerts-default-000001"],
+      ["a", "b"]
+    );
 
+    // A search (not `_doc`/`_mget`) so the lookup survives an alerts alias
+    // with multiple backing indices (post-rollover clusters).
     expect(esClient.post).toHaveBeenCalledWith(
-      "/.alerts-security.alerts-default/_mget",
-      { ids: ["a", "b"] }
+      "/.alerts-security.alerts-default,.internal.alerts-security.alerts-default-000001/_search",
+      { query: { ids: { values: ["a", "b"] } }, size: 2 },
+      { params: { ignore_unavailable: "true", allow_no_indices: "true" } }
     );
+    expect(hits).toEqual([{ _id: "a", _index: "i", _source: {} }]);
   });
 });
