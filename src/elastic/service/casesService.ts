@@ -6,6 +6,7 @@
  */
 
 import type { KibanaCase } from "../../shared/types.js";
+import { createStderrLogger, type Logger } from "../../shared/logger.js";
 import type {
   CaseComment,
   CasesClient,
@@ -15,9 +16,11 @@ import type {
 } from "../client/casesClient.js";
 
 const ATTACHMENT_ENRICHMENT_LIMIT = 20;
+const ALERTS_INDEX = ".alerts-security.alerts-default";
 
 interface CasesServiceOptions {
   readonly casesClient: CasesClient;
+  readonly logger?: Pick<Logger, "warn">;
 }
 
 interface ListCasesOptions {
@@ -68,11 +71,14 @@ export type { CaseComment, UserAvatar } from "../client/casesClient.js";
  * Preserves every default and body shape from the legacy `cases.ts`:
  * `securitySolution` ownership on every write, the connector / settings
  * shape on `createCase`, the patch envelope on `updateCase`, and the
- * "first 20 attachments enriched, fail-soft per attachment" behaviour on
- * `getCaseAlerts`.
+ * "first 20 attachments enriched, fail-soft" behaviour on `getCaseAlerts`.
  */
 export class CasesService {
-  constructor(private readonly options: CasesServiceOptions) {}
+  private readonly logger: Pick<Logger, "warn">;
+
+  constructor(private readonly options: CasesServiceOptions) {
+    this.logger = options.logger ?? createStderrLogger(["cases"]);
+  }
 
   async listCases(options: ListCasesOptions): Promise<FindCasesResponse> {
     // camelCase param names verified against `CasesFindRequestRt` in
@@ -148,34 +154,43 @@ export class CasesService {
   /**
    * Bulk-attach alerts to a case by id.
    *
-   * Resolves each id via `_mget` to recover the source document (needed for
-   * the rule id / name on the attachment), then attaches each found alert in
-   * sequence. Per-attachment failures and the `_mget` failure itself are
-   * swallowed — the case stays created and the caller learns how many of the
-   * requested ids were successfully attached.
+   * Resolves the ids via a single `ids`-query search over `ALERTS_INDEX` to
+   * recover the source documents (needed for the rule id / name on the
+   * attachment), then attaches each found alert in sequence. Per-attachment
+   * failures are swallowed and a failed lookup is logged — the case stays
+   * created and the caller learns how many of the requested ids were
+   * successfully attached.
    */
   async attachAlertsByIds(
     caseId: string,
     alertIds: readonly string[]
   ): Promise<number> {
-    if (alertIds.length === 0) return 0;
+    const uniqueIds = [...new Set(alertIds)];
+    if (uniqueIds.length === 0) return 0;
     let attached = 0;
     try {
-      const { docs } = await this.options.casesClient.mgetAlerts(alertIds);
-      for (const doc of docs) {
-        if (!doc.found || !doc._source) continue;
+      const hits = await this.options.casesClient.searchAlertsByIds(
+        [ALERTS_INDEX],
+        uniqueIds
+      );
+      for (const hit of hits) {
+        if (!hit._source) continue;
         try {
-          const ruleId = (doc._source["kibana.alert.rule.uuid"] as string) || "";
+          const ruleId = (hit._source["kibana.alert.rule.uuid"] as string) || "";
           const ruleName =
-            (doc._source["kibana.alert.rule.name"] as string) || "Unknown Rule";
-          await this.attachAlert(caseId, doc._id, doc._index, ruleId, ruleName);
+            (hit._source["kibana.alert.rule.name"] as string) || "Unknown Rule";
+          await this.attachAlert(caseId, hit._id, hit._index, ruleId, ruleName);
           attached++;
         } catch {
           // skip individual alert attachment failures
         }
       }
-    } catch {
+    } catch (e) {
       // alert lookup failed — case still created without attachments
+      this.logger.warn(
+        `attachAlertsByIds: alert lookup failed for case ${caseId}: ` +
+          (e instanceof Error ? e.message : String(e))
+      );
     }
     return attached;
   }
@@ -205,43 +220,59 @@ export class CasesService {
 
   /**
    * Fetch case alert attachments and enrich the first 20 with summary
-   * fields from Elasticsearch. If a per-attachment lookup fails, fall back
-   * to the bare `{ id, index, attached_at }` record so a single missing
+   * fields from Elasticsearch via a single `ids`-query search over the
+   * attachments' recorded indices. Alerts the search does not return fall
+   * back to the bare `{ id, index, attached_at }` record so a missing
    * source document does not fail the entire request.
    */
   async getCaseAlerts(caseId: string): Promise<CaseAlertAttachment[]> {
     const attachments = await this.options.casesClient.getCaseAlerts(caseId);
+    const toEnrich = attachments.slice(0, ATTACHMENT_ENRICHMENT_LIMIT);
 
-    const enriched: CaseAlertAttachment[] = [];
-    for (const a of attachments.slice(0, ATTACHMENT_ENRICHMENT_LIMIT)) {
+    const sourcesById = new Map<string, Record<string, unknown>>();
+    if (toEnrich.length > 0) {
+      // Attachments may record either the alerts alias or a concrete backing
+      // index, depending on who attached the alert — a multi-index search
+      // accepts both.
+      const indices = [
+        ...new Set(toEnrich.map((a) => a.index).filter(Boolean)),
+      ];
+      const ids = [...new Set(toEnrich.map((a) => a.id))];
       try {
-        const doc = await this.options.casesClient.getAlertDocument(
-          a.index,
-          a.id
+        const hits = await this.options.casesClient.searchAlertsByIds(
+          indices.length > 0 ? indices : [ALERTS_INDEX],
+          ids
         );
-        const src = doc._source;
-        enriched.push({
-          id: a.id,
-          index: a.index,
-          attached_at: a.attached_at,
-          rule: src["kibana.alert.rule.name"] as string | undefined,
-          severity: src["kibana.alert.severity"] as string | undefined,
-          host: (src.host as Record<string, unknown>)?.name as
-            | string
-            | undefined,
-          user: (src.user as Record<string, unknown>)?.name as
-            | string
-            | undefined,
-          reason: src["kibana.alert.reason"] as string | undefined,
-        });
-      } catch {
-        enriched.push({
-          id: a.id,
-          index: a.index,
-          attached_at: a.attached_at,
-        });
+        for (const hit of hits) {
+          if (hit._source) sourcesById.set(hit._id, hit._source);
+        }
+      } catch (e) {
+        this.logger.warn(
+          `getCaseAlerts: failed to enrich ${ids.length} alert attachment(s) for case ${caseId}: ` +
+            (e instanceof Error ? e.message : String(e))
+        );
       }
     }
-    return enriched;
+
+    return toEnrich.map((a) => {
+      const src = sourcesById.get(a.id);
+      if (!src) {
+        return { id: a.id, index: a.index, attached_at: a.attached_at };
+      }
+      return {
+        id: a.id,
+        index: a.index,
+        attached_at: a.attached_at,
+        rule: src["kibana.alert.rule.name"] as string | undefined,
+        severity: src["kibana.alert.severity"] as string | undefined,
+        host: (src.host as Record<string, unknown>)?.name as
+          | string
+          | undefined,
+        user: (src.user as Record<string, unknown>)?.name as
+          | string
+          | undefined,
+        reason: src["kibana.alert.reason"] as string | undefined,
+      };
+    });
   }
 }
