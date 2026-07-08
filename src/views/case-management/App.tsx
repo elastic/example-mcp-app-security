@@ -732,19 +732,11 @@ function CaseCard({ caseData, compact, selected, showDetails = true, onClick, on
             )}
             <div className="fact-row">
               <span className="fact-label">ALERTS</span>
-              {onFilter ? (
-                <button type="button" className="fact-value fact-value-filter" onClick={filterClick(String(caseData.totalAlerts))} title="Filter by this alert count">{caseData.totalAlerts}</button>
-              ) : (
-                <span className="fact-value">{caseData.totalAlerts}</span>
-              )}
+              <span className="fact-value">{caseData.totalAlerts}</span>
             </div>
             <div className="fact-row">
               <span className="fact-label">COMMENTS</span>
-              {onFilter ? (
-                <button type="button" className="fact-value fact-value-filter" onClick={filterClick(String(caseData.totalComment))} title="Filter by this comment count">{caseData.totalComment}</button>
-              ) : (
-                <span className="fact-value">{caseData.totalComment}</span>
-              )}
+              <span className="fact-value">{caseData.totalComment}</span>
             </div>
             {caseData.tags.length > 0 && (
               <div className="fact-row">
@@ -783,6 +775,15 @@ function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onF
 }) {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const alertsSectionRef = useRef<HTMLDivElement>(null);
+  const commentsSectionRef = useRef<HTMLDivElement>(null);
+
+  const revealSection = (setOpen: (v: boolean) => void, ref: React.RefObject<HTMLDivElement | null>) => () => {
+    setOpen(true);
+    requestAnimationFrame(() => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  const showAlerts = context && context.alerts.length > 0 ? revealSection(setAlertsOpen, alertsSectionRef) : undefined;
+  const showComments = context && context.comments.length > 0 ? revealSection(setCommentsOpen, commentsSectionRef) : undefined;
 
   const sev = caseData.severity;
   const statusLabel = STATUS_LABEL[caseData.status];
@@ -834,9 +835,9 @@ function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onF
       <div className="case-detail-facts">
         <FactCol label="STATUS" value={statusLabel} icon={FactIcon.status} />
         <FactCol label="SEVERITY" value={SEVERITY_LABEL[sev]} icon={FactIcon.severity} />
-        <FactCol label="ALERTS" value={String(caseData.totalAlerts)} icon={FactIcon.alerts} onFilter={onFilter} />
-        <FactCol label="COMMENTS" value={String(caseData.totalComment)} icon={FactIcon.comments} onFilter={onFilter} />
-        <FactCol label="CREATED BY" value={creator} icon={FactIcon.createdBy} onFilter={onFilter} />
+        <FactCol label="ALERTS" value={String(caseData.totalAlerts)} icon={FactIcon.alerts} onClick={showAlerts} title="View attached alerts" />
+        <FactCol label="COMMENTS" value={String(caseData.totalComment)} icon={FactIcon.comments} onClick={showComments} title="View comments" />
+        <FactCol label="CREATED BY" value={creator} icon={FactIcon.createdBy} onClick={onFilter ? () => onFilter(creator) : undefined} title={`Filter by ${creator}`} />
         <FactCol label="CREATED" value={caseData.created_at ? timeAgo(caseData.created_at) : "—"} icon={FactIcon.created} />
         <FactCol label="UPDATED" value={caseData.updated_at ? timeAgo(caseData.updated_at) : "—"} icon={FactIcon.updated} />
       </div>
@@ -856,35 +857,39 @@ function CaseDetailView({ caseData, context, contextLoading, onUpdateStatus, onF
       ) : context ? (
         <>
           {context.alerts.length > 0 && (
-            <ExpandSection
-              title="Attached alerts"
-              count={context.alerts.length}
-              expanded={alertsOpen}
-              onToggle={() => setAlertsOpen((v) => !v)}
-              previewCount={ALERTS_PREVIEW}
-            >
-              <div className="case-detail-alerts">
-                {(alertsOpen ? context.alerts : context.alerts.slice(0, ALERTS_PREVIEW)).map((a, i) => (
-                  <AttachedAlertRow key={i} alert={a} />
-                ))}
-              </div>
-            </ExpandSection>
+            <div ref={alertsSectionRef}>
+              <ExpandSection
+                title="Attached alerts"
+                count={context.alerts.length}
+                expanded={alertsOpen}
+                onToggle={() => setAlertsOpen((v) => !v)}
+                previewCount={ALERTS_PREVIEW}
+              >
+                <div className="case-detail-alerts">
+                  {(alertsOpen ? context.alerts : context.alerts.slice(0, ALERTS_PREVIEW)).map((a, i) => (
+                    <AttachedAlertRow key={i} alert={a} />
+                  ))}
+                </div>
+              </ExpandSection>
+            </div>
           )}
 
           {context.comments.length > 0 && (
-            <ExpandSection
-              title="Comments"
-              count={context.comments.length}
-              expanded={commentsOpen}
-              onToggle={() => setCommentsOpen((v) => !v)}
-              previewCount={COMMENTS_PREVIEW}
-            >
-              <div className="case-detail-comments">
-                {(commentsOpen ? context.comments : context.comments.slice(0, COMMENTS_PREVIEW)).map((c, i) => (
-                  <CommentRow key={i} comment={c} />
-                ))}
-              </div>
-            </ExpandSection>
+            <div ref={commentsSectionRef}>
+              <ExpandSection
+                title="Comments"
+                count={context.comments.length}
+                expanded={commentsOpen}
+                onToggle={() => setCommentsOpen((v) => !v)}
+                previewCount={COMMENTS_PREVIEW}
+              >
+                <div className="case-detail-comments">
+                  {(commentsOpen ? context.comments : context.comments.slice(0, COMMENTS_PREVIEW)).map((c, i) => (
+                    <CommentRow key={i} comment={c} />
+                  ))}
+                </div>
+              </ExpandSection>
+            </div>
           )}
         </>
       ) : null}
@@ -941,21 +946,21 @@ function SuggestedActionsRow({ caseData, onSuggestedAction }: {
   );
 }
 
-function FactCol({ label, value, icon, onFilter }: { label: string; value?: string; icon?: React.ReactNode; onFilter?: (q: string) => void }) {
+function FactCol({ label, value, icon, onClick, title }: { label: string; value?: string; icon?: React.ReactNode; onClick?: () => void; title?: string }) {
   const display = value && value.length > 0 ? value : "—";
-  const canFilter = !!onFilter && !!value && value.length > 0;
+  const canActivate = !!onClick && !!value && value.length > 0;
   return (
     <div className="case-detail-fact">
       <div className="case-detail-fact-label">
         {icon && <span className="case-detail-fact-icon" aria-hidden="true">{icon}</span>}
         <span>{label}</span>
       </div>
-      {canFilter ? (
+      {canActivate ? (
         <button
           type="button"
           className="case-detail-fact-value case-detail-fact-filter"
-          title={`Filter by ${value}`}
-          onClick={() => onFilter!(value!)}
+          title={title}
+          onClick={onClick}
         >
           {display}
         </button>
