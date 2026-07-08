@@ -75,6 +75,10 @@ export class CasesService {
   constructor(private readonly options: CasesServiceOptions) {}
 
   async listCases(options: ListCasesOptions): Promise<FindCasesResponse> {
+    // camelCase param names verified against `CasesFindRequestRt` in
+    // cases/common/types/api/case/v1.ts (page, perPage, sortField, sortOrder)
+    // — unlike the security_ai_assistant/rules APIs, the cases API expects
+    // camelCase here, not snake_case. See #46 postmortem in CONTRIBUTING.md.
     const params: Record<string, string> = {
       owner: "securitySolution",
       page: String(options.page || 1),

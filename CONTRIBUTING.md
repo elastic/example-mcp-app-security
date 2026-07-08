@@ -133,6 +133,7 @@ The workflow will:
 - Views use React 19 with Tailwind CSS 4
 - Each view is bundled into a single self-contained HTML file (no external assets)
 - Tool results should be compact summaries — the UI loads full data independently via app-only tools
+- When adding a Kibana API query/body param, verify the exact casing against the Zod/OpenAPI schema in the Kibana source (not by assumption) and cite the schema file in a comment
 
 ## License
 
