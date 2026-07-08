@@ -13,6 +13,7 @@ import type {
   SecurityAlert,
 } from "../../shared/types.js";
 import type { AlertsClient } from "../client/alertsClient.js";
+import { toScalar } from "../../shared/field-utils.js";
 
 /** Time window (ms) on either side of an alert used to gather host context. */
 const CONTEXT_WINDOW_MS = 5 * 60 * 1000;
@@ -116,7 +117,7 @@ export class AlertsService {
         name: b.key,
         count: b.doc_count,
       })),
-      alerts: response.hits.hits,
+      alerts: response.hits.hits.map(normalizeAlertEntityFields),
     };
   }
 
@@ -240,6 +241,57 @@ export class AlertsService {
     });
     return [...response.hits.hits];
   }
+}
+
+/**
+ * Some ECS fields (`host.name`, `user.name`, `process.name`, `source.ip`, ...)
+ * come back as arrays instead of scalars for certain correlated/network-
+ * derived alerts, even though {@link SecurityAlert}'s `_source` types them as
+ * scalars — Elasticsearch does not enforce that shape at the document level.
+ * Downstream code (sorting/grouping in the Alert Triage view) assumes a
+ * scalar and throws (`TypeError: ... .localeCompare is not a function`) if it
+ * gets an array, so normalize once here at the boundary rather than
+ * defensively at every read site.
+ *
+ * The `Record<string, unknown>` reads below reflect reality: this is raw JSON
+ * off the wire, not yet as trustworthy as the `SecurityAlert` type the rest of
+ * the codebase assumes. `host.ip` is intentionally left untouched — it's
+ * already typed and consumed as `string[]`.
+ */
+function normalizeAlertEntityFields(alert: SecurityAlert): SecurityAlert {
+  const src = alert._source as Record<string, unknown>;
+  const scalar = (value: unknown): string | undefined =>
+    toScalar(value as string | string[] | undefined);
+
+  const host = src.host as Record<string, unknown> | undefined;
+  const user = src.user as Record<string, unknown> | undefined;
+  const proc = src.process as Record<string, unknown> | undefined;
+  const parent = proc?.parent as Record<string, unknown> | undefined;
+  const file = src.file as Record<string, unknown> | undefined;
+  const source = src.source as Record<string, unknown> | undefined;
+  const destination = src.destination as Record<string, unknown> | undefined;
+
+  return {
+    ...alert,
+    _source: {
+      ...alert._source,
+      host: host ? { ...host, name: scalar(host.name) } : host,
+      user: user ? { ...user, name: scalar(user.name), domain: scalar(user.domain) } : user,
+      process: proc
+        ? {
+            ...proc,
+            name: scalar(proc.name),
+            executable: scalar(proc.executable),
+            parent: parent
+              ? { ...parent, name: scalar(parent.name), executable: scalar(parent.executable) }
+              : parent,
+          }
+        : proc,
+      file: file ? { ...file, name: scalar(file.name), path: scalar(file.path) } : file,
+      source: source ? { ...source, ip: scalar(source.ip) } : source,
+      destination: destination ? { ...destination, ip: scalar(destination.ip) } : destination,
+    } as SecurityAlert["_source"],
+  };
 }
 
 function buildHostEventQuery(

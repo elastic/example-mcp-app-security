@@ -41,6 +41,9 @@ export type { KpiStripProps, KpiTileProps, KpiAccent } from "./KpiStrip/KpiStrip
 export { LoadingState, EmptyState } from "./States/States";
 export type { LoadingStateProps, EmptyStateProps } from "./States/States";
 
+export { ErrorBoundary } from "./ErrorBoundary/ErrorBoundary";
+export type { ErrorBoundaryProps } from "./ErrorBoundary/ErrorBoundary";
+
 export { DetailPane } from "./DetailPane/DetailPane";
 export type { DetailPaneProps } from "./DetailPane/DetailPane";
 

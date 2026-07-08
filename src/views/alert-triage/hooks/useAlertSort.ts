@@ -45,7 +45,8 @@ export function sortAlerts(alerts: SecurityAlert[], sortBy: SortKey): SecurityAl
       arr.sort((a, b) => (a._source["kibana.alert.rule.name"] || "").localeCompare(b._source["kibana.alert.rule.name"] || ""));
       break;
     case "host":
-      arr.sort((a, b) => (a._source.host?.name || "").localeCompare(b._source.host?.name || ""));
+      arr.sort((a, b) =>
+        String(a._source.host?.name ?? "").localeCompare(String(b._source.host?.name ?? "")));
       break;
   }
   return arr;
@@ -74,7 +75,11 @@ export function groupAlerts(sortedAlerts: SecurityAlert[], groupBy: GroupKey): A
       key = name;
       subtitle = src.process?.executable || (src.process?.parent?.name ? `Parent ${src.process.parent.name}` : undefined);
     }
-    if (!key || !name) continue;
+    // `key`/`name` are expected to be scalar strings (normalized upstream in
+    // AlertsService.getAlerts()), but guard against a stray array slipping
+    // through — a non-empty array is truthy and would otherwise pass this
+    // check, then throw at the `.localeCompare()` call below.
+    if (typeof key !== "string" || !key || typeof name !== "string" || !name) continue;
     let bucket = buckets.get(key);
     if (!bucket) {
       bucket = { key, name, subtitle, topSeverity: "low", alerts: [] };
@@ -90,7 +95,7 @@ export function groupAlerts(sortedAlerts: SecurityAlert[], groupBy: GroupKey): A
     if (d !== 0) return d;
     const c = b.alerts.length - a.alerts.length;
     if (c !== 0) return c;
-    return a.name.localeCompare(b.name);
+    return String(a.name ?? "").localeCompare(String(b.name ?? ""));
   });
 }
 

@@ -193,6 +193,92 @@ describe("AlertsService", () => {
         alerts: [],
       });
     });
+
+    // Regression test for a real bug: some ECS alert fields (host.name,
+    // user.name/domain, process.name/executable, source.ip, destination.ip)
+    // come back from Elasticsearch as arrays instead of scalars for certain
+    // correlated/network-derived alerts, even though `SecurityAlert._source`
+    // types them as scalars. Downstream sort/group logic in the Alert Triage
+    // view (useAlertSort.ts) assumed a scalar and threw on `.localeCompare()`
+    // when it got an array, crashing the whole widget to a blank panel with
+    // no error boundary to catch it. getAlerts() must normalize these fields
+    // before returning so every caller sees the scalar shape the type promises.
+    it("normalizes array-shaped ECS entity/IP fields to scalars", async () => {
+      const alertsClient = createMockAlertsClient();
+      vi.mocked(alertsClient.searchAlerts).mockResolvedValueOnce({
+        hits: {
+          total: { value: 1 },
+          hits: [
+            {
+              _id: "a1",
+              _index: ".alerts-security.alerts-default",
+              _source: {
+                "@timestamp": "2024-01-01T00:00:00Z",
+                "kibana.alert.rule.name": "R",
+                "kibana.alert.rule.uuid": "r",
+                "kibana.alert.severity": "low",
+                "kibana.alert.risk_score": 21,
+                "kibana.alert.workflow_status": "open",
+                "kibana.alert.reason": "x",
+                host: { name: ["sa-da-vm-lls-01"] },
+                user: { name: ["root"], domain: ["CORP"] },
+                process: {
+                  name: ["python3.9"],
+                  executable: ["/usr/bin/python3.9"],
+                  parent: { name: ["bash"] },
+                },
+                source: { ip: ["10.132.0.108"] },
+                destination: { ip: ["35.195.130.253"] },
+              } as unknown as SecurityAlert["_source"],
+            },
+          ],
+        },
+      });
+
+      const service = new AlertsService({ alertsClient });
+      const out = await service.getAlerts();
+
+      expect(out.alerts).toHaveLength(1);
+      const src = out.alerts[0]._source;
+      expect(src.host?.name).toBe("sa-da-vm-lls-01");
+      expect(src.user?.name).toBe("root");
+      expect(src.user?.domain).toBe("CORP");
+      expect(src.process?.name).toBe("python3.9");
+      expect(src.process?.executable).toBe("/usr/bin/python3.9");
+      expect(src.process?.parent?.name).toBe("bash");
+      expect(src.source?.ip).toBe("10.132.0.108");
+      expect(src.destination?.ip).toBe("35.195.130.253");
+    });
+
+    it("leaves already-scalar ECS entity fields untouched", async () => {
+      const alertsClient = createMockAlertsClient();
+      vi.mocked(alertsClient.searchAlerts).mockResolvedValueOnce({
+        hits: {
+          total: { value: 1 },
+          hits: [
+            {
+              _id: "a2",
+              _index: ".alerts-security.alerts-default",
+              _source: {
+                "@timestamp": "2024-01-01T00:00:00Z",
+                "kibana.alert.rule.name": "R",
+                "kibana.alert.rule.uuid": "r",
+                "kibana.alert.severity": "high",
+                "kibana.alert.risk_score": 47,
+                "kibana.alert.workflow_status": "open",
+                "kibana.alert.reason": "x",
+                host: { name: "sa-da-ingest-01" },
+              },
+            },
+          ],
+        },
+      });
+
+      const service = new AlertsService({ alertsClient });
+      const out = await service.getAlerts();
+
+      expect(out.alerts[0]._source.host?.name).toBe("sa-da-ingest-01");
+    });
   });
 
   describe("getAlertContext", () => {
