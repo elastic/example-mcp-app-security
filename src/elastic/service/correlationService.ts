@@ -24,9 +24,9 @@ import type { DiamondVertex } from "../../correlation/tradecraft.js";
 // ---------------------------------------------------------------------------
 
 // Report corpus index pattern. Env-configurable so this app can point at the
-// threat-intel-ingest corpus (`ti-reports*`, the default) or a different
-// deployment's index without a code change. Set TI_REPORTS_INDEX_PATTERN to
-// override (e.g. back to ".kibana-threat-reports*" for the IntelligenceHub corpus).
+// threat-report corpus (`ti-reports*`, the default) or a different deployment's
+// index without a code change. Set TI_REPORTS_INDEX_PATTERN to override
+// (e.g. ".kibana-threat-reports*" for an alternative corpus).
 const THREAT_REPORTS_INDEX_PATTERN =
   process.env.TI_REPORTS_INDEX_PATTERN?.trim() || "ti-reports*";
 
@@ -343,7 +343,7 @@ const runSemanticSearch = async (
     });
   }
 
-  // Sort: overlap desc, maxScore desc — mirrors Mustard compact_output sort key.
+  // Sort: overlap desc, then maxScore desc (anchor overlap outranks similarity).
   candidates.sort((a, b) =>
     b.overlap !== a.overlap ? b.overlap - a.overlap : b.maxScore - a.maxScore
   );
