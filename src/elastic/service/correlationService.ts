@@ -15,6 +15,7 @@
  */
 
 import type { EsClient } from "../es-client/index.js";
+import type { KibanaClient } from "../kibana-client/index.js";
 import { DIAMOND_VERTICES } from "../../correlation/tradecraft.js";
 import type { DiamondVertex } from "../../correlation/tradecraft.js";
 
@@ -22,7 +23,24 @@ import type { DiamondVertex } from "../../correlation/tradecraft.js";
 // Constants — mirror kibana-threat-intel-poc constants
 // ---------------------------------------------------------------------------
 
-const THREAT_REPORTS_INDEX_PATTERN = ".kibana-threat-reports*";
+// Report corpus index pattern. Env-configurable so this app can point at the
+// threat-intel-ingest corpus (`ti-reports*`, the default) or a different
+// deployment's index without a code change. Set TI_REPORTS_INDEX_PATTERN to
+// override (e.g. back to ".kibana-threat-reports*" for the IntelligenceHub corpus).
+const THREAT_REPORTS_INDEX_PATTERN =
+  process.env.TI_REPORTS_INDEX_PATTERN?.trim() || "ti-reports*";
+
+// Authoritative correlation path: the `ti-correlation` Kibana Workflow does the
+// retrieval → Sonnet triage → Opus synthesis and writes one run record per
+// execution (`_id = execution id`) into the correlations index. The MCP app
+// triggers the workflow and polls that index by run_id — it does NOT synthesize.
+// Both are env-overridable to match a deployment's config.sh values.
+const CORRELATIONS_INDEX =
+  process.env.TI_CORRELATIONS_INDEX?.trim() || "ti-correlations";
+const CORRELATION_WORKFLOW_ID =
+  process.env.TI_CORRELATION_WORKFLOW_ID?.trim() || "ti-correlation";
+// Kibana Workflows public route is date-versioned on 9.5.x (see deploy.sh).
+const WORKFLOWS_API_VERSION = "2023-10-31";
 const NOISE_FLOOR = 0.7;
 const KNN_CANDIDATES_PER_VERTEX = 50;
 const DEFAULT_SIZE = 20;
@@ -598,10 +616,175 @@ const runSemanticSearchScored = async (
 
 interface CorrelationServiceOptions {
   readonly esClient: EsClient;
+  /** Required for the workflow-driven `correlate` path; retrieval tools work without it. */
+  readonly kibanaClient?: KibanaClient;
+}
+
+export type CorrelationDepth = "free" | "cheap" | "med" | "full";
+
+export interface RunCorrelationParams {
+  /** Stored corpus report _id (content_fingerprint). Mutually exclusive with raw_text. */
+  report_id?: string;
+  /** Pasted case text. Mutually exclusive with report_id. */
+  raw_text?: string;
+  depth?: CorrelationDepth;
+  triage_pool?: number;
+  triage_floor?: number;
+}
+
+export interface RunCorrelationResult {
+  run_id: string;
+  workflow_id: string;
+  depth: CorrelationDepth;
+}
+
+/** One triage pick as stored on the run record (title↔fp bridge for rendering). */
+export interface CorrelationPick {
+  candidate_id: number;
+  fp: string;
+  title?: string;
+  /** Source vendor (source.name) — carried on the pick by the workflow build_picks step. */
+  vendor?: string;
+  /** Source article URL (source.url) — carried on the pick by the workflow build_picks step. */
+  url?: string;
+  hypothesis?: string;
+  confidence?: number;
+  justification?: string;
+}
+
+/** One fused-pool candidate (audit-only `candidates` array on the run record). The
+ *  anchor-trail builder joins these to picks (by fp/id) and leads (by title). */
+export interface CorrelationPoolCandidate {
+  id: string;
+  overlap?: number;
+  has_anchor?: boolean;
+  anchor_score?: number;
+  /** Shares a distinctive code/execution token (extracted.code_tokens) with the case. */
+  has_phrase_anchor?: boolean;
+  phrase_score?: number;
+  free_score?: number;
+  diamond_max?: number;
+  retrieval_source?: string;
+}
+
+/** Case anchors the workflow searched (audit-only `case.anchors`, enabled:false). */
+export interface CorrelationCaseAnchors {
+  hashes?: string[];
+  network?: string[];
+  artifacts?: string[];
+  techniques?: string[];
+  /** Distinctive code/execution tokens searched as exact "phrase anchors". */
+  code_tokens?: string[];
+  iocs?: Array<{ type?: string; value?: string; defanged?: string }>;
+  artifact_objs?: Array<{ type?: string; value?: string; context?: string }>;
+}
+
+/** Verbatim `_source` of a ti-correlations run record (subset we surface). */
+export interface CorrelationRunRecord {
+  found: boolean;
+  run_id?: string;
+  status?: string;
+  depth?: string;
+  counts?: Record<string, number>;
+  case?: {
+    mode?: string;
+    title?: string;
+    anchors?: CorrelationCaseAnchors;
+    /** Case's own per-vertex signal (NONE/PARTIAL/HIGH) — drives the case-signal diamond. */
+    vertex_signal?: Record<string, string>;
+  } & Record<string, unknown>;
+  /** Workflow-shaped CorrelationFindings (leads reference candidates by title). */
+  findings?: Record<string, unknown>;
+  picks?: CorrelationPick[];
+  /** Fused-pool candidates (audit-only) — drives the anchor trail. */
+  candidates?: CorrelationPoolCandidate[];
+  trace?: Record<string, unknown>;
+  error?: string;
 }
 
 export class CorrelationService {
   constructor(private readonly options: CorrelationServiceOptions) {}
+
+  /**
+   * Trigger the `ti-correlation` Kibana Workflow (async). Returns immediately
+   * with the execution id — the workflow runs in Task Manager (full depth can
+   * take minutes; the POST does not block). Poll {@link getCorrelationRun} with
+   * the returned run_id to read the authoritative findings.
+   */
+  async runCorrelation(params: RunCorrelationParams): Promise<RunCorrelationResult> {
+    const { kibanaClient } = this.options;
+    if (!kibanaClient) {
+      throw new Error(
+        "correlate requires a Kibana client — the correlation workflow is triggered via the Kibana Workflows API."
+      );
+    }
+    const reportId = params.report_id?.trim() ?? "";
+    const rawText = params.raw_text?.trim() ?? "";
+    if (!reportId && !rawText) {
+      throw new Error("correlate requires either report_id or raw_text.");
+    }
+    if (reportId && rawText) {
+      throw new Error("correlate takes report_id OR raw_text, not both.");
+    }
+    const depth: CorrelationDepth = params.depth ?? "full";
+    const inputs: Record<string, unknown> = {
+      report_id: reportId,
+      raw_text: rawText,
+      depth,
+      triage_pool: params.triage_pool ?? 120,
+      triage_floor: params.triage_floor ?? 0.65,
+    };
+    const resp = await kibanaClient.post<{ workflowExecutionId: string }>(
+      `/api/workflows/workflow/${CORRELATION_WORKFLOW_ID}/run`,
+      { inputs },
+      { headers: { "elastic-api-version": WORKFLOWS_API_VERSION } }
+    );
+    const runId = resp.data?.workflowExecutionId;
+    if (!runId) {
+      throw new Error(`workflow run did not return an execution id: ${JSON.stringify(resp.data)}`);
+    }
+    return { run_id: runId, workflow_id: CORRELATION_WORKFLOW_ID, depth };
+  }
+
+  /**
+   * Read one correlation run record by run_id (= workflow execution id) from the
+   * correlations index. Returns `{ found: false }` while the run is still in
+   * flight (the doc is written by the workflow's terminal persist step) or if the
+   * id is unknown.
+   */
+  async getCorrelationRun(runId: string): Promise<CorrelationRunRecord> {
+    const { esClient } = this.options;
+    const id = runId.trim();
+    if (!id) throw new Error("get_correlation_run requires a run_id.");
+    try {
+      const resp = await esClient.get<{
+        found: boolean;
+        _source?: Record<string, unknown>;
+      }>(`/${CORRELATIONS_INDEX}/_doc/${encodeURIComponent(id)}`);
+      const source = resp.data?._source;
+      if (!resp.data?.found || !source) return { found: false };
+      return {
+        found: true,
+        run_id: source.run_id as string | undefined,
+        status: source.status as string | undefined,
+        depth: source.depth as string | undefined,
+        counts: source.counts as Record<string, number> | undefined,
+        case: source.case as CorrelationRunRecord["case"],
+        findings: source.findings as Record<string, unknown> | undefined,
+        picks: source.picks as CorrelationPick[] | undefined,
+        candidates: source.candidates as CorrelationPoolCandidate[] | undefined,
+        trace: source.trace as Record<string, unknown> | undefined,
+        error: source.error as string | undefined,
+      };
+    } catch (err) {
+      const msg = String((err as Error)?.message ?? "");
+      // 404 = index/doc not present yet (run still in flight) → not-found, not fatal.
+      if (msg.includes("404") || msg.includes("index_not_found")) {
+        return { found: false };
+      }
+      throw err;
+    }
+  }
 
   /**
    * Diamond Model correlation search.

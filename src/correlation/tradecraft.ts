@@ -196,15 +196,27 @@ RULES:
   they may ask you to refine weak vertices before proceeding.`;
 
 /**
- * Composite tradecraft bundle returned in every `diamond_search` response.
- * The host model uses the triage rubric to rank candidates, then the synthesis
- * guidance to produce structured correlation findings after reading full reports.
+ * Composite tradecraft bundle returned in every corpus-search response.
+ *
+ * The summarisation/input/triage guidance help an analyst interpret the
+ * EXPLORATION-AID search tools (diamond_search*, get_report).
+ *
+ * `synthesis_guidance` is DEPRECATED: host-driven synthesis has been replaced by
+ * the server-side `ti-correlation` Kibana Workflow (see the `correlate` tool),
+ * which owns retrieval → Sonnet triage → Opus synthesis with consistent
+ * tradecraft and no 120s host timeout. The block is retained only so any legacy
+ * host loop still has the output shape; new flows should NOT synthesize here —
+ * call `correlate`, poll `get_correlation_run`, then `render_correlation`.
  */
 export const TRADECRAFT = {
   diamond_summarisation_guidance: DIAMOND_SUMMARISATION_GUIDANCE,
   input_signal_guidance: INPUT_SIGNAL_GUIDANCE,
   triage_rubric: TRIAGE_RUBRIC,
+  /** @deprecated Use the `correlate` workflow tool instead of host synthesis. */
   synthesis_guidance: {
+    deprecated: true,
+    deprecation_note:
+      "Host-driven synthesis is deprecated. Use the `correlate` tool (ti-correlation workflow) → `get_correlation_run` → `render_correlation`. This block remains only for legacy compatibility.",
     instructions: SYNTHESIS_GUIDANCE_TEXT,
     recommended_output: {
       leads: [

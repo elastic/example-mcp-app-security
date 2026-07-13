@@ -16,130 +16,79 @@ description: >
 # Threat Correlation
 
 Correlate SOC cases and incidents against the threat-report corpus using the `elastic-security`
-MCP connector and the Diamond Model of Intrusion Analysis (adversary, capability, infrastructure,
-victim).
+MCP connector. The authoritative correlation is done by the server-side **`ti-correlation`
+Kibana Workflow** (retrieval → Sonnet triage → Opus synthesis, all consistent tradecraft). The
+host does NOT synthesize findings itself — it triggers the workflow and renders the result.
 
-## ALWAYS call the tool
+## ALWAYS call the tools
 
 When the user asks to correlate a case or find related threat intel — including phrasings
 like "is this a known intrusion set", "have we seen this before", "is this attributed",
-"known campaign/actor", "match this case to threat intel", "who is behind this" — ALWAYS
-start with `correlation_input_check` to surface the per-vertex signal stoplight. Do not
-attempt to answer from memory or describe correlation results without calling the tools.
-The gate is the mandatory entry point for ALL correlation requests, not just explicit
-"analyst-led" asks.
+"known campaign/actor", "match this case to threat intel", "who is behind this" — ALWAYS drive
+the correlation through the tools below. Do not answer from memory or describe correlation
+results without running the workflow.
 
-## Gate: choose a run mode after `correlation_input_check`
+## Authoritative path — `correlate` → poll → `render_correlation`
 
-After `correlation_input_check` surfaces the per-vertex stoplight, PAUSE and offer the analyst
-two run modes. Branch on their reply.
+This is the ONE correlation workflow. Use it for every correlation request.
 
-### Mode A — Full run (AUTONOMOUS, no human triaging) → use `diamond_search` (BLIND)
+| Step | Situation | Tool call |
+|------|-----------|-----------|
+| 1 | You have a stored corpus report to correlate, or pasted case text | `correlate` with `report_id` (a report's content_fingerprint) OR `raw_text`. Optionally set `depth` (default `full`), `triage_pool`, `triage_floor`. Returns a `run_id`. |
+| 2 | The workflow runs asynchronously in Kibana (full depth can take a few minutes) | `get_correlation_run` with the `run_id`. Poll until `status` is `completed` (while running you get `{ found: false, status: "pending" }` — wait and retry). |
+| 3 | The run completed and returned render-ready `findings` | `render_correlation` with the `findings` from step 2. Pure renderer — no reasoning. |
 
-**Why blind:** Scores are withheld in autonomous mode to prevent the model from anchoring on
-similarity rank instead of judging evidence on its merits.
-
-1. Call `diamond_search` with the confirmed vertex queries.
-2. Triage candidates yourself by reading their `matched_vertices` evidence text against the
-   `triage_rubric` in the response. Pull `get_report` for the **top ~10 candidates** judged
-   strongest by evidence — cap at ~10 to bound token cost.
-3. Apply the full `synthesis_guidance` and `triage_rubric` tradecraft from the tool's payload.
-4. Call `render_correlation` with the completed `CorrelationFindings`.
-
-Frame honestly: more thorough, full tradecraft and bias-reduction discipline, but **slower
-and higher token cost** (synthesis across many reports); results are model-dependent.
-
-### Mode B — Analyst-led (INTERACTIVE, human triages) → use `diamond_search_analyst` (SCORED)
-
-**Why scored:** Scores are present here because the analyst, not the model, makes the selection
-decision. The analyst can see and judge the numeric match signal directly.
-
-1. Call `diamond_search_analyst` with the confirmed vertex queries.
-2. **Present the ranked candidates to the analyst** — show titles, scores, and per-vertex
-   match detail from the response.
-3. Wait for the analyst to pick which candidates to deep-dive.
-4. Call `get_report` for only the analyst-selected `report_ids`.
-5. Synthesize findings and call `render_correlation`.
-
-Frame honestly: **faster, cheaper, more interactive** — analyst steers depth and can
-short-circuit at any point — but relies on analyst judgment rather than a full autonomous
-triage pass.
-
-### These are ALTERNATIVES — pick ONE
-
-`diamond_search` and `diamond_search_analyst` serve different run modes. Do NOT run both in
-sequence — that is not a workflow. Autonomous runs → `diamond_search`. Analyst-led runs →
-`diamond_search_analyst`.
-
----
-
-## Primary path — analyst-led (interactive, Mode B)
-
-Use this path for interactive human-in-the-loop correlation. It gives the analyst full
-visibility into what signal you have before the search runs.
-
-| Step | User says / situation | Tool call |
-|------|-----------------------|-----------|
-| 1 | Summarise the case into Diamond Model vertices, then show the analyst the signal quality | `correlation_input_check` with `adversary`, `capability`, `infrastructure`, `victim` — each with a `query` paragraph and a `signal` self-rating (HIGH / PARTIAL / NONE) |
-| 2 | Analyst confirms signal is ready (or chooses Mode A/B at the gate) | `diamond_search_analyst` with the same vertex queries — presents scored candidates with per-vertex match detail |
-| 3 | Analyst selects top candidates from the scored list | `get_report` with the chosen `report_ids` (1–10) |
-| 4 | You (the host) synthesize CorrelationFindings from the report text | `render_correlation` with your completed `findings` object |
-
-### Input signal self-rating scale
-
-| Rating | Meaning |
-|--------|---------|
-| HIGH | Specific, well-attested behavioural detail — strong search anchor |
-| PARTIAL | Present but weak or inferred — query sent but may add noise |
-| NONE | Genuinely absent — omit this vertex from the search |
-
-### Step 1 — `correlation_input_check`
+### Step 1 — `correlate`
 
 ```
-correlation_input_check with:
-  adversary:      { query: "APT28 / Fancy Bear; attributed to Russian GRU Unit 26165", signal: "HIGH" }
-  capability:     { query: "Zebrocy downloader, Sofacy implant, spear-phishing lures", signal: "HIGH" }
-  infrastructure: { query: "dynamic DNS, .ru TLD hosting", signal: "PARTIAL" }
-  victim:         { query: "NATO defence contractors, Eastern European governments", signal: "PARTIAL" }
+correlate with:
+  report_id: "<content_fingerprint>"     # OR raw_text: "<pasted case text>"
+  depth: "full"                          # free | cheap | med | full (default full)
 ```
 
-The analyst reviews the stoplight and decides whether to proceed or refine the input.
+- Provide EITHER `report_id` OR `raw_text`, never both.
+- Only `depth: full` produces a renderable report (Opus synthesis). `free`/`cheap`/`med`
+  are cheaper diagnostic tiers that stop before synthesis.
+- The tool returns immediately with `{ run_id }`; the workflow does the heavy lifting
+  server-side (no host token cost, no 120s host timeout).
 
-### Step 2 — `diamond_search_analyst` (Mode B) or `diamond_search` (Mode A)
+### Step 2 — `get_correlation_run`
 
-**Mode B (analyst-led):** Pass the same vertex queries to `diamond_search_analyst` (omit NONE-rated vertices). The response includes:
-- `candidates`: ScoredStub[] ranked by (overlap desc, max_score desc) with per-vertex match scores
-- `coverage`: signal quality summary — `thin: true` signals weak multi-vertex retrieval
-- `tradecraft`: triage_rubric and synthesis_guidance for steps 3–4
+Poll with the `run_id` until `status` is `completed`:
+- `pending` — still executing (or record not yet written). Wait a few seconds and poll again.
+- `completed` — `findings` is a render-ready `CorrelationFindings` object (candidate titles
+  already resolved to report ids via the run's `picks`). Go to step 3.
+- `budget_exceeded` — the case + candidates exceeded the synthesis input budget; no findings.
+- `failed` — inspect `error`, `counts`, and `picks`.
 
-**Mode A (autonomous):** Call `diamond_search` instead. Candidates include `matched_vertices` evidence text; no scores are returned.
+For non-`full` depths, `findings` is `null` — report the `counts`/`picks` instead of rendering.
 
-### Step 3 — `get_report`
+### Step 3 — `render_correlation`
 
-Call with the `report_ids` the analyst selected. Returns full `body_text`, `title`, `vendor`, `url`
-per report — source material for your synthesis.
+Call with the `findings` returned by `get_correlation_run`. This hands the structured result
+to the analyst view. It performs no reasoning and no queries.
 
-### Step 4 — `render_correlation`
+## Exploration aids (NOT the correlation path)
 
-After completing your synthesis, call `render_correlation` with your full `CorrelationFindings`
-object (`leads`, `no_match`, `synthesis`). This is a pure pass-through to the analyst view —
-the tool performs no reasoning.
+`correlation_input_check`, `diamond_search`, `diamond_search_analyst`, and `get_report` let an
+analyst browse the corpus by Diamond-vertex similarity or read a report's text. They are
+exploration aids — useful for scoping a case or sanity-checking what the corpus holds — but they
+do NOT produce authoritative findings. **Host-driven synthesis from these tools is deprecated;
+always run `correlate` to correlate a case.**
 
-## Alternate path — blind autonomous (Mode A, no analyst triage)
-
-Use `diamond_search` + `get_report` when operating autonomously without analyst oversight.
-`diamond_search` returns candidate stubs WITHOUT scores (scores are withheld server-side
-to prevent anchoring on similarity rank). Each candidate includes `matched_vertices` evidence
-text — the summary from the report for each vertex that matched. Triage candidates by reading
-that evidence against the `triage_rubric` in the response, then call `get_report` for the top
-picks and synthesise findings.
+- `correlation_input_check` — per-vertex signal stoplight (`{ query, signal }` per vertex).
+- `diamond_search` — blind corpus search (matched_vertices evidence, no scores).
+- `diamond_search_analyst` — scored corpus search (per-vertex scores + coverage) for the triage UI.
+- `get_report` — fetch full report text by id (`report_ids`, 1–10).
 
 ## Tools
 
 | Tool | When to use | Purpose |
 |------|-------------|---------|
-| `correlation_input_check` | Always first | Per-vertex signal stoplight gate. Params: `adversary`, `capability`, `infrastructure`, `victim` (each: `{ query, signal }`) |
-| `diamond_search` | Mode A (autonomous, no human triage) | Blind search — matched_vertices evidence, NO scores. Same vertex + IOC params as `diamond_search_analyst` |
-| `diamond_search_analyst` | Mode B (analyst-led, human triages) | Scored transparent search. Returns vertex_scores for analyst review. Params: `adversary`, `capability`, `infrastructure`, `victim` (strings), `iocs`, `size` |
-| `get_report` | After triage | Fetch full report text by ID. Params: `report_ids` (array, 1–10) |
-| `render_correlation` | Final step | Render host-synthesized findings. Params: `findings` (CorrelationFindings) |
+| `correlate` | Correlate a case (authoritative) | Trigger the ti-correlation workflow. Params: `report_id` OR `raw_text`, `depth`, `triage_pool`, `triage_floor`. Returns `run_id`. |
+| `get_correlation_run` | Poll after `correlate` | Fetch a run by `run_id`; returns status + render-ready `findings`. Param: `run_id`. |
+| `render_correlation` | Final step | Render the workflow's findings. Param: `findings` (from `get_correlation_run`). |
+| `correlation_input_check` | Exploration | Per-vertex signal stoplight gate. |
+| `diamond_search` | Exploration | Blind corpus search — matched_vertices evidence, no scores. |
+| `diamond_search_analyst` | Exploration | Scored corpus search — vertex_scores for analyst browse. |
+| `get_report` | Exploration | Fetch full report text by id. |

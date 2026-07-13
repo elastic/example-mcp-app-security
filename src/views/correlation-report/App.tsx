@@ -5,12 +5,13 @@
  * 2.0.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { extractToolText } from "../../shared/extract-tool-text";
 import { useMcpApp, useMcpAppEvents } from "../../shared/hooks/useMcpApp";
 import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
 import { useAnalytics } from "../../shared/hooks/useAnalytics";
-import { AppGlyph } from "../../shared/components/icons/icons";
+import { useFullscreen } from "../../shared/hooks/useFullscreen";
+import { AppGlyph, FullscreenIcon, ExitFullscreenIcon } from "../../shared/components/icons/icons";
 import "./styles.css";
 
 // ---------------------------------------------------------------------------
@@ -84,6 +85,52 @@ interface CandidateMetaEntry {
   url?: string;
 }
 
+interface TraceStage {
+  stage: string;
+  tier?: "sonnet" | "opus" | null;
+  input_tokens?: number | string;
+  output_tokens?: number | string;
+  candidates?: number | string;
+  anchors?: number | string;
+  started_at?: string;
+  ended_at?: string;
+}
+
+interface Trace {
+  total_input_tokens?: number | string;
+  total_output_tokens?: number | string;
+  stages?: TraceStage[];
+}
+
+interface RunMeta {
+  run_id?: string;
+  depth?: string;
+  status?: string;
+}
+
+interface AnchorsSearched {
+  hashes: string[];
+  network: string[];
+  artifacts: string[];
+  techniques: string[];
+  code_tokens?: string[];
+}
+
+interface AnchorTrailEntry {
+  fp: string;
+  anchor_score: number;
+  overlap: number;
+  title?: string;
+  vendor?: string;
+  url?: string;
+  triage_confidence?: number;
+  justification?: string;
+  outcome: "lead" | "picked_no_lead" | "dropped_at_triage";
+  lead_title?: string;
+  relationship?: string;
+  lead_confidence?: string;
+}
+
 interface CorrelationFindings {
   leads: Lead[];
   no_match: NoMatch[];
@@ -91,6 +138,13 @@ interface CorrelationFindings {
   case_vertex_signal?: VertexSignalMap;
   candidate_labels?: Record<string, string>;
   candidate_meta?: Record<string, CandidateMetaEntry>;
+  // Run-level context folded in by get_correlation_run (see workflowFindingsToRenderShape).
+  counts?: Record<string, number>;
+  trace?: Trace;
+  run_meta?: RunMeta;
+  anchors_searched?: AnchorsSearched;
+  anchor_trail?: AnchorTrailEntry[];
+  phrase_anchor_trail?: AnchorTrailEntry[];
 }
 
 interface ReportPayload {
@@ -194,11 +248,17 @@ interface DiamondProps {
 
 function DiamondSvg({ vertexSignal, size = 80 }: DiamondProps) {
   const showLabels = size >= 80;
+  // Nodes (r=16) reach past the 0–160 box, so pad the viewBox and scale the
+  // pixel size to match — keeps the diamond's apparent size while giving the
+  // circles room so they don't clip at the container edges.
+  const PAD = 10;
+  const vb = 160 + PAD * 2;
+  const px = Math.round(size * (vb / 160));
   return (
     <svg
-      width={size}
-      height={size}
-      viewBox="0 0 160 160"
+      width={px}
+      height={px}
+      viewBox={`${-PAD} ${-PAD} ${vb} ${vb}`}
       role="img"
       aria-label="Diamond Model correlation signal"
       className="crr-diamond-svg"
@@ -624,6 +684,302 @@ function IdleState() {
 }
 
 // ---------------------------------------------------------------------------
+// CountsStrip — retrieval → triage → synthesis funnel + run metadata
+// ---------------------------------------------------------------------------
+
+function CountsStrip({ counts, runMeta }: { counts?: Record<string, number>; runMeta?: RunMeta }) {
+  if (!counts && !runMeta) return null;
+  const items: Array<{ label: string; value: string | number }> = [];
+  if (counts) {
+    if (counts.candidates !== undefined) items.push({ label: "Candidates", value: counts.candidates });
+    if (counts.picks !== undefined) items.push({ label: "Triage picks", value: counts.picks });
+    if (counts.leads !== undefined) items.push({ label: "Leads", value: counts.leads });
+    if (counts.no_match !== undefined) items.push({ label: "No-match", value: counts.no_match });
+  }
+  if (runMeta?.depth) items.push({ label: "Depth", value: runMeta.depth });
+  if (items.length === 0) return null;
+  return (
+    <div className="crr-counts-strip">
+      {items.map((it) => (
+        <div key={it.label} className="crr-count-stat">
+          <span className="crr-count-value">{it.value}</span>
+          <span className="crr-count-label">{it.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PipelineCostCard — per-tier token spend + est. cost (collapsible)
+// ---------------------------------------------------------------------------
+
+// Anthropic list prices, USD per 1M tokens (in / out). Estimate only — managed
+// EIS billing may differ; captioned as such in the card.
+const PRICES: Record<"sonnet" | "opus", { in: number; out: number }> = {
+  sonnet: { in: 3, out: 15 },
+  opus: { in: 15, out: 75 },
+};
+
+const STAGE_LABEL: Record<string, string> = {
+  extract_core: "Case extraction",
+  extract_diamond: "Case diamond",
+  retrieval: "Retrieval",
+  triage: "Triage",
+  synthesis: "Synthesis",
+};
+const STAGE_MODEL: Record<string, string> = {
+  extract_core: "Claude Sonnet (raw_text IOCs/behaviors)",
+  extract_diamond: "Claude Opus (raw_text vertices)",
+  retrieval: "Elasticsearch (kNN + BM25 + anchors)",
+  triage: "Claude Sonnet",
+  synthesis: "Claude Opus",
+};
+
+function num(v: number | string | undefined): number {
+  const n = typeof v === "string" ? Number(v) : v;
+  return Number.isFinite(n as number) ? (n as number) : 0;
+}
+function money(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+function stageCost(s: TraceStage): number {
+  if (!s.tier) return 0;
+  const p = PRICES[s.tier];
+  return (num(s.input_tokens) * p.in + num(s.output_tokens) * p.out) / 1_000_000;
+}
+// Duration in ms from the stage's ISO timestamps; null when either mark is absent
+// (e.g. a tier that was gated off for the run's depth).
+function stageDurationMs(s: TraceStage): number | null {
+  if (!s.started_at || !s.ended_at) return null;
+  const a = Date.parse(s.started_at);
+  const b = Date.parse(s.ended_at);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return null;
+  return b - a;
+}
+function fmtDuration(ms: number | null): string {
+  if (ms == null) return "—";
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(1)} s`;
+}
+
+function PipelineCostCard({ trace }: { trace?: Trace }) {
+  const [open, setOpen] = useState(false);
+  const stages = Array.isArray(trace?.stages) ? trace!.stages : [];
+  if (stages.length === 0) return null;
+
+  const totalIn = stages.reduce((a, s) => a + num(s.input_tokens), 0);
+  const totalOut = stages.reduce((a, s) => a + num(s.output_tokens), 0);
+  const totalCost = stages.reduce((a, s) => a + stageCost(s), 0);
+  const totalMs = stages.reduce((a, s) => a + (stageDurationMs(s) ?? 0), 0);
+  const anyDuration = stages.some((s) => stageDurationMs(s) != null);
+  const fmt = (n: number) => (n === 0 ? "—" : n.toLocaleString());
+
+  return (
+    <div className="crr-synthesis-card">
+      <button className="crr-synthesis-header" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="crr-section-title">Pipeline &amp; cost</span>
+        <span className="crr-pipeline-summary">
+          {(totalIn + totalOut).toLocaleString()} tokens · ~{money(totalCost)} est.
+          {anyDuration ? ` · ${fmtDuration(totalMs)}` : ""}
+        </span>
+        <span className="crr-lead-chevron" aria-hidden="true">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="crr-synthesis-body">
+          <table className="crr-pipeline-table">
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th className="crr-num">Tokens in</th>
+                <th className="crr-num">Tokens out</th>
+                <th className="crr-num">Duration</th>
+                <th className="crr-num">Est. cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stages.map((s) => {
+                const detail =
+                  s.stage === "retrieval"
+                    ? `${num(s.candidates)} candidates · ${num(s.anchors)} anchor hits`
+                    : STAGE_MODEL[s.stage] ?? "";
+                return (
+                  <tr key={s.stage}>
+                    <td>
+                      <div className="crr-pipeline-stage">{STAGE_LABEL[s.stage] ?? s.stage}</div>
+                      <div className="crr-pipeline-detail">{detail}</div>
+                    </td>
+                    <td className="crr-num">{fmt(num(s.input_tokens))}</td>
+                    <td className="crr-num">{fmt(num(s.output_tokens))}</td>
+                    <td className="crr-num">{fmtDuration(stageDurationMs(s))}</td>
+                    <td className="crr-num">{s.tier ? money(stageCost(s)) : "$0.00"}</td>
+                  </tr>
+                );
+              })}
+              <tr className="crr-pipeline-total">
+                <td>Total</td>
+                <td className="crr-num">{totalIn.toLocaleString()}</td>
+                <td className="crr-num">{totalOut.toLocaleString()}</td>
+                <td className="crr-num">{anyDuration ? fmtDuration(totalMs) : "—"}</td>
+                <td className="crr-num">{money(totalCost)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="crr-pipeline-caption">
+            Est. cost at Anthropic list prices (Sonnet $3/$15, Opus $15/$75 per 1M in/out) — managed EIS
+            billing may differ. Retrieval is Elasticsearch-only. Source: ti-correlations trace.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AnchorTrailCard — what exact anchors were searched, which reports they matched,
+// and how each match fared through triage → synthesis (collapsible; diagnostic).
+// ---------------------------------------------------------------------------
+
+const OUTCOME_LABEL: Record<AnchorTrailEntry["outcome"], string> = {
+  lead: "Lead",
+  picked_no_lead: "Triaged, no lead",
+  dropped_at_triage: "Dropped at triage",
+};
+const OUTCOME_CLASS: Record<AnchorTrailEntry["outcome"], string> = {
+  lead: "crr-outcome-lead",
+  picked_no_lead: "crr-outcome-picked",
+  dropped_at_triage: "crr-outcome-dropped",
+};
+
+function AnchorChips({ label, values }: { label: string; values: string[] }) {
+  if (!values || values.length === 0) return null;
+  return (
+    <div className="crr-anchor-chip-row">
+      <span className="crr-anchor-chip-label">{label}</span>
+      <div className="crr-anchor-chips">
+        {values.map((v, i) => (
+          <span className="crr-anchor-chip" key={`${v}-${i}`}>{v}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TrailRows({ rows, scoreLabel }: { rows: AnchorTrailEntry[]; scoreLabel: string }) {
+  return (
+    <div className="crr-anchor-trail-list">
+      {rows.map((r, i) => (
+        <div className="crr-anchor-trail-row" key={r.fp || i}>
+          <div className="crr-anchor-trail-head">
+            <span className={`crr-outcome-badge ${OUTCOME_CLASS[r.outcome]}`}>
+              {OUTCOME_LABEL[r.outcome]}
+            </span>
+            <span className="crr-anchor-trail-title">
+              {r.url ? (
+                <a href={r.url} target="_blank" rel="noreferrer">{r.title ?? r.fp}</a>
+              ) : (
+                r.title ?? r.fp
+              )}
+            </span>
+            {r.vendor && <span className="crr-anchor-trail-vendor">{r.vendor}</span>}
+          </div>
+          <div className="crr-anchor-trail-meta">
+            <span>{scoreLabel} {r.anchor_score}</span>
+            <span>· diamond overlap {r.overlap}</span>
+            {r.triage_confidence != null && (
+              <span>· triage {(r.triage_confidence * 100).toFixed(0)}%</span>
+            )}
+            {r.outcome === "lead" && r.relationship && (
+              <span>· synthesis: {r.relationship.replace(/_/g, " ")} ({r.lead_confidence})</span>
+            )}
+          </div>
+          {r.justification && (
+            <div className="crr-anchor-trail-just">“{r.justification}”</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AnchorTrailCard({
+  anchors,
+  trail,
+  phraseTrail,
+}: {
+  anchors?: AnchorsSearched;
+  trail?: AnchorTrailEntry[];
+  phraseTrail?: AnchorTrailEntry[];
+}) {
+  const [open, setOpen] = useState(false);
+  const codeTokens = anchors?.code_tokens ?? [];
+  const searched = anchors
+    ? (anchors.hashes.length + anchors.network.length + anchors.artifacts.length + anchors.techniques.length + codeTokens.length)
+    : 0;
+  const rows = trail ?? [];
+  const phraseRows = phraseTrail ?? [];
+  if (searched === 0 && rows.length === 0 && phraseRows.length === 0) return null;
+  const matched = rows.length + phraseRows.length;
+  const leadCount = [...rows, ...phraseRows].filter((r) => r.outcome === "lead").length;
+
+  return (
+    <div className="crr-synthesis-card">
+      <button className="crr-synthesis-header" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="crr-section-title">Anchor trail</span>
+        <span className="crr-pipeline-summary">
+          {searched} anchor{searched !== 1 ? "s" : ""} searched · {matched} matched · {leadCount} in a lead
+        </span>
+        <span className="crr-lead-chevron" aria-hidden="true">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="crr-synthesis-body">
+          {anchors && searched > 0 && (
+            <div className="crr-anchors-searched">
+              <div className="crr-pipeline-detail" style={{ marginBottom: 8 }}>
+                Case anchors backfilled into the exact-match retrieval clause:
+              </div>
+              <AnchorChips label="hashes" values={anchors.hashes} />
+              <AnchorChips label="network" values={anchors.network} />
+              <AnchorChips label="artifacts" values={anchors.artifacts} />
+              <AnchorChips label="techniques" values={anchors.techniques} />
+              <AnchorChips label="code tokens" values={codeTokens} />
+            </div>
+          )}
+
+          <div className="crr-anchor-trail-subhead">IOC / artifact anchors</div>
+          {rows.length > 0 ? (
+            <TrailRows rows={rows} scoreLabel="anchor weight" />
+          ) : (
+            <div className="crr-pipeline-detail">
+              No corpus report shared an exact IOC/artifact anchor with the case.
+            </div>
+          )}
+
+          <div className="crr-anchor-trail-subhead" style={{ marginTop: 14 }}>
+            Code-token (phrase) anchors
+          </div>
+          {phraseRows.length > 0 ? (
+            <TrailRows rows={phraseRows} scoreLabel="phrase weight" />
+          ) : (
+            <div className="crr-pipeline-detail">
+              {codeTokens.length > 0
+                ? "No corpus report shared a distinctive code token with the case."
+                : "The case exposed no distinctive code tokens to phrase-match."}
+            </div>
+          )}
+
+          <div className="crr-pipeline-caption">
+            Anchors = shared file-hash IOCs + discriminating artifacts (network IOCs / techniques are boosts).
+            Code-token anchors match distinctive execution tokens (e.g. [Class]::Method()) exactly against
+            corpus extracted.code_tokens. Trail joins retrieval hits → triage picks → synthesis leads. Source: ti-correlations run record.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main App
 // ---------------------------------------------------------------------------
 
@@ -638,8 +994,10 @@ export function App() {
 function AppContent() {
   const [payload, setPayload] = useState<ReportPayload | null>(null);
 
-  const { connected } = useMcpApp();
+  const { connected, getApp } = useMcpApp();
   const { trackEvent } = useAnalytics();
+  const fullscreen = useFullscreen(getApp);
+  const autoExpandedRef = useRef(false);
 
   useEffect(() => {
     trackEvent({ eventType: "view_rendered", viewId: "correlation-report" });
@@ -659,6 +1017,17 @@ function AppContent() {
       }
     },
   });
+
+  // The report is dense — when findings first arrive, request the host's
+  // larger surface (fullscreen display mode → side panel) instead of leaving
+  // it in the inline chat card. Best-effort: hosts that require a user gesture
+  // ignore it, and the header toggle is the manual fallback.
+  useEffect(() => {
+    if (payload?.findings && !autoExpandedRef.current) {
+      autoExpandedRef.current = true;
+      if (!fullscreen.isFullscreen) fullscreen.toggle();
+    }
+  }, [payload, fullscreen]);
 
   if (!connected) {
     return (
@@ -684,19 +1053,30 @@ function AppContent() {
             {findings?.synthesis.case_title ?? "Correlation Report"}
           </h1>
         </div>
-        {findings && (
-          <div className="crr-header-meta">
-            <span
-              className="crr-signal-badge"
-              style={{ color: signalColor(findings.synthesis.correlation_signal) }}
-            >
-              {findings.synthesis.correlation_signal.toUpperCase()}
-            </span>
-            <span className="crr-header-count">
-              {findings.leads.length} lead{findings.leads.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-        )}
+        <div className="crr-header-meta">
+          {findings && (
+            <>
+              <span
+                className="crr-signal-badge"
+                style={{ color: signalColor(findings.synthesis.correlation_signal) }}
+              >
+                {findings.synthesis.correlation_signal.toUpperCase()}
+              </span>
+              <span className="crr-header-count">
+                {findings.leads.length} lead{findings.leads.length !== 1 ? "s" : ""}
+              </span>
+            </>
+          )}
+          <button
+            type="button"
+            className="crr-header-icon-btn"
+            onClick={fullscreen.toggle}
+            title={fullscreen.isFullscreen ? "Exit fullscreen" : "Open in panel"}
+            aria-label={fullscreen.isFullscreen ? "Exit fullscreen" : "Open in panel"}
+          >
+            {fullscreen.isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+          </button>
+        </div>
       </header>
 
       <div className="crr-body">
@@ -717,6 +1097,9 @@ function AppContent() {
                 <p className="crr-bluf-text">{findings.synthesis.bluf}</p>
               </div>
             </div>
+
+            {/* Retrieval → triage → synthesis funnel */}
+            <CountsStrip counts={findings.counts} runMeta={findings.run_meta} />
 
             {/* Case vertex signal */}
             {findings.case_vertex_signal && (
@@ -751,6 +1134,23 @@ function AppContent() {
 
             {/* Next steps */}
             <NextStepsCard nextSteps={findings.synthesis.next_steps} />
+
+            {/* Anchor trail (diagnostic; collapsed) — searched → matched → synthesis */}
+            <AnchorTrailCard
+              anchors={findings.anchors_searched}
+              trail={findings.anchor_trail}
+              phraseTrail={findings.phrase_anchor_trail}
+            />
+
+            {/* Pipeline & cost (diagnostic; collapsed) */}
+            <PipelineCostCard trace={findings.trace} />
+
+            {findings.run_meta?.run_id && (
+              <div className="crr-run-footer">
+                run {findings.run_meta.run_id}
+                {findings.run_meta.status ? ` · ${findings.run_meta.status}` : ""}
+              </div>
+            )}
           </div>
         )}
       </div>

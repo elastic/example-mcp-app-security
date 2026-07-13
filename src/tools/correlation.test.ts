@@ -27,6 +27,8 @@ function makeMockCorrelationService(): CorrelationService {
     diamondSearch: vi.fn(),
     diamondSearchScored: vi.fn(),
     getReports: vi.fn(),
+    runCorrelation: vi.fn(),
+    getCorrelationRun: vi.fn(),
   } as unknown as CorrelationService;
 }
 
@@ -57,9 +59,11 @@ describe("registerCorrelationTools", () => {
     });
   });
 
-  it("registers all 5 correlation tools plus the 3 UI resources", () => {
+  it("registers all 7 correlation tools plus the 3 UI resources", () => {
     expect([...server.tools.keys()].sort()).toEqual(
       [
+        "correlate",
+        "get_correlation_run",
         "diamond_search",
         "get_report",
         "diamond_search_analyst",
@@ -332,6 +336,254 @@ describe("registerCorrelationTools", () => {
       expect(body.findings.synthesis.correlation_signal).toBe("high");
       expect(body.summary).toContain("1 lead");
       expect(body.summary).toContain("signal: high");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // correlate — triggers the workflow, returns a run_id
+  // -------------------------------------------------------------------------
+
+  describe("correlate", () => {
+    it("triggers the workflow and returns the run_id", async () => {
+      vi.mocked(correlationService.runCorrelation).mockResolvedValueOnce({
+        run_id: "exec-123",
+        workflow_id: "ti-correlation",
+        depth: "full",
+      });
+
+      const out = await server.tool("correlate").callback({
+        report_id: "fp-abc",
+        depth: "full",
+      });
+
+      expect(correlationService.runCorrelation).toHaveBeenCalledWith({
+        report_id: "fp-abc",
+        raw_text: undefined,
+        depth: "full",
+        triage_pool: undefined,
+        triage_floor: undefined,
+      });
+
+      const body = parseToolText<{ kind: string; run_id: string; depth: string }>(out);
+      expect(body.kind).toBe("correlation_run_started");
+      expect(body.run_id).toBe("exec-123");
+      expect(body.depth).toBe("full");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // get_correlation_run — poll + transform workflow findings to render shape
+  // -------------------------------------------------------------------------
+
+  describe("get_correlation_run", () => {
+    it("reports pending when the run record does not exist yet", async () => {
+      vi.mocked(correlationService.getCorrelationRun).mockResolvedValueOnce({
+        found: false,
+      });
+
+      const out = await server.tool("get_correlation_run").callback({ run_id: "exec-x" });
+      const body = parseToolText<{ found: boolean; status: string }>(out);
+      expect(body.found).toBe(false);
+      expect(body.status).toBe("pending");
+    });
+
+    it("resolves candidate titles to report ids via picks on completion", async () => {
+      vi.mocked(correlationService.getCorrelationRun).mockResolvedValueOnce({
+        found: true,
+        run_id: "exec-9",
+        status: "completed",
+        depth: "full",
+        picks: [
+          { candidate_id: 0, fp: "fp-1", title: "APT28 Zebrocy" },
+          { candidate_id: 1, fp: "fp-2", title: "Sofacy Infra" },
+        ],
+        findings: {
+          leads: [
+            {
+              candidate_titles: ["APT28 Zebrocy", "Sofacy Infra"],
+              title: "Actor overlap",
+              relationship: "same_actor",
+              confidence: "high",
+              vertex_signal: { adversary: "high", capability: "high", infrastructure: "partial", victim: "none" },
+              bluf: "Overlap.",
+              evidence: [{ vertex: "adversary", weight: "smoking_gun", text: "Fancy Bear." }],
+              gaps: "none",
+            },
+          ],
+          no_match: [{ title: "Unrelated report" }],
+          synthesis: {
+            bluf: "b",
+            correlation_signal: "high",
+            reasoning: "r",
+            gaps: "g",
+            next_steps: [],
+          },
+        },
+      });
+
+      const out = await server.tool("get_correlation_run").callback({ run_id: "exec-9" });
+      const body = parseToolText<{
+        found: boolean;
+        status: string;
+        findings: {
+          leads: Array<{ candidate_ids: string[]; candidate_titles?: string[] }>;
+          no_match: Array<{ id: string; title: string }>;
+          candidate_meta: Record<string, { title?: string }>;
+        };
+      }>(out);
+
+      expect(body.found).toBe(true);
+      expect(body.status).toBe("completed");
+      // candidate_titles resolved to fingerprints, and the title array dropped.
+      expect(body.findings.leads[0].candidate_ids).toEqual(["fp-1", "fp-2"]);
+      expect(body.findings.leads[0].candidate_titles).toBeUndefined();
+      // no_match falls back to the title string when unmatched by picks.
+      expect(body.findings.no_match[0]).toEqual({ id: "Unrelated report", title: "Unrelated report" });
+      // candidate_meta bridges id -> title for the renderer.
+      expect(body.findings.candidate_meta["fp-1"]).toEqual({ title: "APT28 Zebrocy" });
+    });
+
+    it("resolves titles across typographic vs ASCII quote differences", async () => {
+      vi.mocked(correlationService.getCorrelationRun).mockResolvedValueOnce({
+        found: true,
+        run_id: "exec-q",
+        status: "completed",
+        depth: "full",
+        // Stored pick titles use curly apostrophes (as written in the corpus).
+        picks: [
+          { candidate_id: 0, fp: "fp-fish", title: "FishMonger\u2019s arsenal upgraded: SprySOCKS for Windows" },
+          { candidate_id: 1, fp: "fp-isoon", title: "A comprehensive analysis of I-Soon\u2019s commercial offering" },
+        ],
+        findings: {
+          leads: [
+            {
+              // Synthesis LLM re-emitted them with straight ASCII apostrophes.
+              candidate_titles: ["FishMonger's arsenal upgraded: SprySOCKS for Windows"],
+              title: "FishMonger lead",
+              relationship: "same_actor",
+              confidence: "moderate",
+              vertex_signal: { adversary: "high", capability: "partial", infrastructure: "none", victim: "none" },
+              bluf: "b",
+              evidence: [],
+              gaps: "g",
+            },
+            {
+              candidate_titles: ["A comprehensive analysis of I-Soon's commercial offering"],
+              title: "I-Soon lead",
+              relationship: "same_actor",
+              confidence: "low",
+              vertex_signal: { adversary: "partial", capability: "none", infrastructure: "none", victim: "none" },
+              bluf: "b2",
+              evidence: [],
+              gaps: "g2",
+            },
+          ],
+          no_match: [],
+          synthesis: { bluf: "b", correlation_signal: "moderate", reasoning: "r", gaps: "g", next_steps: [] },
+        },
+      });
+
+      const out = await server.tool("get_correlation_run").callback({ run_id: "exec-q" });
+      const body = parseToolText<{
+        findings: { leads: Array<{ candidate_ids: string[] }> };
+      }>(out);
+      expect(body.findings.leads[0].candidate_ids).toEqual(["fp-fish"]);
+      expect(body.findings.leads[1].candidate_ids).toEqual(["fp-isoon"]);
+    });
+
+    it("surfaces a loud miss when a candidate title does not resolve to a pick", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.mocked(correlationService.getCorrelationRun).mockResolvedValueOnce({
+        found: true,
+        run_id: "exec-miss",
+        status: "completed",
+        depth: "full",
+        picks: [{ candidate_id: 0, fp: "fp-1", title: "Known report" }],
+        findings: {
+          leads: [
+            {
+              candidate_titles: ["A title the LLM reworded and no pick matches"],
+              title: "Reworded lead",
+              relationship: "shared_tradecraft",
+              confidence: "low",
+              vertex_signal: { adversary: "none", capability: "partial", infrastructure: "none", victim: "none" },
+              bluf: "b",
+              evidence: [],
+              gaps: "g",
+            },
+          ],
+          no_match: [],
+          synthesis: { bluf: "b", correlation_signal: "low", reasoning: "r", gaps: "g", next_steps: [] },
+        },
+      });
+
+      const out = await server.tool("get_correlation_run").callback({ run_id: "exec-miss" });
+      const body = parseToolText<{
+        unresolved_candidate_titles: Array<{ where: string; index: number; title: string }>;
+        summary: string;
+        findings: { leads: Array<{ candidate_ids: string[] }> };
+      }>(out);
+
+      // Reported in the response …
+      expect(body.unresolved_candidate_titles).toHaveLength(1);
+      expect(body.unresolved_candidate_titles[0]).toMatchObject({ where: "lead", index: 0 });
+      expect(body.summary).toContain("WARNING");
+      // … logged loudly …
+      expect(warnSpy).toHaveBeenCalledOnce();
+      // … and still rendered (fallback to the title string).
+      expect(body.findings.leads[0].candidate_ids).toEqual([
+        "A title the LLM reworded and no pick matches",
+      ]);
+      warnSpy.mockRestore();
+    });
+
+    it("reports no unresolved titles on a clean resolve", async () => {
+      vi.mocked(correlationService.getCorrelationRun).mockResolvedValueOnce({
+        found: true,
+        run_id: "exec-clean",
+        status: "completed",
+        depth: "full",
+        picks: [{ candidate_id: 0, fp: "fp-1", title: "Known report" }],
+        findings: {
+          leads: [
+            {
+              candidate_titles: ["Known report"],
+              title: "Clean lead",
+              relationship: "same_actor",
+              confidence: "high",
+              vertex_signal: { adversary: "high", capability: "high", infrastructure: "none", victim: "none" },
+              bluf: "b",
+              evidence: [],
+              gaps: "g",
+            },
+          ],
+          no_match: [],
+          synthesis: { bluf: "b", correlation_signal: "high", reasoning: "r", gaps: "g", next_steps: [] },
+        },
+      });
+
+      const out = await server.tool("get_correlation_run").callback({ run_id: "exec-clean" });
+      const body = parseToolText<{
+        unresolved_candidate_titles: unknown[];
+        summary: string;
+      }>(out);
+      expect(body.unresolved_candidate_titles).toHaveLength(0);
+      expect(body.summary).not.toContain("WARNING");
+    });
+
+    it("returns null findings for non-full depth (no synthesis to render)", async () => {
+      vi.mocked(correlationService.getCorrelationRun).mockResolvedValueOnce({
+        found: true,
+        run_id: "exec-cheap",
+        status: "completed",
+        depth: "cheap",
+        counts: { pool: 42 },
+      });
+
+      const out = await server.tool("get_correlation_run").callback({ run_id: "exec-cheap" });
+      const body = parseToolText<{ found: boolean; findings: unknown }>(out);
+      expect(body.found).toBe(true);
+      expect(body.findings).toBeNull();
     });
   });
 

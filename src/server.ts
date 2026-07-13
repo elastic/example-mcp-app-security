@@ -107,7 +107,7 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     sampleDataClient: new SampleDataClient({ esClient }),
     rulesService,
   });
-  const correlationService = new CorrelationService({ esClient });
+  const correlationService = new CorrelationService({ esClient, kibanaClient });
 
   const server = new McpServer({
     name: "elastic-security",
