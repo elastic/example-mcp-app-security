@@ -54,6 +54,7 @@ async function main() {
     elasticsearchUrl: ES_URL,
     kibanaUrl: KBN_URL,
     elasticsearchApiKey: API_KEY,
+    sslVerify: process.env.ELASTIC_SSL_VERIFY === "false" ? false : true,
   };
   const esClient = createEsClient(creds);
   const kibanaClient = createKibanaClient(creds);
