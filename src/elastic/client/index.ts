@@ -19,6 +19,17 @@ export { AlertsClient } from "./alertsClient.js";
 
 export { EsqlClient } from "./esqlClient.js";
 
+export type {
+  CatDocCountRow,
+  CatIndexRow,
+  InstalledPackage,
+  RawActionConnector,
+  RawDataStream,
+  RawDataStreamStat,
+  RawPackagePolicy,
+} from "./environmentClient.js";
+export { EnvironmentClient } from "./environmentClient.js";
+
 export type { CatIndicesRow, RawMappingResponse } from "./indicesClient.js";
 export { IndicesClient } from "./indicesClient.js";
 

@@ -4,6 +4,9 @@ dist/
 .mcp.json
 .vscode/mcp.json
 .env
+clusters.json
+clusters.*.json
+clusters*.bak.json
 .DS_Store
 *.code-workspace
 *.backup
@@ -14,3 +17,6 @@ dist/
 .cursor/
 coverage/
 openspec/
+environment-profile.md
+environment-brief.canvas.tsx
+environment-catalog.json
