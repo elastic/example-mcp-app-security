@@ -14,10 +14,12 @@ import {
   type CatalogData,
   type ClassificationCatalog,
 } from "../../shared/classification-catalog.js";
+import { PRIMITIVES_SUPPORTED_BY_CLASS } from "../../shared/environment-profile.js";
 import type {
   ActiveDataStream,
   Capabilities,
   CapabilityDomain,
+  DataClass,
   DefendPolicyPosture,
   DefendProtection,
   EndpointPosture,
@@ -26,18 +28,25 @@ import type {
   EnvironmentProfile,
   AffordanceConfidence,
   AffordanceSource,
+  FieldFact,
+  FieldReality,
+  IdentityFields,
+  IdentityResolution,
   HuntableFieldGroup,
   HuntPrimitive,
   IndexAffordances,
   IndexRole,
   IntegrationPresence,
+  IocClass,
   JoinKey,
   JoinKeyKind,
   LineageSignals,
+  MatchedAtomic,
   OffSchemaIndex,
   PopulatedField,
   PrimitiveSupport,
   ProcessTreeCapability,
+  RuleFields,
   SchemaAlignment,
   ProfileScope,
   ProtectionMode,
@@ -765,13 +774,32 @@ export class EnvironmentService {
       .sort((a, b) => (b.doc_count ?? 0) - (a.doc_count ?? 0))
       .map((o) => o.name);
 
+    // Source availability gates the intel-dependent foundational primitives:
+    // `ioc_match` needs a match/intel source; `enrichment_match` needs an
+    // enrichable verdict source. Both are terrain facts (not per-index field
+    // shape), so they're stamped onto each hunt target's `primitives` here — only
+    // hunt targets, so an IOC feed isn't advertised as something you hunt *on*.
+    const intelAvailable = intel_sources.length > 0;
+    const enrichAvailable = canonical.some(
+      (o) => isEnrichmentSource(o) && o.affordances?.enrichable === true
+    );
+    const augment = (o: OffSchemaIndex): OffSchemaIndex => {
+      if (!isHuntTarget(o)) return o;
+      const extra = sourceGatedPrimitives(o, intelAvailable, enrichAvailable);
+      return extra.length
+        ? { ...o, primitives: [...(o.primitives ?? []), ...extra] }
+        : o;
+    };
+    const withMaterialAug = withMaterial.map(augment);
+    const canonicalAug = withMaterialAug.filter((o) => !o.mirror_of);
+
     // Surface hunt-target streams — ECS happy-path AND off-schema — with
     // discovered material, ranked by breadth of observable categories (then
     // volume), so operational noise sinks and telemetry/alert corpora rise.
     const byBreadthThenVol = (a: OffSchemaIndex, b: OffSchemaIndex) =>
       (b.huntable_fields?.length ?? 0) - (a.huntable_fields?.length ?? 0) ||
       (b.doc_count ?? 0) - (a.doc_count ?? 0);
-    const ranked = canonical
+    const ranked = canonicalAug
       .filter(isHuntTarget)
       .sort(byBreadthThenVol)
       .slice(0, HUNT_DISPLAY_LIMIT);
@@ -793,8 +821,24 @@ export class EnvironmentService {
     const emptyNames = new Set(
       backfilled.filter((o) => o.doc_count === 0).map((o) => o.name)
     );
-    // First-class, unified hunt catalog (ECS happy path + off-schema).
-    const hunt_indices = backfilled.filter((o) => !emptyNames.has(o.name));
+    // First-class, unified hunt catalog (ECS happy path + off-schema). Attach
+    // FIELD REALITY to each — the addressable ground truth (actual paths, nested
+    // detection, cast hints, IOC-match field lists, rule metadata) the hunt
+    // generator needs to emit runnable, grounded ES|QL with no live probing.
+    const huntWithReality = await inChunks(
+      backfilled.filter((o) => !emptyNames.has(o.name)),
+      6,
+      async (o) => {
+        const field_reality = await this.buildFieldReality(o).catch(
+          () => undefined
+        );
+        return field_reality ? { ...o, field_reality } : o;
+      }
+    );
+    // Identity terrain: populated direct anchors, populated join keys, and the
+    // cross-index resolution fabric (agent.id → host.name/user.name, etc.). Uses
+    // the field reality above plus a bounded population probe per index.
+    const hunt_indices = await this.buildIdentity(huntWithReality);
     // Off-schema subset — the "where is my data hiding" view.
     const high_volume_off_schema = hunt_indices.filter(
       (o) => o.schema_alignment === "off_schema"
@@ -806,7 +850,7 @@ export class EnvironmentService {
     // with the calls most in need of a second look. Confirmed-empty streams are
     // excluded so the review isn't cluttered with datasets that hold no data.
     const confRank = { low: 0, medium: 1, high: 2 } as const;
-    const classified_indices = withMaterial
+    const classified_indices = withMaterialAug
       .filter((o) => !emptyNames.has(o.name))
       .sort(
         (a, b) =>
@@ -849,6 +893,20 @@ export class EnvironmentService {
       }
     }
 
+    // Cross-index field-presence map: canonical field → the hunt indices that
+    // carry it (present + addressable), ranked by volume. Lets a multi-index
+    // `FROM` avoid erroring on a column absent from one member, and grounds the
+    // blind-spot rule (an observable is blind only if NO class-appropriate hunt
+    // index carries it — the generator reads this, not a coarse family flag).
+    const field_presence: Record<string, string[]> = {};
+    for (const o of byVolDesc) {
+      const fr = o.field_reality;
+      if (!fr) continue;
+      for (const [canonical, fact] of Object.entries(fr.fields)) {
+        if (fact.present) (field_presence[canonical] ??= []).push(o.name);
+      }
+    }
+
     return {
       populated_ecs_fields,
       resolved_hunt_indices,
@@ -861,6 +919,8 @@ export class EnvironmentService {
       process_tree_indices,
       primitive_matrix,
       joinability: { by_key },
+      primitives_supported_by_class: PRIMITIVES_SUPPORTED_BY_CLASS,
+      field_presence,
       blind_spots: deriveBlindSpots(
         inventory,
         populatedFamilies,
@@ -901,6 +961,7 @@ export class EnvironmentService {
       const fieldNames = Object.keys(caps);
       const { total_fields, timestamp_fields, huntable_fields } =
         classifyHuntableFields(caps);
+      const data_class = classifyDataClass(ds.name, fieldNames, metaDescription);
       const lineage = classifyLineage(fieldNames);
       const primitives = classifyPrimitives(fieldNames, timestamp_fields, lineage);
       const join_keys = classifyJoinKeys(fieldNames);
@@ -923,6 +984,7 @@ export class EnvironmentService {
         signature,
         family: familyKey(ds.name),
         schema_alignment: schemaAlignmentFor(ds.name),
+        data_class,
         doc_count: ds.doc_count,
         store_size_bytes: ds.store_size_bytes,
         last_seen: ds.last_seen,
@@ -937,6 +999,112 @@ export class EnvironmentService {
         ...(lineage.capability !== "none" ? { lineage } : {}),
         ...(primitives.length ? { primitives } : {}),
       } satisfies OffSchemaIndex;
+    });
+  }
+
+  /**
+   * Compute persisted FIELD REALITY for one hunt index: fetch `_field_caps`
+   * (types + `nested` detection) and one sample doc (example values / multivalue),
+   * then resolve every canonical hunt field to its real addressable path. Returns
+   * undefined when the index has no mappings (nothing to ground a hunt on).
+   */
+  private async buildFieldReality(
+    index: OffSchemaIndex
+  ): Promise<FieldReality | undefined> {
+    const client = this.options.environmentClient;
+    const [caps, sample] = await Promise.all([
+      client
+        .getFieldCaps(index.name, ["*"])
+        .catch(() => ({}) as Record<string, Record<string, unknown>>),
+      client
+        .getSampleDoc(index.name)
+        .catch(() => ({}) as Record<string, unknown>),
+    ]);
+    if (Object.keys(caps).length === 0) return undefined;
+    return computeFieldReality(index.data_class, caps, sample);
+  }
+
+  /**
+   * Measure population ratio (populated docs / total) for a bounded set of
+   * addressable fields on one index, via a single ES|QL `STATS COUNT` query. Used
+   * to distinguish mapped-but-empty identity fields (e.g. `user.name` at ~0%) from
+   * genuinely populated anchors / join keys. Returns an empty map on failure so
+   * callers fall back to sample-doc presence.
+   */
+  private async probeFieldPopulation(
+    index: string,
+    fields: string[]
+  ): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    const uniq = [...new Set(fields)].slice(0, POPULATION_PROBE_FIELD_CAP);
+    if (!uniq.length) return out;
+    try {
+      const cols = uniq.map((f, i) => `f${i} = COUNT(\`${f}\`)`).join(", ");
+      const result = await this.options.environmentClient.runEsql(
+        `FROM ${index} | STATS total = COUNT(*), ${cols}`
+      );
+      const row = result.values[0] ?? [];
+      const colIdx = (name: string) =>
+        result.columns.findIndex((c) => c.name === name);
+      const total = Number(row[colIdx("total")] ?? 0);
+      if (total <= 0) return out;
+      uniq.forEach((f, i) => {
+        const idx = colIdx(`f${i}`);
+        if (idx >= 0) out.set(f, Number(row[idx] ?? 0) / total);
+      });
+    } catch {
+      // Missing @timestamp / type conflicts / absent index → treat as unmeasured.
+      return out;
+    }
+    return out;
+  }
+
+  /**
+   * Attach identity terrain to each hunt index: measure population ratios for its
+   * identity anchors + join keys, resolve direct anchors, stamp join-key ratios,
+   * then stitch the cross-index resolution fabric so an index missing identity is
+   * routed through a populated join key to indices that carry it.
+   */
+  private async buildIdentity(
+    hunt: OffSchemaIndex[]
+  ): Promise<OffSchemaIndex[]> {
+    // Phase A: per-index population probe → ratios + identity profile.
+    const ratiosByName = new Map<string, Map<string, number>>();
+    const withRatios = await inChunks(hunt, 6, async (o) => {
+      const fr = o.field_reality;
+      const anchorFields = IDENTITY_ANCHORS.flatMap((a) =>
+        a.canonicals
+          .map((c) => fr?.fields[c])
+          .filter((f): f is FieldFact => Boolean(f?.present && f.esql_addressable))
+          .map((f) => f.actual_path)
+      );
+      const joinFields = (o.join_keys ?? []).map((jk) => jk.field);
+      const ratios = await this.probeFieldPopulation(o.name, [
+        ...anchorFields,
+        ...joinFields,
+      ]);
+      ratiosByName.set(o.name, ratios);
+      // Stamp measured population ratios onto join keys.
+      const join_keys = o.join_keys?.map((jk) => {
+        const r = ratios.get(jk.field);
+        return r === undefined ? jk : { ...jk, population_ratio: r };
+      });
+      return join_keys ? { ...o, join_keys } : o;
+    });
+
+    // Phase B: build profiles, then stitch the cross-index resolution fabric.
+    const profiles = withRatios.map((o) =>
+      buildIdentityProfile(o, ratiosByName.get(o.name) ?? new Map())
+    );
+    const byName = new Map(profiles.map((p) => [p.name, p]));
+    return withRatios.map((o) => {
+      const self = byName.get(o.name)!;
+      const identity_fields: IdentityFields = {
+        direct: self.direct,
+        join_keys: self.populatedJoinFields,
+        resolves_via: resolveIdentityVia(self, profiles),
+      };
+      return { ...o, identity_fields };
     });
   }
 
@@ -1268,6 +1436,7 @@ function classifyLineage(fieldNames: string[]): LineageSignals {
 
 /** All hunt primitives, in the order they should be surfaced. */
 const HUNT_PRIMITIVES: HuntPrimitive[] = [
+  // Terrain-gated behavioral.
   "process_lineage",
   "temporal_sequence",
   "auth_lateral",
@@ -1278,6 +1447,12 @@ const HUNT_PRIMITIVES: HuntPrimitive[] = [
   "egress_exfil",
   "file_integrity",
   "code_signature",
+  // Foundational (composable; always-available or field + a source).
+  "ioc_match",
+  "frequency_analysis",
+  "enrichment_match",
+  "known_good_diff",
+  "string_analysis",
 ];
 
 /**
@@ -1393,6 +1568,110 @@ function classifyPrimitives(
   const sig = pick(/(?:^|\.)(file|process)\.code_signature\./i);
   if (sig.length) add("code_signature", "high", sig);
 
+  // ---- Foundational tactics (composable; derived from field shape alone) ----
+  // These need no behavioral shape — just a field to interrogate. `ioc_match` and
+  // `enrichment_match` are ALSO foundational but source-gated, so they're stamped
+  // on at the terrain level (see {@link sourceGatedPrimitives}), not here.
+
+  // frequency_analysis — stack-count / rare-term / outlier over any populated
+  // categorical field. Effectively always-available once a categorical exists;
+  // confidence tracks whether a high-cardinality field is present.
+  const categorical = pick(
+    /(?:^|\.)(process\.(name|executable|command_line)|file\.(name|path)|user\.name|host\.name|dns\.question\.name|destination\.(domain|ip)|source\.ip|url\.(domain|full)|user_agent\.original|event\.action|registry\.(path|key))$/i,
+    6
+  );
+  if (categorical.length) {
+    const highCard = has(
+      /(?:^|\.)(process\.(command_line|name)|dns\.question\.name|url\.(domain|full)|user_agent\.original|file\.path)$/i
+    );
+    add("frequency_analysis", highCard ? "high" : "medium", categorical);
+  }
+
+  // string_analysis — substring / tokenization / entropy over long free-text
+  // observables (command lines, urls, UAs, registry paths, DNS questions).
+  const freeText = pick(
+    /(?:^|\.)(process\.command_line|command[_.]?line|url\.(full|original|path|query)|user_agent\.original|registry\.(path|key)|file\.path|dns\.question\.name)$/i,
+    6
+  );
+  if (freeText.length) add("string_analysis", "medium", freeText);
+
+  // known_good_diff — baseline / allowlist / new-term / first-seen differencing.
+  // Needs either an explicit first-seen anchor (high) or a stable key to baseline
+  // per (medium).
+  const firstSeen = pick(
+    /(?:^|\.)(first_seen|firstseen|first_observed|first[_.]?time|seen_first)$/i,
+    3
+  );
+  const baselineKey = pick(
+    /(?:^|\.)(host\.(id|name)|user\.(name|id)|agent\.id|process\.entity_id|entity\.id)$/i,
+    3
+  );
+  if (firstSeen.length || baselineKey.length) {
+    add(
+      "known_good_diff",
+      firstSeen.length ? "high" : "medium",
+      firstSeen.length ? [...firstSeen, ...baselineKey] : baselineKey
+    );
+  }
+
+  return out;
+}
+
+/** Observable-field categories that can be matched against intel / enrichment. */
+const OBSERVABLE_CATEGORIES = new Set(["hash", "ip", "domain", "dns", "url"]);
+
+/**
+ * The concrete observable fields (hash / ip / domain / dns / url) an index carries,
+ * best-first, plus whether any is a hash (exact-match, high-precision → higher
+ * `ioc_match` confidence). Read from the already-classified
+ * {@link OffSchemaIndex.huntable_fields} so it works uniformly for ECS and
+ * off-schema indices.
+ */
+function observableFields(o: OffSchemaIndex): {
+  fields: string[];
+  hasHash: boolean;
+} {
+  const groups = o.huntable_fields ?? [];
+  const fields = [
+    ...new Set(
+      groups
+        .filter((g) => OBSERVABLE_CATEGORIES.has(g.category))
+        .flatMap((g) => g.fields)
+    ),
+  ].slice(0, 6);
+  const hasHash = groups.some(
+    (g) => g.category === "hash" && g.fields.length > 0
+  );
+  return { fields, hasHash };
+}
+
+/**
+ * Source-gated foundational primitives (`ioc_match` / `enrichment_match`). Unlike
+ * the field-shape primitives in {@link classifyPrimitives}, these need TERRAIN
+ * context: an observable on the hunt index AND a source to match / enrich against.
+ * `ioc_match` needs ≥1 intel/match source ({@link Terrain.intel_sources});
+ * `enrichment_match` needs an enrichable verdict source
+ * ({@link IndexAffordances.enrichable}). Deterministic — no field-value reads.
+ */
+function sourceGatedPrimitives(
+  o: OffSchemaIndex,
+  intelAvailable: boolean,
+  enrichAvailable: boolean
+): PrimitiveSupport[] {
+  if (!intelAvailable && !enrichAvailable) return [];
+  const { fields, hasHash } = observableFields(o);
+  if (!fields.length) return [];
+  const out: PrimitiveSupport[] = [];
+  if (intelAvailable) {
+    out.push({
+      primitive: "ioc_match",
+      confidence: hasHash ? "high" : "medium",
+      fields,
+    });
+  }
+  if (enrichAvailable) {
+    out.push({ primitive: "enrichment_match", confidence: "medium", fields });
+  }
   return out;
 }
 
@@ -1465,6 +1744,471 @@ function isEcsHuntStream(name: string): boolean {
   return (
     /^(?:logs-|\.alerts|\.entities)/i.test(name) && !name.includes(".ds-")
   );
+}
+
+/**
+ * Classify an index's {@link DataClass} — the most decisive terrain signal, since
+ * it gates which primitives are even possible. Deterministic, name + field-shape
+ * based (no LLM), order-sensitive:
+ *  1. `alert`  — detection-engine output (`.alerts` alias/backing, or `kibana.alert.*`
+ *                / `signal.rule.*` metadata fields).
+ *  2. `detonation` — sandbox/detonation results (name/meta).
+ *  3. `telemetry_aggregate` — rolled-up counts/summaries (name/meta).
+ *  4. `raw_event` — per-event rows: `event.category|action|type|code`, or
+ *                process/network/file/dns/registry eventing fields (top-level OR
+ *                nested under an `*.event.*` container).
+ * Falls back to `telemetry_aggregate` when nothing else matches.
+ */
+function classifyDataClass(
+  name: string,
+  fieldNames: string[],
+  metaDescription?: string
+): DataClass {
+  const nameMeta = `${name} ${metaDescription ?? ""}`;
+  const has = (re: RegExp) => fieldNames.some((n) => re.test(n));
+  // The canonical security-alerts alias/backing is always `alert`, regardless of
+  // name tokens.
+  if (/^\.(?:internal\.)?alerts/i.test(name)) return "alert";
+  if (/detonat|sandbox|cuckoo/i.test(nameMeta)) return "detonation";
+  // A `*_telemetry_*` / aggregate NAME wins over alert-metadata *fields*: rollups
+  // of detection alerts (e.g. `detections_alert_telemetry_elastic`) carry
+  // `kibana.alert.rule.*` columns but are aggregates, not per-alert docs.
+  if (/telemetry|aggregat|summary|rollup|metric|_stats?\b|_counts?\b/i.test(nameMeta)) {
+    return "telemetry_aggregate";
+  }
+  // Per-alert docs (no telemetry name) carrying detection-engine metadata.
+  if (has(/(?:^|\.)kibana\.alert\./i) || has(/(?:^|\.)signal\.rule\./i)) {
+    return "alert";
+  }
+  if (
+    has(/(?:^|\.)event\.(?:category|action|type|code)$/i) ||
+    has(/(?:^|\.)(?:process|network|dns|file|registry)\.[a-z_]/i)
+  ) {
+    return "raw_event";
+  }
+  return "telemetry_aggregate";
+}
+
+/**
+ * Canonical/ECS hunt fields the field-reality resolver looks for. Suffix-matched
+ * against an index's REAL field names, so a nested/prefixed container (e.g.
+ * `timeline.event.process.command_line`) resolves back to its ECS canonical.
+ */
+const CANONICAL_HUNT_FIELDS: readonly string[] = [
+  // process / lineage / command line
+  "process.command_line",
+  "process.parent.command_line",
+  "process.name",
+  "process.executable",
+  "process.entity_id",
+  "process.parent.entity_id",
+  "process.Ext.ancestry",
+  "process.pid",
+  "process.parent.pid",
+  "process.hash.sha256",
+  // identity anchors (host / user / tenant)
+  "host.name",
+  "host.id",
+  "host.hostname",
+  "user.name",
+  "user.id",
+  "user.email",
+  "user.domain",
+  "cloud.account.id",
+  "cloud.tenant.id",
+  // network / dns / url
+  "source.ip",
+  "destination.ip",
+  "host.ip",
+  "dns.question.name",
+  "destination.domain",
+  "url.domain",
+  "url.full",
+  "url.original",
+  // file / hash / registry
+  "file.path",
+  "file.name",
+  "file.hash.sha256",
+  "file.hash.md5",
+  "file.hash.sha1",
+  "registry.path",
+  "registry.key",
+  // threat / TI enrichment
+  "threat.indicator.ip",
+  "threat.indicator.url.full",
+  "threat.indicator.url.domain",
+  "threat.indicator.file.hash.sha256",
+  "threat.enrichments.matched.atomic",
+  // rule / technique metadata (alerts)
+  "rule.name",
+  "threat.technique.id",
+  "threat.technique.subtechnique.id",
+];
+
+/** Which canonical fields feed each IOC-match class (order = generator OR order). */
+const IOC_CLASS_CANONICALS: Record<IocClass, readonly string[]> = {
+  ip: ["source.ip", "destination.ip", "host.ip", "threat.indicator.ip"],
+  domain: [
+    "dns.question.name",
+    "destination.domain",
+    "url.domain",
+    "threat.indicator.url.domain",
+  ],
+  url: ["url.full", "url.original", "threat.indicator.url.full"],
+  hash: [
+    "file.hash.sha256",
+    "file.hash.sha1",
+    "file.hash.md5",
+    "process.hash.sha256",
+    "threat.indicator.file.hash.sha256",
+  ],
+  file_path: ["file.path", "process.executable", "file.name"],
+  registry: ["registry.path", "registry.key"],
+  named_pipe: [], // resolved by name-regex scan (paths vary wildly)
+  mutex: [], // resolved by name-regex scan
+};
+
+/**
+ * Fields that are conventionally multivalue even when a 1-doc sample shows a
+ * single value — hunts MUST use DSL terms aggs, not ES|QL `IN` (which silently
+ * drops multivalue rows).
+ */
+const KNOWN_MULTIVALUE_RE =
+  /(?:^|\.)(?:threat\.technique\.id|threat\.technique\.subtechnique\.id|technique\.id|subtechnique\.id|process\.args|process\.Ext\.ancestry|dns\.answers|related\.(?:ip|hash|user|hosts)|threat\.tactic\.id|tags|host\.ip)$/i;
+
+/** Identity anchor canonicals per category, best-first (first populated one wins). */
+const IDENTITY_ANCHORS: {
+  category: "host" | "user" | "tenant";
+  canonicals: string[];
+}[] = [
+  { category: "host", canonicals: ["host.name", "host.id", "host.hostname"] },
+  { category: "user", canonicals: ["user.name", "user.id", "user.email"] },
+  {
+    category: "tenant",
+    canonicals: ["cloud.account.id", "cloud.tenant.id", "user.domain"],
+  },
+];
+
+/** Canonical identity-anchor field names — resolved strictly (no foreign fallback). */
+const IDENTITY_ANCHOR_CANONICALS = new Set(
+  IDENTITY_ANCHORS.flatMap((a) => a.canonicals)
+);
+
+/** Min population ratio for an identity anchor / join key to count as usable. */
+const IDENTITY_POPULATED_MIN = 0.01;
+/** Cap fields per population probe so one STATS query stays bounded. */
+const POPULATION_PROBE_FIELD_CAP = 24;
+
+/**
+ * Per-index identity terrain distilled from field reality + population ratios.
+ * Internal to terrain building; the cross-index {@link IdentityResolution} fabric
+ * is stitched from these.
+ */
+interface IdentityProfile {
+  readonly name: string;
+  readonly direct: {
+    host: string | null;
+    user: string | null;
+    tenant: string | null;
+  };
+  /** Join fields present AND populated on this index (best-first). */
+  readonly populatedJoinFields: string[];
+}
+
+/**
+ * Decide whether a canonical field is populated on an index. Prefers a measured
+ * population ratio (from the ES|QL probe); falls back to the sample doc's
+ * example-value presence when no ratio is available (probe failed / empty).
+ */
+function isPopulated(
+  fact: FieldFact | undefined,
+  ratio: number | undefined
+): boolean {
+  if (!fact?.present || !fact.esql_addressable) return false;
+  if (ratio !== undefined) return ratio >= IDENTITY_POPULATED_MIN;
+  return fact.example_value != null;
+}
+
+/**
+ * Build one index's identity profile: the first populated anchor per category and
+ * the join fields that are present + populated. `ratios` maps actual field path →
+ * populated fraction (may be empty, then sample presence is used).
+ */
+function buildIdentityProfile(
+  o: OffSchemaIndex,
+  ratios: Map<string, number>
+): IdentityProfile {
+  const fr = o.field_reality;
+  const direct: IdentityProfile["direct"] = {
+    host: null,
+    user: null,
+    tenant: null,
+  };
+  for (const { category, canonicals } of IDENTITY_ANCHORS) {
+    for (const canon of canonicals) {
+      const fact = fr?.fields[canon];
+      if (fact && isPopulated(fact, ratios.get(fact.actual_path))) {
+        direct[category] = fact.actual_path;
+        break;
+      }
+    }
+  }
+  const factByPath = new Map<string, FieldFact>();
+  if (fr) {
+    for (const f of Object.values(fr.fields)) {
+      if (f.present) factByPath.set(f.actual_path, f);
+    }
+  }
+  const populatedJoinFields = (o.join_keys ?? [])
+    .filter((jk) => {
+      const r = ratios.get(jk.field);
+      if (r !== undefined) return r >= IDENTITY_POPULATED_MIN;
+      // Unmeasured: use sample presence when the join field is in field reality;
+      // otherwise keep it (it was derived from a real mapped field).
+      const fact = factByPath.get(jk.field);
+      return fact ? isPopulated(fact, undefined) : true;
+    })
+    .map((jk) => jk.field);
+  return { name: o.name, direct, populatedJoinFields };
+}
+
+/**
+ * Stitch the cross-index resolution fabric for one index: for each populated join
+ * field it carries, find other hunt indices sharing that field (populated) that
+ * carry identity THIS index lacks, and record what they yield.
+ */
+function resolveIdentityVia(
+  self: IdentityProfile,
+  others: IdentityProfile[]
+): IdentityResolution[] {
+  const missing = (["host", "user", "tenant"] as const).filter(
+    (c) => self.direct[c] === null
+  );
+  if (!missing.length) return [];
+  const out: IdentityResolution[] = [];
+  for (const key of self.populatedJoinFields) {
+    const to: string[] = [];
+    const yields = new Set<string>();
+    for (const other of others) {
+      if (other.name === self.name) continue;
+      if (!other.populatedJoinFields.includes(key)) continue;
+      const provides = missing.filter((c) => other.direct[c] !== null);
+      if (!provides.length) continue;
+      to.push(other.name);
+      for (const c of provides) yields.add(other.direct[c]!);
+    }
+    if (to.length && yields.size) {
+      out.push({ key, from: self.name, to, yields: [...yields] });
+    }
+  }
+  return out;
+}
+
+/** First (representative) mapping type reported by `_field_caps` for a path. */
+function esTypeOf(
+  caps: Record<string, Record<string, unknown>>,
+  path: string
+): string {
+  return Object.keys(caps[path] ?? {})[0] ?? "unknown";
+}
+
+/**
+ * The nearest ancestor of `path` mapped as `nested` (which makes `path`
+ * non-ES|QL-addressable — the generator must use `_search`), or null. `nested`
+ * containers are surfaced by `_field_caps` with type `nested`, so this needs no
+ * extra mapping round-trip.
+ */
+function nestedAncestorOf(
+  caps: Record<string, Record<string, unknown>>,
+  path: string
+): string | null {
+  const segs = path.split(".");
+  for (let i = segs.length - 1; i >= 1; i--) {
+    const anc = segs.slice(0, i).join(".");
+    if (esTypeOf(caps, anc) === "nested") return anc;
+  }
+  return null;
+}
+
+/**
+ * Sub-object namespaces that indicate a suffix match belongs to a DIFFERENT
+ * entity than the canonical field (e.g. `process.Ext.code_signature.host.name`
+ * is the signer's host, not the event host; `threat.indicator.file.hash.sha256`
+ * is an IOC, not the observed file). Applied to the PREFIX (the part before the
+ * canonical suffix), so canonicals that legitimately contain `Ext` still resolve.
+ */
+const FOREIGN_ENTITY_PREFIX_RE =
+  /(?:^|\.)(?:Ext|code_signature|geo|as|related|threat|indicator|enrichments)(?:\.|$)/i;
+
+/**
+ * Resolve a canonical field to its REAL addressable path in this index: exact
+ * match first, else the shallowest real field whose path ends in `.<canonical>`
+ * (so prefixed/nested containers resolve). Suffix matches that dive through a
+ * foreign entity sub-object are de-prioritized. When `strict` (identity anchors),
+ * a foreign-only match returns null rather than a wrong-entity path.
+ */
+function resolveActualPath(
+  canonical: string,
+  names: string[],
+  nameSet: Set<string>,
+  strict = false
+): string | null {
+  if (nameSet.has(canonical)) return canonical;
+  const suffix = "." + canonical;
+  const cands = names.filter((n) => n.endsWith(suffix));
+  if (!cands.length) return null;
+  const clean = cands.filter(
+    (n) => !FOREIGN_ENTITY_PREFIX_RE.test(n.slice(0, n.length - suffix.length))
+  );
+  // Strict (identity): never resolve to a foreign-entity path — prefer the join
+  // fabric over a wrong anchor.
+  const pool = clean.length ? clean : strict ? [] : cands;
+  if (!pool.length) return null;
+  // Shallowest path (fewest segments) is closest to the real anchor.
+  return pool.sort(
+    (a, b) => a.split(".").length - b.split(".").length || a.length - b.length
+  )[0];
+}
+
+/** Read a value from a sample `_source` by dotted path (flattened key OR nested walk). */
+function rawValueAtPath(doc: Record<string, unknown>, path: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(doc, path)) return doc[path];
+  let cur: unknown = doc;
+  for (const seg of path.split(".")) {
+    if (Array.isArray(cur)) cur = cur[0];
+    if (cur == null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return cur;
+}
+
+/** Stringify + truncate a sample value for the field-reality `example_value`. */
+function exampleValueOf(raw: unknown): string | null {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  if (v == null) return null;
+  const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  return s.length > 120 ? s.slice(0, 117) + "…" : s;
+}
+
+/**
+ * Compute the persisted FIELD REALITY for one index from `_field_caps` (types +
+ * `nested` detection) and one sample doc (example values / multivalue). This is
+ * the ground truth a hunt generator needs to emit runnable, grounded ES|QL with
+ * no live probing of its own. Deterministic; recomputed on every refresh.
+ */
+function computeFieldReality(
+  dataClass: DataClass | undefined,
+  caps: Record<string, Record<string, unknown>>,
+  sample: Record<string, unknown>
+): FieldReality {
+  const names = Object.keys(caps);
+  const nameSet = new Set(names);
+  const fields: Record<string, FieldFact> = {};
+
+  for (const canonical of CANONICAL_HUNT_FIELDS) {
+    // Identity anchors resolve strictly (no foreign-entity fallback) so a missing
+    // host/user routes through the join fabric instead of a wrong-entity path.
+    const actual = resolveActualPath(
+      canonical,
+      names,
+      nameSet,
+      IDENTITY_ANCHOR_CANONICALS.has(canonical)
+    );
+    if (!actual) {
+      fields[canonical] = {
+        present: false,
+        actual_path: canonical,
+        es_type: "unknown",
+        esql_addressable: false,
+        nested_parent: null,
+        multivalue: false,
+        cast_hint: null,
+        example_value: null,
+      };
+      continue;
+    }
+    const es_type = esTypeOf(caps, actual);
+    const selfNested = es_type === "nested";
+    const ancestorNested = nestedAncestorOf(caps, actual);
+    const nested_parent = ancestorNested ?? (selfNested ? actual : null);
+    const raw = rawValueAtPath(sample, actual);
+    fields[canonical] = {
+      present: true,
+      actual_path: actual,
+      es_type,
+      esql_addressable: nested_parent === null,
+      nested_parent,
+      multivalue:
+        (Array.isArray(raw) && raw.length > 1) ||
+        KNOWN_MULTIVALUE_RE.test(canonical),
+      cast_hint: es_type === "ip" ? "::keyword" : null,
+      example_value: exampleValueOf(raw),
+    };
+  }
+
+  // Addressable + cast IOC-match expressions per class (nested/absent excluded),
+  // in the order a generator should OR them.
+  const iocFor = (canon: readonly string[]): string[] => {
+    const out: string[] = [];
+    for (const c of canon) {
+      const f = fields[c];
+      if (f?.present && f.esql_addressable) {
+        out.push(f.actual_path + (f.cast_hint ?? ""));
+      }
+    }
+    return out;
+  };
+  const byNameRe = (re: RegExp): string[] =>
+    names
+      .filter(
+        (n) =>
+          re.test(n) &&
+          esTypeOf(caps, n) !== "nested" &&
+          nestedAncestorOf(caps, n) === null &&
+          !(/\.(keyword|text)$/.test(n) &&
+            nameSet.has(n.replace(/\.(keyword|text)$/, "")))
+      )
+      .sort();
+  const ioc_match_fields: Record<IocClass, string[]> = {
+    ip: iocFor(IOC_CLASS_CANONICALS.ip),
+    domain: iocFor(IOC_CLASS_CANONICALS.domain),
+    url: iocFor(IOC_CLASS_CANONICALS.url),
+    hash: iocFor(IOC_CLASS_CANONICALS.hash),
+    file_path: iocFor(IOC_CLASS_CANONICALS.file_path),
+    registry: iocFor(IOC_CLASS_CANONICALS.registry),
+    named_pipe: byNameRe(/pipe/i),
+    mutex: byNameRe(/mutex/i),
+  };
+
+  const atomic = fields["threat.enrichments.matched.atomic"];
+  const matched_atomic: MatchedAtomic | null = atomic?.present
+    ? {
+        field: atomic.actual_path,
+        access: atomic.esql_addressable ? "esql" : "search_nested",
+      }
+    : null;
+
+  let rule_fields: RuleFields | null = null;
+  const ruleName = fields["rule.name"];
+  if (dataClass === "alert" && ruleName?.present) {
+    const tech = fields["threat.technique.id"];
+    const subtech = fields["threat.technique.subtechnique.id"];
+    rule_fields = {
+      rule_name: ruleName.actual_path,
+      technique_id: {
+        field: tech?.actual_path ?? "threat.technique.id",
+        multivalue: tech?.multivalue ?? true,
+        populated: Boolean(tech?.present && tech.example_value != null),
+      },
+      subtechnique_id: {
+        field: subtech?.actual_path ?? "threat.technique.subtechnique.id",
+        multivalue: subtech?.multivalue ?? true,
+        populated: Boolean(subtech?.present && subtech.example_value != null),
+      },
+    };
+  }
+
+  return { fields, ioc_match_fields, matched_atomic, rule_fields };
 }
 
 /**

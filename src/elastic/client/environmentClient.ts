@@ -190,6 +190,24 @@ export class EnvironmentClient {
     return out;
   }
 
+  /**
+   * GET `/{pattern}/_search?size=1` — one sample document's `_source`, used to
+   * derive example values and multivalue-ness for field-reality. Tolerant of
+   * missing indices; returns `{}` when the pattern is empty.
+   */
+  async getSampleDoc(pattern: string): Promise<Record<string, unknown>> {
+    const { data } = await this.options.esClient.get<{
+      hits?: { hits?: { _source?: Record<string, unknown> }[] };
+    }>(`/${encodeURIComponent(pattern)}/_search`, {
+      params: {
+        size: "1",
+        ignore_unavailable: "true",
+        allow_no_indices: "true",
+      },
+    });
+    return data.hits?.hits?.[0]?._source ?? {};
+  }
+
   /** GET `/api/cases/_find` — returns just the total. */
   async countCases(): Promise<number> {
     const { data } = await this.options.kibanaClient.get<{ total: number }>(

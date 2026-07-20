@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import { EnvironmentService } from "./environmentService.js";
 import { createMockEnvironmentClient } from "../../test/helpers/mockServiceClients.js";
 import type { EnvironmentClient } from "../client/environmentClient.js";
+import { PRIMITIVES_SUPPORTED_BY_CLASS } from "../../shared/environment-profile.js";
 import {
   emptyCatalog,
   type CatalogData,
@@ -97,6 +98,7 @@ function seedHappyPath(client: EnvironmentClient) {
   });
   vi.mocked(client.getFieldCaps).mockResolvedValue({});
   vi.mocked(client.getMappingsMeta).mockResolvedValue({});
+  vi.mocked(client.getSampleDoc).mockResolvedValue({});
   vi.mocked(client.catIndices).mockResolvedValue([]);
   vi.mocked(client.count).mockResolvedValue(0);
   vi.mocked(client.countCases).mockResolvedValue(0);
@@ -655,6 +657,13 @@ describe("EnvironmentService.profileEnvironment", () => {
     expect(endpoint).toContain("network_beaconing");
     expect(endpoint).toContain("dns_analytics");
     expect(endpoint).toContain("code_signature");
+    // Foundational field-shape tactics come for free from the same shape.
+    expect(endpoint).toContain("frequency_analysis");
+    expect(endpoint).toContain("string_analysis");
+    expect(endpoint).toContain("known_good_diff");
+    // …but the source-gated ones stay off with no intel/enrichment source present.
+    expect(endpoint).not.toContain("ioc_match");
+    expect(endpoint).not.toContain("enrichment_match");
 
     const okta = prims("okta-audit");
     expect(okta).toContain("cloud_identity");
@@ -667,6 +676,79 @@ describe("EnvironmentService.profileEnvironment", () => {
     expect(m.temporal_sequence).toEqual(
       expect.arrayContaining(["rich-endpoint", "okta-audit"])
     );
+  });
+
+  it("stamps source-gated foundational primitives (ioc_match / enrichment_match) from terrain", async () => {
+    const client = createMockEnvironmentClient();
+    seedHappyPath(client);
+    vi.mocked(client.getDataStreams).mockResolvedValue([]);
+    vi.mocked(client.catDocCounts).mockResolvedValue([]);
+    vi.mocked(client.catIndices).mockResolvedValue([
+      { index: "rich-telemetry", "docs.count": "1000", "store.size": "1" },
+      { index: "threatintel-iocs", "docs.count": "500", "store.size": "1" },
+      { index: "reputation-verdicts", "docs.count": "400", "store.size": "1" },
+    ]);
+    vi.mocked(client.getFieldCaps).mockImplementation(
+      async (
+        pattern: string
+      ): Promise<Record<string, Record<string, unknown>>> => {
+        if (pattern === "rich-telemetry")
+          return {
+            "@timestamp": { date: {} },
+            "agent.id": { keyword: {} },
+            "host.id": { keyword: {} },
+            "process.name": { keyword: {} },
+            "process.command_line": { keyword: {} },
+            "destination.ip": { ip: {} },
+            "destination.domain": { keyword: {} },
+            "file.hash.sha256": { keyword: {} },
+            first_seen: { date: {} },
+            "event.action": { keyword: {} },
+          };
+        if (pattern === "threatintel-iocs")
+          return {
+            "threat.indicator.ip": { ip: {} },
+            "threat.indicator.file.hash.sha256": { keyword: {} },
+          };
+        if (pattern === "reputation-verdicts")
+          return {
+            "source.ip": { ip: {} },
+            "reputation.score": { long: {} },
+            verdict: { keyword: {} },
+          };
+        return {};
+      }
+    );
+    vi.mocked(client.runEsql).mockResolvedValue({ columns: [], values: [] });
+    const service = new EnvironmentService({ environmentClient: client });
+
+    const { terrain } = await service.profileEnvironment();
+
+    // Intel + enrichment sources are recognized (and excluded from hunt targets).
+    expect(terrain.intel_sources).toEqual(
+      expect.arrayContaining(["threatintel-iocs", "reputation-verdicts"])
+    );
+
+    const hunt = terrain.hunt_indices?.find((o) => o.name === "rich-telemetry");
+    const prims = new Set(hunt?.primitives?.map((p) => p.primitive));
+    // Field-shape foundational tactics.
+    expect(prims).toContain("frequency_analysis");
+    expect(prims).toContain("string_analysis");
+    expect(prims).toContain("known_good_diff");
+    // Source-gated foundational tactics — present because a match/enrich source is.
+    expect(prims).toContain("ioc_match");
+    expect(prims).toContain("enrichment_match");
+
+    // ioc_match rides high confidence when a hash observable is present.
+    const ioc = hunt?.primitives?.find((p) => p.primitive === "ioc_match");
+    expect(ioc?.confidence).toBe("high");
+    expect(ioc?.fields).toEqual(
+      expect.arrayContaining(["file.hash.sha256"])
+    );
+
+    // Rolled up into the worker-facing matrix (hunt target only, not the feeds).
+    expect(terrain.primitive_matrix?.ioc_match).toEqual(["rich-telemetry"]);
+    expect(terrain.primitive_matrix?.enrichment_match).toEqual(["rich-telemetry"]);
   });
 
   it("treats ECS logs streams as first-class hunt targets with join keys", async () => {
@@ -767,6 +849,285 @@ describe("EnvironmentService.profileEnvironment", () => {
       ])
     );
     expect(terrain.joinability?.by_key.user).toContain("logs-okta.system-default");
+  });
+
+  it("computes per-index field reality + data class the generator can ground on", async () => {
+    const client = createMockEnvironmentClient();
+    seedHappyPath(client);
+    vi.mocked(client.getDataStreams).mockResolvedValue([]);
+    vi.mocked(client.getDataStreamStats).mockResolvedValue([]);
+    vi.mocked(client.catDocCounts).mockResolvedValue([]);
+    // Two off-schema standalone indices; the alerts alias is auto-injected.
+    vi.mocked(client.catIndices).mockResolvedValue([
+      {
+        index: "alert_timelines_elastic",
+        "docs.count": "1940000000",
+        "store.size": "1",
+      },
+      {
+        index: "detections_alert_telemetry_elastic",
+        "docs.count": "500000",
+        "store.size": "1",
+      },
+    ]);
+    // Only the alerts alias needs a _count (has volume); off-schema report theirs.
+    vi.mocked(client.count).mockImplementation(async (pattern: string) =>
+      pattern === ".alerts-security.alerts-*" ? 3_000_000 : 0
+    );
+    vi.mocked(client.getFieldCaps).mockImplementation(
+      async (
+        pattern: string
+      ): Promise<Record<string, Record<string, unknown>>> => {
+        if (pattern === "alert_timelines_elastic")
+          return {
+            "@timestamp": { date: {} },
+            // Canonical process fields live under an index-specific container.
+            "timeline.event.process.command_line": { keyword: {} },
+            "timeline.event.process.parent.command_line": { keyword: {} },
+            "timeline.event.process.name": { keyword: {} },
+            "timeline.event.process.entity_id": { keyword: {} },
+            "source.ip": { ip: {} },
+            "destination.ip": { ip: {} },
+            // The only `host.name` here belongs to the code SIGNER, not the event
+            // host — must NOT resolve as a direct host anchor.
+            "process.Ext.code_signature.host.name": { keyword: {} },
+            "event.category": { keyword: {} },
+          };
+        if (pattern === ".alerts-security.alerts-*")
+          return {
+            "@timestamp": { date: {} },
+            "kibana.alert.rule.name": { keyword: {} },
+            "kibana.alert.rule.threat.technique.id": { keyword: {} },
+            "threat.indicator.file.hash.sha256": { keyword: {} },
+            // `nested` container → matched.atomic is not ES|QL-addressable.
+            "threat.enrichments": { nested: {} },
+            "threat.enrichments.matched.atomic": { keyword: {} },
+            "source.ip": { ip: {} },
+            "user.name": { keyword: {} },
+            "host.name": { keyword: {} },
+          };
+        if (pattern === "detections_alert_telemetry_elastic")
+          return {
+            "@timestamp": { date: {} },
+            "source.ip": { ip: {} },
+            "destination.ip": { ip: {} },
+            "file.hash.sha256": { keyword: {} },
+            "network.protocol": { keyword: {} },
+            // Carries alert-rule metadata, yet a `_telemetry_` name → aggregate.
+            "kibana.alert.rule.name": { keyword: {} },
+            "kibana.alert.rule.threat.technique.id": { keyword: {} },
+          };
+        return {};
+      }
+    );
+    vi.mocked(client.getSampleDoc).mockImplementation(
+      async (pattern: string): Promise<Record<string, unknown>> => {
+        if (pattern === "alert_timelines_elastic")
+          return {
+            timeline: {
+              event: {
+                process: {
+                  command_line: "powershell -enc AAAA",
+                  name: "powershell.exe",
+                },
+              },
+            },
+            source: { ip: "10.0.0.1" },
+          };
+        if (pattern === ".alerts-security.alerts-*")
+          return {
+            kibana: {
+              alert: {
+                rule: {
+                  name: "SCMBANKER",
+                  threat: { technique: { id: ["T1055", "T1059"] } },
+                },
+              },
+            },
+            threat: {
+              indicator: { file: { hash: { sha256: "abc123" } } },
+              enrichments: [{ matched: { atomic: "1.2.3.4" } }],
+            },
+          };
+        return {};
+      }
+    );
+    vi.mocked(client.runEsql).mockResolvedValue({ columns: [], values: [] });
+    const service = new EnvironmentService({ environmentClient: client });
+
+    const { terrain } = await service.profileEnvironment();
+    const byName = (n: string) =>
+      terrain.hunt_indices?.find((o) => o.name === n);
+
+    // --- raw_event: canonical fields relocated under a nested-ish container ---
+    const timelines = byName("alert_timelines_elastic");
+    expect(timelines?.data_class).toBe("raw_event");
+    const cmd = timelines?.field_reality?.fields["process.command_line"];
+    expect(cmd?.present).toBe(true);
+    expect(cmd?.actual_path).toBe("timeline.event.process.command_line");
+    expect(cmd?.esql_addressable).toBe(true);
+    // ip fields cast to keyword so they match string IOC lists in ES|QL.
+    expect(timelines?.field_reality?.ioc_match_fields.ip).toContain(
+      "source.ip::keyword"
+    );
+    // The signer's `host.name` (under process.Ext.code_signature) is NOT a direct
+    // host anchor — strict identity resolution rejects the foreign-entity path.
+    expect(timelines?.field_reality?.fields["host.name"].present).toBe(false);
+    expect(timelines?.identity_fields?.direct.host).toBeNull();
+
+    // --- alert: hashes addressable, matched-indicator nested, rule meta mv ---
+    const alerts = byName(".alerts-security.alerts-*");
+    expect(alerts?.data_class).toBe("alert");
+    const sha =
+      alerts?.field_reality?.fields["threat.indicator.file.hash.sha256"];
+    expect(sha?.present).toBe(true);
+    expect(sha?.esql_addressable).toBe(true);
+    expect(alerts?.field_reality?.matched_atomic).toEqual({
+      field: "threat.enrichments.matched.atomic",
+      access: "search_nested",
+    });
+    expect(alerts?.field_reality?.rule_fields?.technique_id.multivalue).toBe(
+      true
+    );
+    expect(alerts?.field_reality?.rule_fields?.technique_id.populated).toBe(
+      true
+    );
+
+    // --- telemetry_aggregate: no threat.indicator.* (field_presence reflects it) ---
+    const telem = byName("detections_alert_telemetry_elastic");
+    expect(telem?.data_class).toBe("telemetry_aggregate");
+    expect(
+      telem?.field_reality?.fields["threat.indicator.file.hash.sha256"].present
+    ).toBe(false);
+
+    // Cross-index field presence: hash only on the alerts alias, ip on all three.
+    expect(terrain.field_presence?.["threat.indicator.file.hash.sha256"]).toEqual(
+      [".alerts-security.alerts-*"]
+    );
+    expect(terrain.field_presence?.["source.ip"]).toEqual(
+      expect.arrayContaining([
+        "alert_timelines_elastic",
+        ".alerts-security.alerts-*",
+        "detections_alert_telemetry_elastic",
+      ])
+    );
+
+    // Class → tactic gating table is persisted verbatim from the shared contract.
+    expect(terrain.primitives_supported_by_class).toEqual(
+      PRIMITIVES_SUPPORTED_BY_CLASS
+    );
+  });
+
+  it("records identity terrain and routes missing identity through the join fabric", async () => {
+    const client = createMockEnvironmentClient();
+    seedHappyPath(client);
+    vi.mocked(client.getDataStreams).mockResolvedValue([]);
+    vi.mocked(client.getDataStreamStats).mockResolvedValue([]);
+    vi.mocked(client.catDocCounts).mockResolvedValue([]);
+    vi.mocked(client.catIndices).mockResolvedValue([
+      {
+        index: "alert_timelines_elastic",
+        "docs.count": "1940000000",
+        "store.size": "1",
+      },
+      {
+        index: "detections_alert_telemetry_elastic",
+        "docs.count": "500000",
+        "store.size": "1",
+      },
+    ]);
+    vi.mocked(client.count).mockImplementation(async (pattern: string) =>
+      pattern === ".alerts-security.alerts-*" ? 3_000_000 : 0
+    );
+    vi.mocked(client.getFieldCaps).mockImplementation(
+      async (
+        pattern: string
+      ): Promise<Record<string, Record<string, unknown>>> => {
+        // Raw events: agent.id carries identity, host.name/user.name are mapped
+        // but empty (~0%). host/user must resolve THROUGH agent.id.
+        if (pattern === "alert_timelines_elastic")
+          return {
+            "@timestamp": { date: {} },
+            "agent.id": { keyword: {} },
+            "host.name": { keyword: {} },
+            "user.name": { keyword: {} },
+            "process.command_line": { keyword: {} },
+            "source.ip": { ip: {} },
+            "event.category": { keyword: {} },
+          };
+        if (pattern === ".alerts-security.alerts-*")
+          return {
+            "@timestamp": { date: {} },
+            "agent.id": { keyword: {} },
+            "host.name": { keyword: {} },
+            "user.name": { keyword: {} },
+            "kibana.alert.rule.name": { keyword: {} },
+          };
+        if (pattern === "detections_alert_telemetry_elastic")
+          return {
+            "@timestamp": { date: {} },
+            "agent.id": { keyword: {} },
+            "host.name": { keyword: {} },
+            "source.ip": { ip: {} },
+          };
+        return {};
+      }
+    );
+    vi.mocked(client.getSampleDoc).mockImplementation(
+      async (pattern: string): Promise<Record<string, unknown>> => {
+        // Sample presence stands in for population: timelines' sample has agent.id
+        // but NO host.name / user.name (they're ~0% populated).
+        if (pattern === "alert_timelines_elastic")
+          return {
+            agent: { id: "a-1" },
+            process: { command_line: "powershell -enc AAAA" },
+            source: { ip: "10.0.0.1" },
+          };
+        if (pattern === ".alerts-security.alerts-*")
+          return {
+            agent: { id: "a-1" },
+            host: { name: "web01" },
+            user: { name: "alice" },
+          };
+        if (pattern === "detections_alert_telemetry_elastic")
+          return { agent: { id: "a-1" }, host: { name: "web01" } };
+        return {};
+      }
+    );
+    // Empty ES|QL → population probe falls back to sample-doc presence.
+    vi.mocked(client.runEsql).mockResolvedValue({ columns: [], values: [] });
+    const service = new EnvironmentService({ environmentClient: client });
+
+    const { terrain } = await service.profileEnvironment();
+    const byName = (n: string) =>
+      terrain.hunt_indices?.find((o) => o.name === n);
+
+    // Raw-event stream: host/user are empty → NOT direct anchors; only agent.id
+    // is a usable (populated) join key.
+    const timelines = byName("alert_timelines_elastic")?.identity_fields;
+    expect(timelines?.direct.host).toBeNull();
+    expect(timelines?.direct.user).toBeNull();
+    expect(timelines?.join_keys).toContain("agent.id");
+    expect(timelines?.join_keys).not.toContain("host.name");
+
+    // …and it resolves the missing identity via agent.id to the indices that carry
+    // it, yielding host.name + user.name.
+    const via = timelines?.resolves_via.find((r) => r.key === "agent.id");
+    expect(via).toBeTruthy();
+    expect(via?.to).toEqual(
+      expect.arrayContaining([
+        ".alerts-security.alerts-*",
+        "detections_alert_telemetry_elastic",
+      ])
+    );
+    expect(via?.yields).toEqual(
+      expect.arrayContaining(["host.name", "user.name"])
+    );
+
+    // Alerts carry identity directly → nothing to resolve.
+    const alerts = byName(".alerts-security.alerts-*")?.identity_fields;
+    expect(alerts?.direct.host).toBe("host.name");
+    expect(alerts?.direct.user).toBe("user.name");
   });
 
   it("collapses reindex mirrors and drops confirmed-empty streams", async () => {

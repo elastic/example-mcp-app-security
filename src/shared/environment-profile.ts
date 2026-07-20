@@ -286,15 +286,51 @@ export interface LineageSignals {
 }
 
 /**
- * Hunting primitives a worker can run against an index, derived from field shape
- * the same way {@link LineageSignals} is. Grounded in the tradecraft GenAI-hunter
- * pivots and the behavioral/ML detection packages Elastic ships (beaconing, lmd,
- * pad, ded, dga, okta/aws/azure identity, fim). `process_lineage` is the tiered
- * detail in {@link LineageSignals}; the rest broaden the question from "can I
- * walk a process tree?" to "can I sequence, correlate auth, spot beaconing,
- * analyze DNS, pivot cloud identity, …?".
+ * Hunt primitives — the composable *tactics* a worker can run against grounded
+ * telemetry, each derived deterministically from field shape / affordances the
+ * same way {@link LineageSignals} is. A primitive names *a way of interrogating
+ * fields*, not an ATT&CK technique: ATT&CK is descriptive, this vocabulary is
+ * what the **terrain** analytically affords. Primitives COMPOSE — a hunt uses one
+ * alone or several together (e.g. `frequency_analysis` to surface rare parents,
+ * then `process_lineage` to walk them, then `ioc_match` to score the binaries).
+ *
+ * Two tiers:
+ *
+ * FOUNDATIONAL — available whenever a field exists (optionally plus an intel /
+ * enrichment source), independent of behavioral shape. These are the tactics an
+ * analyst reaches for first and were previously absent:
+ *   - `ioc_match`          observable field (hash/ip/domain/url) × ≥1 intel/match
+ *                          source ({@link Terrain.intel_sources}).
+ *   - `frequency_analysis` stack-count / rare-term / outlier over any populated
+ *                          categorical field. Effectively always-available once
+ *                          the index has a huntable field; confidence tracks
+ *                          field cardinality.
+ *   - `enrichment_match`   observable joined against an enrichable verdict source
+ *                          (reputation / CTI); needs an index with
+ *                          {@link IndexAffordances.enrichable}.
+ *   - `known_good_diff`    baseline / allowlist / new-term / first-seen
+ *                          differencing; needs a stable key or a first-seen anchor.
+ *   - `string_analysis`    substring / tokenization / entropy over free-text
+ *                          observables (command lines, urls, UAs, registry paths).
+ *
+ * TERRAIN-GATED BEHAVIORAL — need a specific field shape; grounded in the
+ * behavioral/ML detection packages Elastic ships (beaconing, lmd, pad, ded, dga,
+ * okta/aws/azure identity, fim) plus the tradecraft GenAI-hunter pivots:
+ *   process_lineage, temporal_sequence, auth_lateral, network_beaconing,
+ *   dns_analytics, cloud_identity, geo_impossible_travel, egress_exfil,
+ *   file_integrity, code_signature.
+ *
+ * Additive by contract: new tactics append; existing members are never renamed or
+ * removed, and the {@link PrimitiveSupport} / {@link Terrain.primitive_matrix}
+ * shapes are stable — only the set of possible keys grows.
+ *
+ * TODO(candidates): `threshold_aggregation` (subsumed by `frequency_analysis`
+ * today), `asn_outlier` (a `geo_impossible_travel` sibling), and splitting
+ * `new_term` out of `known_good_diff` — add each when a distinct field signal
+ * justifies separating it.
  */
 export type HuntPrimitive =
+  // Terrain-gated behavioral (original set — unchanged).
   | "process_lineage"
   | "temporal_sequence"
   | "auth_lateral"
@@ -304,13 +340,193 @@ export type HuntPrimitive =
   | "geo_impossible_travel"
   | "egress_exfil"
   | "file_integrity"
-  | "code_signature";
+  | "code_signature"
+  // Foundational (always-available, or field + a source).
+  | "ioc_match"
+  | "frequency_analysis"
+  | "enrichment_match"
+  | "known_good_diff"
+  | "string_analysis";
 
 export interface PrimitiveSupport {
   readonly primitive: HuntPrimitive;
   readonly confidence: AffordanceConfidence;
   /** Concrete fields a worker would build the primitive's query on, best-first. */
   readonly fields: string[];
+}
+
+/**
+ * What KIND of data an index holds — the single most decisive terrain signal for
+ * a hunt generator, because it gates which primitives are even *possible*:
+ * - `raw_event` — per-event endpoint/network telemetry (process/file/dns/registry
+ *   events). Enables lineage, sequencing, and command-line / file / registry
+ *   hunts on live rows.
+ * - `alert` — detection-engine output (`.alerts-security.*`): rule metadata,
+ *   technique tags, matched indicators. Enables ioc_match / technique_association
+ *   / entity_pivot; NOT raw eventing.
+ * - `detonation` — sandbox / detonation results.
+ * - `telemetry_aggregate` — rolled-up counts / summaries, not per-event rows.
+ */
+export type DataClass =
+  | "raw_event"
+  | "alert"
+  | "detonation"
+  | "telemetry_aggregate";
+
+/**
+ * Class-level hunt-capability vocabulary — a coarse gating view keyed by
+ * {@link DataClass}. A SUPERSET of {@link HuntPrimitive}: it adds a few
+ * class-capability labels the generator switches on (`commandline_match`,
+ * `file_match`, `registry_match`, `technique_association`, `entity_pivot`) that
+ * are not (yet) field-derived {@link HuntPrimitive}s. Kept as a superset so the
+ * field-derived primitive vocabulary stays tight while the generator still gets
+ * the exact capability strings it needs from a data class.
+ */
+export type DataClassPrimitive =
+  | HuntPrimitive
+  | "commandline_match"
+  | "file_match"
+  | "registry_match"
+  | "technique_association"
+  | "entity_pivot";
+
+/**
+ * Ground-truth map from data class to the tactics that class supports.
+ * Authoritative and shared: both the profiler and the hunt generator import this
+ * so a class always gates to the same capability set. Persisted on the profile as
+ * {@link Terrain.primitives_supported_by_class}.
+ */
+export const PRIMITIVES_SUPPORTED_BY_CLASS: Record<
+  DataClass,
+  readonly DataClassPrimitive[]
+> = {
+  raw_event: [
+    "process_lineage",
+    "temporal_sequence",
+    "commandline_match",
+    "file_match",
+    "registry_match",
+    "ioc_match",
+  ],
+  alert: ["ioc_match", "technique_association", "entity_pivot"],
+  detonation: ["ioc_match", "commandline_match", "file_match"],
+  telemetry_aggregate: ["technique_association", "frequency_analysis"],
+} as const;
+
+/** IOC observable classes a generator ORs together per class within one hunt. */
+export type IocClass =
+  | "ip"
+  | "domain"
+  | "url"
+  | "hash"
+  | "file_path"
+  | "registry"
+  | "named_pipe"
+  | "mutex";
+
+/**
+ * The addressable, query-ready reality of ONE canonical field in ONE index —
+ * everything the generator needs to emit correct, runnable ES|QL (or know when to
+ * fall back to `_search`) without probing the cluster itself.
+ */
+export interface FieldFact {
+  readonly present: boolean;
+  /**
+   * The REAL addressable path to query — may be nested/prefixed relative to the
+   * canonical ECS name (e.g. `timeline.event.process.command_line` for
+   * `process.command_line`).
+   */
+  readonly actual_path: string;
+  /** ES mapping type: `"ip"` | `"keyword"` | `"text"` | `"nested"` | … */
+  readonly es_type: string;
+  /** False when the field — or an ancestor — is `nested` (ES|QL can't address it). */
+  readonly esql_addressable: boolean;
+  /** The nested ancestor path that forces `_search` access, or null. */
+  readonly nested_parent: string | null;
+  /** True when values are multivalue — hunts must use DSL terms aggs, not ES|QL `IN`. */
+  readonly multivalue: boolean;
+  /** Cast needed to match a string IOC list, e.g. `"::keyword"` for an `ip` field. */
+  readonly cast_hint: string | null;
+  /** A sample value (truncated) proving population, or null. */
+  readonly example_value: string | null;
+}
+
+/** Where a TI-match alert stores the matched indicator, and how to read it. */
+export interface MatchedAtomic {
+  readonly field: string;
+  readonly access: "esql" | "search_nested";
+}
+
+/** Rule / detection metadata fields (alerts), with multivalue + population flags. */
+export interface RuleFields {
+  readonly rule_name: string;
+  readonly technique_id: {
+    readonly field: string;
+    readonly multivalue: boolean;
+    readonly populated: boolean;
+  };
+  readonly subtechnique_id: {
+    readonly field: string;
+    readonly multivalue: boolean;
+    readonly populated: boolean;
+  };
+}
+
+/**
+ * How one hunt index recovers identity it LACKS by joining to indices that carry
+ * it — the concrete edge of the identity fabric.
+ */
+export interface IdentityResolution {
+  /** The concrete join field that bridges (present + populated on `from`). */
+  readonly key: string;
+  /** The index missing the identity (this hunt index). */
+  readonly from: string;
+  /** Indices that share `key` (populated) and carry identity `from` lacks. */
+  readonly to: string[];
+  /** Identity field paths recoverable by following the join (e.g. `host.name`). */
+  readonly yields: string[];
+}
+
+/**
+ * Identity terrain for one hunt index: the direct identity anchors it carries,
+ * the join keys it can be pivoted on, and — crucially — how it resolves identity
+ * it LACKS via the join fabric. "Present" means present AND populated: a
+ * mapped-but-empty field (e.g. `user.name` at ~0% on a raw-event stream) is
+ * treated as absent and routed through a populated join key instead. Populated
+ * ratios live on {@link JoinKey.population_ratio} for the join keys.
+ */
+export interface IdentityFields {
+  /** Directly present + populated identity anchor field paths, or null. */
+  readonly direct: {
+    readonly host: string | null;
+    readonly user: string | null;
+    readonly tenant: string | null;
+  };
+  /** Join keys present + populated on this index (concrete fields, best-first). */
+  readonly join_keys: string[];
+  /** Resolution fabric: bridge identity gaps by joining to other hunt indices. */
+  readonly resolves_via: IdentityResolution[];
+}
+
+/**
+ * Persisted FIELD REALITY for one hunt index — the ground truth a hunt generator
+ * needs to emit runnable, grounded queries with no live probing. Computed
+ * deterministically from `_field_caps` (types + `nested` detection) plus one
+ * sample doc (example values / multivalue), and recomputed on every refresh.
+ */
+export interface FieldReality {
+  /** Canonical/ECS field name → its addressable reality in THIS index. */
+  readonly fields: Record<string, FieldFact>;
+  /**
+   * Precomputed, ordered, addressable + cast field expressions to OR together per
+   * IOC class (e.g. `ip: ["source.ip::keyword", "destination.ip::keyword"]`).
+   * Nested / non-addressable fields are excluded so the emitted ES|QL always runs.
+   */
+  readonly ioc_match_fields: Record<IocClass, string[]>;
+  /** Where a TI-match alert keeps the matched indicator, and how to read it. */
+  readonly matched_atomic: MatchedAtomic | null;
+  /** Rule/technique metadata (alerts only), or null. */
+  readonly rule_fields: RuleFields | null;
 }
 
 /**
@@ -418,6 +634,22 @@ export interface OffSchemaIndex {
    * primitive/lineage roll-ups so the same data isn't surfaced twice.
    */
   readonly mirror_of?: string;
+  /**
+   * What kind of data this index holds — gates which primitives are possible.
+   * Derived deterministically from field shape + name (see {@link DataClass}).
+   */
+  readonly data_class?: DataClass;
+  /**
+   * Addressable field ground-truth for the hunt generator — resolved actual paths,
+   * ES types, nested/ES|QL-addressability, cast hints, IOC-match field lists, and
+   * rule metadata (see {@link FieldReality}). Computed for hunt indices only.
+   */
+  readonly field_reality?: FieldReality;
+  /**
+   * Identity terrain: direct anchors, populated join keys, and the resolution
+   * fabric this index uses to recover identity it lacks (see {@link IdentityFields}).
+   */
+  readonly identity_fields?: IdentityFields;
 }
 
 /**
@@ -479,9 +711,13 @@ export interface Terrain {
   };
   /**
    * Hunt-primitive support matrix: for each {@link HuntPrimitive}, the hunt-target
-   * indices that support it, ranked by volume. The generalized, worker-facing
-   * answer to "who can I sequence / correlate auth / beacon-analyze / identity-
-   * pivot on?" — mirrors excluded so a primitive isn't advertised twice.
+   * indices that support it, ranked by volume (mirrors excluded so a primitive
+   * isn't advertised twice). Spans the full, composable vocabulary — foundational
+   * tactics (`ioc_match`, `frequency_analysis`, `enrichment_match`,
+   * `known_good_diff`, `string_analysis`) as well as terrain-gated behavioral ones
+   * (`process_lineage`, `temporal_sequence`, …). Every verdict is terrain-derived
+   * from field shape / affordances / available sources — never bound to ATT&CK.
+   * The worker-facing answer to "which tactics can I run here, and where?".
    */
   readonly primitive_matrix?: Partial<Record<HuntPrimitive, string[]>>;
   /**
@@ -490,6 +726,23 @@ export interface Terrain {
    * match findings across primitives, and cue follow-up hunts.
    */
   readonly joinability?: Joinability;
+  /**
+   * Class → supported-tactics gating table (mirror of
+   * {@link PRIMITIVES_SUPPORTED_BY_CLASS}). Lets the generator resolve a hunt
+   * index's {@link OffSchemaIndex.data_class} to the tactics it can run.
+   */
+  readonly primitives_supported_by_class?: Record<
+    DataClass,
+    readonly DataClassPrimitive[]
+  >;
+  /**
+   * Cross-index field-presence map: canonical field → the hunt indices that carry
+   * it (present + addressable). Two jobs: (1) a multi-index `FROM` list can avoid
+   * erroring on a column absent from one member, and (2) it is the authoritative
+   * input to the blind-spot rule — an observable is blind only if NO hunt index
+   * whose {@link OffSchemaIndex.data_class} supports the needed primitive carries it.
+   */
+  readonly field_presence?: Record<string, string[]>;
   /** Human-readable gaps ("no network telemetry", "alerts only, no raw events"). */
   readonly blind_spots: string[];
 }

@@ -145,15 +145,36 @@ function summarize(profile: EnvironmentProfile) {
     hunt_indices: (terrain.hunt_indices ?? []).map((o) => ({
       name: o.name,
       schema: o.schema_alignment,
+      // Data class gates which primitives are possible on this index.
+      data_class: o.data_class,
       doc_count: o.doc_count,
       primitives: (o.primitives ?? []).map((p) => p.primitive),
       join_keys: (o.join_keys ?? []).map((j) => j.kind),
+      // Addressable ground truth for the hunt generator: how many canonical fields
+      // resolved, the matched-indicator accessor, and whether it carries rule meta.
+      field_reality: o.field_reality
+        ? {
+            fields_present: Object.values(o.field_reality.fields).filter(
+              (f) => f.present
+            ).length,
+            ioc_match_fields: o.field_reality.ioc_match_fields,
+            matched_atomic: o.field_reality.matched_atomic,
+            rule_fields: o.field_reality.rule_fields,
+          }
+        : undefined,
+      // Identity terrain: direct anchors (populated), populated join keys, and the
+      // resolution fabric for identity this index lacks.
+      identity_fields: o.identity_fields,
     })),
     intel_sources: terrain.intel_sources,
     process_tree_indices: terrain.process_tree_indices,
     // Generalized hunt-primitive support (sequence, auth, beaconing, DNS, cloud
     // identity, …) beyond just process lineage.
     primitive_matrix: terrain.primitive_matrix ?? {},
+    // Data-class → supported-tactics gating table + cross-index field presence, so
+    // the generator can gate primitives by class and avoid multi-index FROM errors.
+    primitives_supported_by_class: terrain.primitives_supported_by_class ?? {},
+    field_presence: terrain.field_presence ?? {},
     // Cross-index join fabric: for each key, the indices mutually joinable on it
     // (sequencing / dedup / matching across primitives / cueing follow-up hunts).
     joinability: terrain.joinability?.by_key ?? {},

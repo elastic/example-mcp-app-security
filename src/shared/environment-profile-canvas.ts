@@ -37,6 +37,13 @@ export function renderProfileCanvas(profile: EnvironmentProfile): string {
 // --- Display metadata (kept in sync with the markdown renderer) -------------
 
 const PRIMITIVE_ORDER: HuntPrimitive[] = [
+  // Foundational (composable; always-available or field + a source).
+  "ioc_match",
+  "frequency_analysis",
+  "enrichment_match",
+  "known_good_diff",
+  "string_analysis",
+  // Terrain-gated behavioral.
   "process_lineage",
   "temporal_sequence",
   "auth_lateral",
@@ -50,6 +57,13 @@ const PRIMITIVE_ORDER: HuntPrimitive[] = [
 ];
 
 const PRIMITIVE_DESC: Record<HuntPrimitive, string> = {
+  // Foundational.
+  ioc_match: "Match observables against intel / IOC sources.",
+  frequency_analysis: "Stack-count & rare-term outliers over any field.",
+  enrichment_match: "Join observables to reputation / CTI verdicts.",
+  known_good_diff: "New-term / first-seen / allowlist differencing.",
+  string_analysis: "Substring / entropy analysis of free-text fields.",
+  // Terrain-gated behavioral.
   process_lineage: "Walk parent/child process chains — who-spawned-what.",
   temporal_sequence: "Order events over time within a join key (EQL sequences).",
   auth_lateral: "Logon / RDP / lateral-movement correlation.",
@@ -63,6 +77,17 @@ const PRIMITIVE_DESC: Record<HuntPrimitive, string> = {
 };
 
 const PRIMITIVE_FIELDS: Record<HuntPrimitive, string> = {
+  // Foundational.
+  ioc_match:
+    "file.hash.* · source.ip · destination.domain · url.full × intel_sources",
+  frequency_analysis:
+    "process.name · user.name · dns.question.name (any categorical)",
+  enrichment_match:
+    "source.ip · destination.domain · file.hash.* → enrichable source",
+  known_good_diff: "first_seen · host.id · user.name · process.entity_id",
+  string_analysis:
+    "process.command_line · url.full · user_agent.original · registry.path",
+  // Terrain-gated behavioral.
   process_lineage:
     "process.entity_id · process.parent.entity_id · process.Ext.ancestry · ppid",
   temporal_sequence: "@timestamp + a stable entity id (host / process)",
@@ -150,6 +175,7 @@ interface GlossaryItem {
 interface HuntRow {
   name: string;
   schema: "ecs" | "off_schema";
+  dataClass: string;
   docs: number | null;
   prims: number;
   keys: number;
@@ -237,6 +263,7 @@ function buildBriefData(profile: EnvironmentProfile): BriefData {
   const huntRows: HuntRow[] = hunt.slice(0, 12).map((h) => ({
     name: h.name,
     schema: h.schema_alignment === "ecs" ? "ecs" : "off_schema",
+    dataClass: h.data_class ?? "—",
     docs: h.doc_count ?? null,
     prims: (h.primitives ?? []).length,
     keys: (h.join_keys ?? []).length,
@@ -413,7 +440,7 @@ import {
 
 interface Kv { key: string; n: number; }
 interface GlossaryItem { key: string; n: number; desc: string; fields: string; }
-interface HuntRow { name: string; schema: "ecs" | "off_schema"; docs: number | null; prims: number; keys: number; lineage: string; }
+interface HuntRow { name: string; schema: "ecs" | "off_schema"; dataClass: string; docs: number | null; prims: number; keys: number; lineage: string; }
 interface Big { name: string; docs: number; note: string; }
 interface BriefData {
   cluster: string;
@@ -564,14 +591,15 @@ export default function EnvironmentBrief() {
             Ranked by derived hunt-primitive richness. ECS = standard logs-*/.alerts naming (the happy path); off = custom-named.
           </Text>
           <Table
-            headers={["Index", "Schema", "Docs", "Primitives", "Join keys", "Lineage"]}
-            columnAlign={["left", "left", "right", "right", "right", "left"]}
+            headers={["Index", "Schema", "Class", "Docs", "Primitives", "Join keys", "Lineage"]}
+            columnAlign={["left", "left", "left", "right", "right", "right", "left"]}
             rowTone={d.hunt.map((h) => (h.lineage === "full" ? "success" : h.lineage === "parent_only" ? "warning" : undefined))}
             rows={d.hunt.map((h) => [
               <Text as="span" style={MONO} truncate>{h.name}</Text>,
               <Pill size="sm" active={h.schema === "ecs"}>{h.schema === "ecs" ? "ECS" : "off"}</Pill>,
+              <Pill size="sm">{h.dataClass}</Pill>,
               fmt(h.docs),
-              h.prims + "/10",
+              String(h.prims),
               String(h.keys),
               h.lineage,
             ])}

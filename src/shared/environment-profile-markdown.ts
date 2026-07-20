@@ -7,7 +7,9 @@
 
 import type {
   EnvironmentProfile,
+  HuntIndexProfile,
   HuntPrimitive,
+  IocClass,
   JoinKeyKind,
 } from "./environment-profile.js";
 
@@ -40,6 +42,13 @@ const JOIN_KEY_FIELD: Record<JoinKeyKind, string> = {
 
 /** Display order + one-line "what it enables" for the hunt-primitive matrix. */
 const PRIMITIVE_ORDER: HuntPrimitive[] = [
+  // Foundational (composable; always-available or field + a source).
+  "ioc_match",
+  "frequency_analysis",
+  "enrichment_match",
+  "known_good_diff",
+  "string_analysis",
+  // Terrain-gated behavioral.
   "process_lineage",
   "temporal_sequence",
   "auth_lateral",
@@ -53,6 +62,13 @@ const PRIMITIVE_ORDER: HuntPrimitive[] = [
 ];
 
 const PRIMITIVE_BLURB: Record<HuntPrimitive, string> = {
+  // Foundational.
+  ioc_match: "match observables (hash/ip/domain/url) against intel sources",
+  frequency_analysis: "stack-count / rare-term / outlier over categorical fields",
+  enrichment_match: "join observables to an enrichable reputation/CTI verdict",
+  known_good_diff: "baseline / allowlist / new-term / first-seen differencing",
+  string_analysis: "substring / token / entropy analysis of free-text observables",
+  // Terrain-gated behavioral.
   process_lineage: "walk process parent/child trees",
   temporal_sequence: "EQL `sequence by` across ordered events",
   auth_lateral: "correlate logon failure→success / RDP lateral movement",
@@ -199,17 +215,18 @@ export function renderProfileMarkdown(profile: EnvironmentProfile): string {
         "= standard `logs-*`/`.alerts*` naming; `off` = custom-named._"
     );
     lines.push("");
-    lines.push("| Index | Schema | Docs | Primitives | Join keys |");
-    lines.push("|---|---|---|---|---|");
+    lines.push("| Index | Schema | Class | Docs | Primitives | Join keys |");
+    lines.push("|---|---|---|---|---|---|");
     for (const o of hunt) {
       const prims = (o.primitives ?? []).map((p) => p.primitive).join(", ") || "—";
       const keys =
         (o.join_keys ?? []).map((j) => j.kind).join(", ") || "—";
       lines.push(
-        `| \`${o.name}\` | ${o.schema_alignment === "ecs" ? "ECS" : "off"} | ${fmtNum(o.doc_count)} | ${prims} | ${keys} |`
+        `| \`${o.name}\` | ${o.schema_alignment === "ecs" ? "ECS" : "off"} | ${o.data_class ?? "—"} | ${fmtNum(o.doc_count)} | ${prims} | ${keys} |`
       );
     }
     lines.push("");
+    renderFieldReality(lines, hunt);
   }
 
   if (terrain.high_volume_off_schema.length > 0) {
@@ -357,10 +374,12 @@ export function renderProfileMarkdown(profile: EnvironmentProfile): string {
     lines.push("## Hunt-primitive matrix");
     lines.push("");
     lines.push(
-      "_Which hunt techniques the environment can support, derived from field " +
-        "shape (generalizing process lineage to the behavioral/ML detection " +
-        "families Elastic ships). For each primitive, the hunt-target indices that " +
-        "support it, ranked by volume._"
+      "_Composable hunt tactics the environment can support, derived from field " +
+        "shape / affordances / available sources (never from ATT&CK). Spans " +
+        "foundational tactics (IOC match, frequency analysis, enrichment, " +
+        "known-good diff, string analysis) and terrain-gated behavioral ones " +
+        "(lineage, sequencing, beaconing, …). For each primitive, the hunt-target " +
+        "indices that support it, ranked by volume._"
     );
     lines.push("");
     lines.push("| Primitive | What it enables | Indices |");
@@ -427,6 +446,110 @@ export function renderProfileMarkdown(profile: EnvironmentProfile): string {
   lines.push("");
 
   return lines.join("\n");
+}
+
+const IOC_CLASS_ORDER: IocClass[] = [
+  "ip",
+  "domain",
+  "url",
+  "hash",
+  "file_path",
+  "registry",
+  "named_pipe",
+  "mutex",
+];
+
+/**
+ * Per hunt-index FIELD REALITY: the addressable ground truth a hunt generator
+ * needs. Surfaces only the "gotcha" facts (relocated / nested / multivalue / cast)
+ * plus the precomputed IOC-match field lists, matched-indicator accessor, and
+ * rule metadata — so the analyst can eyeball what a hunt would actually query.
+ */
+function renderFieldReality(lines: string[], hunt: HuntIndexProfile[]): void {
+  const withReality = hunt.filter((o) => o.field_reality);
+  if (!withReality.length) return;
+
+  lines.push("### Field reality (addressable ground truth)");
+  lines.push("");
+  lines.push(
+    "_Resolved per hunt index from `_field_caps` + a sample doc. `actual_path` is " +
+      "the REAL path to query (may differ from the ECS name); `nested` fields need " +
+      "`_search`; `mv` fields need DSL terms aggs, not ES|QL `IN`; `ip` fields cast " +
+      "with `::keyword` to match string IOC lists._"
+  );
+  lines.push("");
+
+  for (const o of withReality) {
+    const fr = o.field_reality!;
+    const facts = Object.entries(fr.fields).filter(([, f]) => f.present);
+    // Only the fields with something worth flagging (relocated, nested, mv, cast).
+    const notable = facts.filter(
+      ([canon, f]) =>
+        f.actual_path !== canon ||
+        !f.esql_addressable ||
+        f.multivalue ||
+        f.cast_hint
+    );
+    lines.push(
+      `<details><summary><code>${o.name}</code> — ${o.data_class ?? "?"} · ${facts.length} canonical fields</summary>`
+    );
+    lines.push("");
+    if (notable.length) {
+      lines.push("| Canonical | actual_path | type | ES\\|QL | nested | mv | cast |");
+      lines.push("|---|---|---|---|---|---|---|");
+      for (const [canon, f] of notable) {
+        lines.push(
+          `| \`${canon}\` | \`${f.actual_path}\` | ${f.es_type} | ${chk(f.esql_addressable)} | ${f.nested_parent ? `\`${f.nested_parent}\`` : "·"} | ${chk(f.multivalue)} | ${f.cast_hint ?? "·"} |`
+        );
+      }
+      lines.push("");
+    }
+    const iocLines = IOC_CLASS_ORDER.filter(
+      (c) => (fr.ioc_match_fields[c] ?? []).length
+    ).map((c) => `- **${c}**: ${fr.ioc_match_fields[c].map((x) => `\`${x}\``).join(", ")}`);
+    if (iocLines.length) {
+      lines.push("IOC-match fields (addressable + cast):");
+      lines.push(...iocLines);
+      lines.push("");
+    }
+    if (fr.matched_atomic) {
+      lines.push(
+        `Matched indicator: \`${fr.matched_atomic.field}\` (${fr.matched_atomic.access})`
+      );
+      lines.push("");
+    }
+    if (fr.rule_fields) {
+      const t = fr.rule_fields.technique_id;
+      const s = fr.rule_fields.subtechnique_id;
+      lines.push(
+        `Rule fields: name \`${fr.rule_fields.rule_name}\`; technique \`${t.field}\`` +
+          ` (mv ${yn(t.multivalue)}, populated ${yn(t.populated)}); subtechnique \`${s.field}\`` +
+          ` (mv ${yn(s.multivalue)}, populated ${yn(s.populated)})`
+      );
+      lines.push("");
+    }
+    const id = o.identity_fields;
+    if (id) {
+      const d = id.direct;
+      lines.push(
+        `Identity — direct: host ${anchor(d.host)}, user ${anchor(d.user)}, tenant ${anchor(d.tenant)}; ` +
+          `join keys: ${id.join_keys.map((k) => `\`${k}\``).join(", ") || "—"}`
+      );
+      for (const r of id.resolves_via) {
+        lines.push(
+          `- resolves via \`${r.key}\` → ${r.to.map((n) => `\`${n}\``).join(", ")} ` +
+            `yields ${r.yields.map((y) => `\`${y}\``).join(", ")}`
+        );
+      }
+      lines.push("");
+    }
+    lines.push("</details>");
+    lines.push("");
+  }
+}
+
+function anchor(v: string | null): string {
+  return v ? `\`${v}\`` : "—";
 }
 
 function yn(v: boolean): string {

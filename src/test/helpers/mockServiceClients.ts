@@ -89,6 +89,7 @@ export function createMockEnvironmentClient(): EnvironmentClient {
     "count",
     "getFieldCaps",
     "getMappingsMeta",
+    "getSampleDoc",
     "countCases",
     "getAttackDiscoveryGenerations",
   ]);
