@@ -9,6 +9,7 @@ import type {
   EnvironmentProfile,
   HuntPrimitive,
   JoinKeyKind,
+  Terrain,
 } from "./environment-profile.js";
 
 /**
@@ -58,9 +59,9 @@ const PRIMITIVE_ORDER: HuntPrimitive[] = [
 
 const PRIMITIVE_DESC: Record<HuntPrimitive, string> = {
   // Foundational.
-  ioc_match: "Match observables against intel / IOC sources.",
+  ioc_match: "Match observables against an indicator list.",
   frequency_analysis: "Stack-count & rare-term outliers over any field.",
-  enrichment_match: "Join observables to reputation / CTI verdicts.",
+  enrichment_match: "Join observables to a reputation / CTI enrichment verdict.",
   known_good_diff: "New-term / first-seen / allowlist differencing.",
   string_analysis: "Substring / entropy analysis of free-text fields.",
   // Terrain-gated behavioral.
@@ -79,11 +80,11 @@ const PRIMITIVE_DESC: Record<HuntPrimitive, string> = {
 const PRIMITIVE_FIELDS: Record<HuntPrimitive, string> = {
   // Foundational.
   ioc_match:
-    "file.hash.* · source.ip · destination.domain · url.full × intel_sources",
+    "file.hash.* · source.ip · destination.domain · url.full",
   frequency_analysis:
     "process.name · user.name · dns.question.name (any categorical)",
   enrichment_match:
-    "source.ip · destination.domain · file.hash.* → enrichable source",
+    "source.ip · destination.domain · file.hash.*",
   known_good_diff: "first_seen · host.id · user.name · process.entity_id",
   string_analysis:
     "process.command_line · url.full · user_agent.original · registry.path",
@@ -104,6 +105,26 @@ const PRIMITIVE_FIELDS: Record<HuntPrimitive, string> = {
   code_signature:
     "process.code_signature.trusted · file.code_signature.subject_name · *.signed",
 };
+
+/**
+ * Mode suffix for the corpus-matching primitives: matchability is unconditional
+ * (field-shape), so we only note whether the loop is self-serviced (in-cluster
+ * source) or needs a bring-your-own indicator/enrichment feed. Empty for the
+ * field-shape primitives.
+ */
+function primitiveModeSuffix(p: HuntPrimitive, terrain: Terrain): string {
+  if (p === "ioc_match") {
+    return terrain.ioc_match_self_serviced
+      ? " In-cluster intel source present (self-serviced)."
+      : " BYO indicators — cluster has no in-cluster intel source; worker supplies the feed.";
+  }
+  if (p === "enrichment_match") {
+    return terrain.enrichment_self_serviced
+      ? " In-cluster enrichment source present (self-serviced)."
+      : " BYO enrichment — worker calls an external enrichment service.";
+  }
+  return "";
+}
 
 const JOIN_KEY_ORDER: JoinKeyKind[] = [
   "event",
@@ -277,7 +298,9 @@ function buildBriefData(profile: EnvironmentProfile): BriefData {
   const primitiveGlossary: GlossaryItem[] = primitives.map((x) => ({
     key: x.key,
     n: x.n,
-    desc: PRIMITIVE_DESC[x.key as HuntPrimitive],
+    desc:
+      PRIMITIVE_DESC[x.key as HuntPrimitive] +
+      primitiveModeSuffix(x.key as HuntPrimitive, terrain),
     fields: PRIMITIVE_FIELDS[x.key as HuntPrimitive],
   }));
 

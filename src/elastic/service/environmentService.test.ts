@@ -661,9 +661,25 @@ describe("EnvironmentService.profileEnvironment", () => {
     expect(endpoint).toContain("frequency_analysis");
     expect(endpoint).toContain("string_analysis");
     expect(endpoint).toContain("known_good_diff");
-    // …but the source-gated ones stay off with no intel/enrichment source present.
-    expect(endpoint).not.toContain("ioc_match");
-    expect(endpoint).not.toContain("enrichment_match");
+    // Matchability is field-shape, not source-gated: the endpoint carries observables
+    // (destination.ip / dns.question.name), so ioc_match / enrichment_match ARE
+    // present — but tagged `byo` because this cluster ships no intel/enrichment source.
+    expect(endpoint).toContain("ioc_match");
+    expect(endpoint).toContain("enrichment_match");
+    const endpointObj = terrain.classified_indices?.find(
+      (o) => o.name === "rich-endpoint"
+    );
+    expect(
+      endpointObj?.primitives?.find((p) => p.primitive === "ioc_match")
+        ?.source_mode
+    ).toBe("byo");
+    expect(
+      endpointObj?.primitives?.find((p) => p.primitive === "enrichment_match")
+        ?.source_mode
+    ).toBe("byo");
+    // Terrain flags say the loop is not self-serviced (no in-cluster corpus).
+    expect(terrain.ioc_match_self_serviced).toBe(false);
+    expect(terrain.enrichment_self_serviced).toBe(false);
 
     const okta = prims("okta-audit");
     expect(okta).toContain("cloud_identity");
@@ -678,7 +694,7 @@ describe("EnvironmentService.profileEnvironment", () => {
     );
   });
 
-  it("stamps source-gated foundational primitives (ioc_match / enrichment_match) from terrain", async () => {
+  it("stamps ioc_match / enrichment_match and marks them self-serviced when in-cluster sources exist", async () => {
     const client = createMockEnvironmentClient();
     seedHappyPath(client);
     vi.mocked(client.getDataStreams).mockResolvedValue([]);
@@ -735,16 +751,25 @@ describe("EnvironmentService.profileEnvironment", () => {
     expect(prims).toContain("frequency_analysis");
     expect(prims).toContain("string_analysis");
     expect(prims).toContain("known_good_diff");
-    // Source-gated foundational tactics — present because a match/enrich source is.
+    // Corpus-matching tactics present (field-shape), and self-serviced here because
+    // an in-cluster match/enrich source exists.
     expect(prims).toContain("ioc_match");
     expect(prims).toContain("enrichment_match");
 
-    // ioc_match rides high confidence when a hash observable is present.
+    // ioc_match rides high confidence when a hash observable is present, and the
+    // in-cluster intel source makes it a self-serviced loop.
     const ioc = hunt?.primitives?.find((p) => p.primitive === "ioc_match");
     expect(ioc?.confidence).toBe("high");
+    expect(ioc?.source_mode).toBe("in_cluster");
     expect(ioc?.fields).toEqual(
       expect.arrayContaining(["file.hash.sha256"])
     );
+    expect(
+      hunt?.primitives?.find((p) => p.primitive === "enrichment_match")
+        ?.source_mode
+    ).toBe("in_cluster");
+    expect(terrain.ioc_match_self_serviced).toBe(true);
+    expect(terrain.enrichment_self_serviced).toBe(true);
 
     // Rolled up into the worker-facing matrix (hunt target only, not the feeds).
     expect(terrain.primitive_matrix?.ioc_match).toEqual(["rich-telemetry"]);

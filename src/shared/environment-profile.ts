@@ -353,6 +353,16 @@ export interface PrimitiveSupport {
   readonly confidence: AffordanceConfidence;
   /** Concrete fields a worker would build the primitive's query on, best-first. */
   readonly fields: string[];
+  /**
+   * For the corpus-matching primitives (`ioc_match`, `enrichment_match`) only:
+   * where the corpus to match/enrich against comes from. `in_cluster` = a
+   * self-serviced loop (the cluster ships an intel/enrichment source);
+   * `byo` = the index is fully matchable but the worker must supply the
+   * indicator/enrichment feed (ti-loupe / MISP / external service / cross-cluster).
+   * Matchability itself is a per-index field-shape fact and is NOT gated on this;
+   * absence of an in-cluster source downgrades the mode, never the capability.
+   */
+  readonly source_mode?: "in_cluster" | "byo";
 }
 
 /**
@@ -720,6 +730,20 @@ export interface Terrain {
    * The worker-facing answer to "which tactics can I run here, and where?".
    */
   readonly primitive_matrix?: Partial<Record<HuntPrimitive, string[]>>;
+  /**
+   * Whether `ioc_match` is a self-serviced loop here: `true` when the cluster ships
+   * an in-cluster intel/match source (see {@link Terrain.intel_sources}); `false`
+   * means indices are fully matchable but the worker must bring its own indicator
+   * list. Never gates the {@link Terrain.primitive_matrix} `ioc_match` list — only
+   * annotates the mode (per-index detail lives on {@link PrimitiveSupport.source_mode}).
+   */
+  readonly ioc_match_self_serviced?: boolean;
+  /**
+   * Whether `enrichment_match` is self-serviced: `true` when an in-cluster enrichable
+   * verdict source exists; `false` means matchable observables are present but the
+   * worker calls an external enrichment service. Mode only — never gates capability.
+   */
+  readonly enrichment_self_serviced?: boolean;
   /**
    * Cross-index join fabric: for each join key (host / user / agent / …), the hunt
    * indices that carry it — the pivots a worker uses to sequence, deduplicate,

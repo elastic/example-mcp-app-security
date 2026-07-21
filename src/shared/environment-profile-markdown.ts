@@ -11,6 +11,7 @@ import type {
   HuntPrimitive,
   IocClass,
   JoinKeyKind,
+  Terrain,
 } from "./environment-profile.js";
 
 /** Display order + representative field for the joinability fabric. */
@@ -63,9 +64,9 @@ const PRIMITIVE_ORDER: HuntPrimitive[] = [
 
 const PRIMITIVE_BLURB: Record<HuntPrimitive, string> = {
   // Foundational.
-  ioc_match: "match observables (hash/ip/domain/url) against intel sources",
+  ioc_match: "match observables (hash/ip/domain/url) against an indicator list",
   frequency_analysis: "stack-count / rare-term / outlier over categorical fields",
-  enrichment_match: "join observables to an enrichable reputation/CTI verdict",
+  enrichment_match: "join observables to a reputation/CTI enrichment verdict",
   known_good_diff: "baseline / allowlist / new-term / first-seen differencing",
   string_analysis: "substring / token / entropy analysis of free-text observables",
   // Terrain-gated behavioral.
@@ -80,6 +81,21 @@ const PRIMITIVE_BLURB: Record<HuntPrimitive, string> = {
   file_integrity: "file create/modify/delete monitoring",
   code_signature: "unsigned / untrusted binary hunts",
 };
+
+/**
+ * Mode tag for the corpus-matching primitives: whether the match/enrich loop is
+ * self-serviced (in-cluster source) or needs the worker to bring its own feed.
+ * Field-shape primitives are unconditional, so they read "—".
+ */
+function primitiveMode(p: HuntPrimitive, terrain: Terrain): string {
+  if (p === "ioc_match") {
+    return terrain.ioc_match_self_serviced ? "in-cluster" : "BYO indicators";
+  }
+  if (p === "enrichment_match") {
+    return terrain.enrichment_self_serviced ? "in-cluster" : "BYO enrichment";
+  }
+  return "—";
+}
 
 /**
  * Render an {@link EnvironmentProfile} as an analyst-readable Markdown document.
@@ -382,11 +398,18 @@ export function renderProfileMarkdown(profile: EnvironmentProfile): string {
         "indices that support it, ranked by volume._"
     );
     lines.push("");
-    lines.push("| Primitive | What it enables | Indices |");
-    lines.push("|---|---|---|");
+    lines.push(
+      "_Matchability (`ioc_match` / `enrichment_match`) is derived from observable " +
+        "field shape — it is NOT gated on an in-cluster corpus. The mode tag shows " +
+        "whether the match/enrich loop is self-serviced (in-cluster source) or needs " +
+        "the worker to bring its own indicator/enrichment feed (BYO)._"
+    );
+    lines.push("");
+    lines.push("| Primitive | What it enables | Mode | Indices |");
+    lines.push("|---|---|---|---|");
     for (const p of matrixEntries) {
       const idx = (matrix[p] ?? []).map((n) => `\`${n}\``).join(", ");
-      lines.push(`| \`${p}\` | ${PRIMITIVE_BLURB[p]} | ${idx} |`);
+      lines.push(`| \`${p}\` | ${PRIMITIVE_BLURB[p]} | ${primitiveMode(p, terrain)} | ${idx} |`);
     }
     lines.push("");
   }

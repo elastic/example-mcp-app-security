@@ -774,18 +774,20 @@ export class EnvironmentService {
       .sort((a, b) => (b.doc_count ?? 0) - (a.doc_count ?? 0))
       .map((o) => o.name);
 
-    // Source availability gates the intel-dependent foundational primitives:
-    // `ioc_match` needs a match/intel source; `enrichment_match` needs an
-    // enrichable verdict source. Both are terrain facts (not per-index field
-    // shape), so they're stamped onto each hunt target's `primitives` here — only
-    // hunt targets, so an IOC feed isn't advertised as something you hunt *on*.
+    // `ioc_match` / `enrichment_match` are field-shape capabilities: any hunt target
+    // carrying matchable observables (ip/domain/url/hash/…) supports them. In-cluster
+    // source availability does NOT gate the capability — it only sets the mode:
+    // `in_cluster` (self-serviced match/enrich loop) vs `byo` (worker supplies the
+    // indicator/enrichment feed: ti-loupe / MISP / external service / cross-cluster).
+    // A cluster full of raw observables but no in-cluster TI is still a strong
+    // ioc_match target for a worker that brings its own indicators.
     const intelAvailable = intel_sources.length > 0;
     const enrichAvailable = canonical.some(
       (o) => isEnrichmentSource(o) && o.affordances?.enrichable === true
     );
     const augment = (o: OffSchemaIndex): OffSchemaIndex => {
       if (!isHuntTarget(o)) return o;
-      const extra = sourceGatedPrimitives(o, intelAvailable, enrichAvailable);
+      const extra = matchAndEnrichPrimitives(o, intelAvailable, enrichAvailable);
       return extra.length
         ? { ...o, primitives: [...(o.primitives ?? []), ...extra] }
         : o;
@@ -918,6 +920,8 @@ export class EnvironmentService {
       intel_sources,
       process_tree_indices,
       primitive_matrix,
+      ioc_match_self_serviced: intelAvailable,
+      enrichment_self_serviced: enrichAvailable,
       joinability: { by_key },
       primitives_supported_by_class: PRIMITIVES_SUPPORTED_BY_CLASS,
       field_presence,
@@ -1646,33 +1650,39 @@ function observableFields(o: OffSchemaIndex): {
 }
 
 /**
- * Source-gated foundational primitives (`ioc_match` / `enrichment_match`). Unlike
- * the field-shape primitives in {@link classifyPrimitives}, these need TERRAIN
- * context: an observable on the hunt index AND a source to match / enrich against.
- * `ioc_match` needs ≥1 intel/match source ({@link Terrain.intel_sources});
- * `enrichment_match` needs an enrichable verdict source
- * ({@link IndexAffordances.enrichable}). Deterministic — no field-value reads.
+ * The corpus-matching foundational primitives (`ioc_match` / `enrichment_match`).
+ * Capability is a per-index FIELD-SHAPE fact: any hunt target carrying matchable
+ * observables (ip/domain/url/hash/dns) supports both — you can always match those
+ * columns against an indicator/enrichment corpus. In-cluster source availability is
+ * NOT a gate; it only sets {@link PrimitiveSupport.source_mode}:
+ *   - `in_cluster` — the cluster ships an intel/match ({@link Terrain.intel_sources})
+ *     or enrichable verdict source, so the loop is self-serviced.
+ *   - `byo` — fully matchable, but the worker supplies the feed (ti-loupe / MISP /
+ *     external service / cross-cluster intel).
+ * `hasHash` still lifts `ioc_match` confidence (exact-match, high precision).
+ * Deterministic — no field-value reads.
  */
-function sourceGatedPrimitives(
+function matchAndEnrichPrimitives(
   o: OffSchemaIndex,
   intelAvailable: boolean,
   enrichAvailable: boolean
 ): PrimitiveSupport[] {
-  if (!intelAvailable && !enrichAvailable) return [];
   const { fields, hasHash } = observableFields(o);
   if (!fields.length) return [];
-  const out: PrimitiveSupport[] = [];
-  if (intelAvailable) {
-    out.push({
+  return [
+    {
       primitive: "ioc_match",
       confidence: hasHash ? "high" : "medium",
       fields,
-    });
-  }
-  if (enrichAvailable) {
-    out.push({ primitive: "enrichment_match", confidence: "medium", fields });
-  }
-  return out;
+      source_mode: intelAvailable ? "in_cluster" : "byo",
+    },
+    {
+      primitive: "enrichment_match",
+      confidence: "medium",
+      fields,
+      source_mode: enrichAvailable ? "in_cluster" : "byo",
+    },
+  ];
 }
 
 /** Ordered join keys + the fields that carry each, best (most stable) first. */

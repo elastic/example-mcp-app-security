@@ -19,10 +19,10 @@ coverage/
 openspec/
 # Environment profiler — proprietary cluster outputs, state, and local notes.
 # These embed internal Elastic cluster data; never commit them.
-environment-profile.md
+environment-profile*.md
 environment-profile*.json
-environment-brief.canvas.tsx
-environment-catalog.json
+environment-brief*.canvas.tsx
+environment-catalog*.json
 *.state.json
 # Spikes / TODOs / scratch notes (may reference proprietary cluster info)
 docs/*-spikes.md
