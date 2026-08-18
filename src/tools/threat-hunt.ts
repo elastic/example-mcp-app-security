@@ -119,7 +119,8 @@ export function registerThreatHuntTools(
     "execute-esql",
     {
       title: "Execute ES|QL",
-      description: "Run an ES|QL query",
+      description:
+        "Run an ES|QL query. Uses Elasticsearch async ES|QL so frozen-tier and other long-running queries can complete.",
       inputSchema: { query: z.string() },
       _meta: { ui: { visibility: ["app"] } },
     },
