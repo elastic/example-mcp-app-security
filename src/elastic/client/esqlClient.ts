@@ -24,6 +24,9 @@ export const ESQL_ASYNC_MAX_WAIT_MS = 300_000;
 
 export const ESQL_ASYNC_MAX_POLLS = Math.ceil(ESQL_ASYNC_MAX_WAIT_MS / POLL_WAIT_MS);
 
+/** ES `keep_alive`, derived from {@link ESQL_ASYNC_MAX_WAIT_MS} so the two cannot drift. */
+export const ESQL_ASYNC_KEEP_ALIVE = `${Math.ceil(ESQL_ASYNC_MAX_WAIT_MS / 60_000)}m`;
+
 interface EsqlClientOptions {
   readonly esClient: EsClient;
 }
@@ -63,7 +66,7 @@ export class EsqlClient {
       {
         query,
         wait_for_completion_timeout: ESQL_ASYNC_SUBMIT_WAIT,
-        keep_alive: "5m",
+        keep_alive: ESQL_ASYNC_KEEP_ALIVE,
       },
       {
         params: { format: "json" },
@@ -87,6 +90,7 @@ export class EsqlClient {
             params: {
               format: "json",
               wait_for_completion_timeout: ESQL_ASYNC_POLL_WAIT,
+              keep_alive: ESQL_ASYNC_KEEP_ALIVE,
             },
             timeout: ESQL_ASYNC_HTTP_TIMEOUT_MS,
           }

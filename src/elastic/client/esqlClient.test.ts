@@ -11,6 +11,7 @@ import {
   ESQL_ASYNC_HTTP_TIMEOUT_MS,
   ESQL_ASYNC_MAX_POLLS,
   ESQL_ASYNC_MAX_WAIT_MS,
+  ESQL_ASYNC_KEEP_ALIVE,
   ESQL_ASYNC_POLL_WAIT,
   ESQL_ASYNC_SUBMIT_WAIT,
 } from "./esqlClient.js";
@@ -37,7 +38,7 @@ describe("EsqlClient", () => {
         {
           query: QUERY,
           wait_for_completion_timeout: ESQL_ASYNC_SUBMIT_WAIT,
-          keep_alive: "5m",
+          keep_alive: ESQL_ASYNC_KEEP_ALIVE,
         },
         {
           params: { format: "json" },
@@ -101,6 +102,7 @@ describe("EsqlClient", () => {
           params: {
             format: "json",
             wait_for_completion_timeout: ESQL_ASYNC_POLL_WAIT,
+            keep_alive: ESQL_ASYNC_KEEP_ALIVE,
           },
           timeout: ESQL_ASYNC_HTTP_TIMEOUT_MS,
         }
