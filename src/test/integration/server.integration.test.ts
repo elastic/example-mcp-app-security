@@ -37,6 +37,7 @@ const ALERTS_PATH = "/.alerts-security.alerts-*/_search";
 const RULES_FIND_PATH = "/api/detection_engine/rules/_find";
 const CAT_INDICES_PATH = "/_cat/indices/logs-*,.alerts-security*";
 const ESQL_PATH = "/_query";
+const ESQL_ASYNC_PATH = "/_query/async";
 const USER_PROFILE_PATH = "/internal/security/user_profile";
 
 /**
@@ -549,7 +550,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
 
     it("routes Elasticsearch and Kibana traffic to their configured base URLs in a single threat-hunt call", async () => {
       // threat-hunt fans out to: list-indices (ES _cat) + execute-esql (ES
-      // _query) + investigate-entity (ES _search). Pair it with a Kibana
+      // _query/async) + investigate-entity (ES _search). Pair it with a Kibana
       // call from another tool to assert the two clients are wired
       // independently to their own base URLs.
       mockAxios.onGet(CAT_INDICES_PATH, {
@@ -563,7 +564,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
           },
         ],
       });
-      mockAxios.onPost(ESQL_PATH, { data: { columns: [], values: [] } });
+      mockAxios.onPost(ESQL_ASYNC_PATH, { data: { columns: [], values: [] } });
       mockAxios.onGet(RULES_FIND_PATH, {
         data: { total: 0, page: 1, perPage: 20, data: [] },
       });
@@ -585,7 +586,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
 
         // Every Elasticsearch path landed on the ES base URL.
         expect(requestsByUrl.get(CAT_INDICES_PATH)?.baseURL).toBe(ES_BASE_URL);
-        expect(requestsByUrl.get(ESQL_PATH)?.baseURL).toBe(ES_BASE_URL);
+        expect(requestsByUrl.get(ESQL_ASYNC_PATH)?.baseURL).toBe(ES_BASE_URL);
 
         // The Kibana path landed on the Kibana base URL — never on the ES one.
         expect(requestsByUrl.get(RULES_FIND_PATH)?.baseURL).toBe(
