@@ -25,6 +25,8 @@ This project provides six interactive security operations tools, each with a ric
 | **Threat Hunt** | ES\|QL workbench with clickable entities and a D3 investigation graph |
 | **Sample Data** | Generate ECS security events for demos across 4 attack chain scenarios |
 
+`emulation-run` is a seventh model-facing tool with **no UI**: a JSON state machine the cloud-threat-emulation skill uses so plan → approve → execute → cleanup cannot be skipped. See [docs/architecture.md](docs/architecture.md).
+
 See [docs/features.md](docs/features.md) for a full breakdown of each tool's capabilities.
 
 ## Quick Start

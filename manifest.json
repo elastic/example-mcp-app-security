@@ -57,6 +57,10 @@
     {
       "name": "generate-sample-data",
       "description": "Generate ECS-compliant security events for demos"
+    },
+    {
+      "name": "emulation-run",
+      "description": "State machine for a cloud threat-emulation run (plan, approve, record, finalize)"
     }
   ],
   "tools_generated": true,

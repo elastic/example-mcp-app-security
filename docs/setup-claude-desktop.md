@@ -50,6 +50,7 @@ Skills teach Claude _when_ and _how_ to use the tools. Download the skill zips f
 - `alert-triage.zip`
 - `attack-discovery-triage.zip`
 - `case-management.zip`
+- `cloud-threat-emulation.zip`
 - `detection-rule-management.zip`
 - `generate-sample-data.zip`
 

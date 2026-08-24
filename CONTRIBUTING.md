@@ -128,7 +128,7 @@ The workflow will:
 1. Create the Elastic API client functions in `src/elastic/`
 2. Create the tool registration module in `src/tools/` using `registerAppTool` from `@modelcontextprotocol/ext-apps/server`
 3. Register the module in `src/server.ts`
-4. If the tool has a UI, create a new view directory under `src/views/` with `mcp-app.html` and `App.tsx`
+4. If the tool has a UI, create a new view directory under `src/views/` with `mcp-app.html` and `App.tsx`, and register with `registerTrackedAppTool`. JSON-only model-facing tools (see `emulation-run`) skip the view and use `registerTrackedTool`.
 5. Update `manifest.json` if the tool is model-facing (add to the `tools` array)
 6. Run `npm run typecheck` to verify
 
