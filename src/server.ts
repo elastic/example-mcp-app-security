@@ -41,6 +41,7 @@ import { registerCaseManagementTools } from "./tools/case-management.js";
 import { registerDetectionRuleTools } from "./tools/detection-rules.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
+import { registerEmulationRunTools } from "./tools/emulation-run.js";
 import { noopAnalyticsClient, type AnalyticsClient } from "./elastic/analytics/index.js";
 
 export interface CreateServerDeps {
@@ -128,6 +129,7 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     analytics,
   });
   registerAnalyticsTools(server, { analytics });
+  registerEmulationRunTools(server, { analytics });
 
   return server;
 }

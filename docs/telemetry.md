@@ -73,6 +73,7 @@ create-case
 create-rule
 create-rules-for-scenario
 enrich-discovery
+emulation-run
 execute-esql
 find-rules
 generate-attack-discovery

@@ -8,6 +8,7 @@
 import {
   registerAppTool,
   type McpUiAppToolConfig,
+  type ToolConfig,
 } from "@modelcontextprotocol/ext-apps/server";
 import type {
   McpServer,
@@ -19,6 +20,41 @@ import type {
   ZodRawShapeCompat,
 } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import type { AnalyticsClient } from "../elastic/analytics/index.js";
+
+type OpaqueCb = (...args: unknown[]) => unknown;
+
+function wrapTrackedCallback(
+  analytics: Pick<AnalyticsClient, "trackToolCalled">,
+  name: string,
+  cb: OpaqueCb
+): OpaqueCb {
+  return (...args) => {
+    const start = performance.now();
+
+    const emit = (success: boolean): void => {
+      try {
+        analytics.trackToolCalled({
+          tool_id: name,
+          duration_ms: Math.round(performance.now() - start),
+          success,
+        });
+      } catch {
+        // Telemetry must never mutate handler behaviour; swallow.
+      }
+    };
+
+    return Promise.resolve(cb(...args)).then(
+      (value) => {
+        emit(true);
+        return value;
+      },
+      (err: unknown) => {
+        emit(false);
+        throw err;
+      }
+    );
+  };
+}
 
 /**
  * Drop-in replacement for `registerAppTool` that emits a typed
@@ -50,48 +86,37 @@ export function registerTrackedAppTool<
     inputSchema?: InputArgs;
     outputSchema?: OutputArgs;
   },
-  cb: ToolCallback<InputArgs>,
+  cb: ToolCallback<InputArgs>
 ): RegisteredTool {
-  // Treat the callback as an opaque (...args) => result function so we
-  // don't have to reproduce the exact `args / extra` arity of
-  // ToolCallback<InputArgs> (which differs by whether InputArgs is
-  // undefined). The runtime contract is "forward whatever you got" —
-  // the static types are re-applied via the `as unknown as` bridge
-  // when handing back to `registerAppTool`.
-  type OpaqueCb = (...args: unknown[]) => unknown;
-  const original = cb as unknown as OpaqueCb;
-
-  const wrapped: OpaqueCb = (...args) => {
-    const start = performance.now();
-
-    const emit = (success: boolean): void => {
-      try {
-        analytics.trackToolCalled({
-          tool_id: name,
-          duration_ms: Math.round(performance.now() - start),
-          success,
-        });
-      } catch {
-        // Telemetry must never mutate handler behaviour; swallow.
-      }
-    };
-
-    return Promise.resolve(original(...args)).then(
-      (value) => {
-        emit(true);
-        return value;
-      },
-      (err: unknown) => {
-        emit(false);
-        throw err;
-      },
-    );
-  };
-
   return registerAppTool<OutputArgs, InputArgs>(
     server,
     name,
     config,
-    wrapped as unknown as ToolCallback<InputArgs>,
+    wrapTrackedCallback(analytics, name, cb as unknown as OpaqueCb) as unknown as ToolCallback<InputArgs>
+  );
+}
+
+/**
+ * Same telemetry wrap as {@link registerTrackedAppTool}, but registers a
+ * JSON-only tool via `server.registerTool`. Use this when there is no MCP
+ * App UI (`registerAppTool` requires `_meta.ui`).
+ */
+export function registerTrackedTool<
+  OutputArgs extends ZodRawShapeCompat | AnySchema,
+  InputArgs extends undefined | ZodRawShapeCompat | AnySchema = undefined,
+>(
+  analytics: Pick<AnalyticsClient, "trackToolCalled">,
+  server: Pick<McpServer, "registerTool">,
+  name: string,
+  config: ToolConfig & {
+    inputSchema?: InputArgs;
+    outputSchema?: OutputArgs;
+  },
+  cb: ToolCallback<InputArgs>
+): RegisteredTool {
+  return server.registerTool(
+    name,
+    config,
+    wrapTrackedCallback(analytics, name, cb as unknown as OpaqueCb) as unknown as ToolCallback<InputArgs>
   );
 }

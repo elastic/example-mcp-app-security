@@ -3,6 +3,7 @@
 ## The Two Types of Tools
 
 - **Model-facing** (`triage-alerts`, `triage-attack-discoveries`, `manage-cases`, `manage-rules`, `threat-hunt`, `generate-sample-data`, `generate-attack-discovery`): The LLM calls these. Each returns a compact text summary AND renders an interactive UI.
+- **Model-facing, JSON only** (`emulation-run`): The LLM calls this. It is a fail-closed state machine for cloud threat-emulation runs (plan → approve → record → finalize). It does not execute cloud APIs and has no React view — the compact JSON snapshot *is* the result.
 - **App-only** (`poll-alerts`, `get-alert-context`, `investigate-entity`, `get-entity-detail`, `execute-esql`, `get-case-alerts`, `get-case-comments`, etc.): Hidden from the LLM. The UI calls these for interactivity.
 
 ## How Views Are Built

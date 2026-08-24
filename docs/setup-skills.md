@@ -50,6 +50,7 @@ Download the skill zips from the [latest GitHub release](https://github.com/elas
 - `alert-triage.zip`
 - `attack-discovery-triage.zip`
 - `case-management.zip`
+- `cloud-threat-emulation.zip`
 - `detection-rule-management.zip`
 - `generate-sample-data.zip`
 
