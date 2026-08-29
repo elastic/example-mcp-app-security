@@ -57,7 +57,14 @@
     {
       "name": "generate-sample-data",
       "description": "Generate ECS-compliant security events for demos"
-    }
+    },
+    { "name": "correlate",               "description": "Correlate a case via the ti-correlation Kibana workflow (authoritative)" },
+    { "name": "get_correlation_run",      "description": "Poll a correlation run by id; return render-ready findings" },
+    { "name": "render_correlation",      "description": "Render the workflow's correlation deep-dive findings" },
+    { "name": "diamond_search",          "description": "Exploration aid: blind diamond-model corpus search" },
+    { "name": "get_report",              "description": "Exploration aid: fetch full threat report(s) by id" },
+    { "name": "diamond_search_analyst",  "description": "Exploration aid: scored diamond-model corpus search with triage view" },
+    { "name": "correlation_input_check", "description": "Exploration aid: per-vertex signal stoplight gate" }
   ],
   "tools_generated": true,
   "user_config": {

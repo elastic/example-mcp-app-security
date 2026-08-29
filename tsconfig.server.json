@@ -13,7 +13,7 @@
     "rootDir": ".",
     "lib": ["ES2022"]
   },
-  "include": ["main.ts", "src/server.ts", "src/elastic/**/*", "src/tools/**/*", "src/shared/logger.ts", "src/shared/types.ts"],
+  "include": ["main.ts", "src/server.ts", "src/elastic/**/*", "src/tools/**/*", "src/canvas/**/*", "src/shared/logger.ts", "src/shared/types.ts"],
   "exclude": [
     "node_modules",
     "src/views/**/*",

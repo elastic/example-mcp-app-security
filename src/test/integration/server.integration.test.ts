@@ -143,6 +143,14 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "list-ai-connectors",
           // analytics
           "report-analytics-event",
+          // correlation (workflow-backed path + analyst-aid retrieval tools)
+          "correlate",
+          "get_correlation_run",
+          "render_correlation",
+          "correlation_input_check",
+          "diamond_search",
+          "diamond_search_analyst",
+          "get_report",
         ].sort()
       );
     } finally {
@@ -163,6 +171,10 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "ui://threat-hunt/mcp-app.html",
           "ui://generate-sample-data/mcp-app.html",
           "ui://triage-attack-discoveries/mcp-app.html",
+          // correlation views
+          "ui://correlation/mcp-app.html",
+          "ui://correlation-input/mcp-app.html",
+          "ui://correlation-report/mcp-app.html",
         ].sort()
       );
     } finally {
