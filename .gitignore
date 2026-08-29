@@ -4,6 +4,9 @@ dist/
 .mcp.json
 .vscode/mcp.json
 .env
+clusters.json
+clusters.*.json
+clusters*.bak.json
 .DS_Store
 *.code-workspace
 *.backup
@@ -14,3 +17,20 @@ dist/
 .cursor/
 coverage/
 openspec/
+# Environment profiler — proprietary cluster outputs, state, and local notes.
+# These embed internal Elastic cluster data; never commit them.
+environment-profile*.md
+environment-profile*.json
+environment-brief*.canvas.tsx
+environment-catalog*.json
+*.state.json
+# Spikes / TODOs / scratch notes (may reference proprietary cluster info)
+docs/*-spikes.md
+*-spikes.md
+SPIKES.md
+TODO.md
+TODOS.md
+*.local.md
+# Local scratch runners
+scripts/profile-run.ts
+scripts/*.local.ts

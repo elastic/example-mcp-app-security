@@ -7,6 +7,8 @@
 
 export { AlertsService } from "./alertsService.js";
 export { EsqlService } from "./esqlService.js";
+export type { ProfileEnvironmentOptions } from "./environmentService.js";
+export { EnvironmentService } from "./environmentService.js";
 export { IndicesService } from "./indicesService.js";
 export { EntityDetailService } from "./entityDetailService.js";
 export { InvestigateService } from "./investigateService.js";

@@ -10,6 +10,7 @@ import type { AlertsClient } from "../../elastic/client/alertsClient.js";
 import type { AttackDiscoveryClient } from "../../elastic/client/attackDiscoveryClient.js";
 import type { CasesClient } from "../../elastic/client/casesClient.js";
 import type { EntityDetailClient } from "../../elastic/client/entityDetailClient.js";
+import type { EnvironmentClient } from "../../elastic/client/environmentClient.js";
 import type { EsqlClient } from "../../elastic/client/esqlClient.js";
 import type { IndicesClient } from "../../elastic/client/indicesClient.js";
 import type { InvestigateClient } from "../../elastic/client/investigateClient.js";
@@ -72,6 +73,32 @@ export function createMockEntityDetailClient(): EntityDetailClient {
 
 export function createMockEsqlClient(): EsqlClient {
   return mockClient<EsqlClient>(["executeEsql"]);
+}
+
+export function createMockEnvironmentClient(): EnvironmentClient {
+  const client = mockClient<EnvironmentClient>([
+    "getDataStreams",
+    "getDataStreamStats",
+    "catDocCounts",
+    "catIndices",
+    "runEsql",
+    "getInstalledPackages",
+    "getPackagePolicies",
+    "getConnectors",
+    "countRules",
+    "count",
+    "getFieldCaps",
+    "getMappingsMeta",
+    "getSampleDoc",
+    "countCases",
+    "getAttackDiscoveryGenerations",
+  ]);
+  // `clusterName` is a getter, not a method, so define it explicitly.
+  Object.defineProperty(client, "clusterName", {
+    value: "test-cluster",
+    configurable: true,
+  });
+  return client;
 }
 
 export function createMockIndicesClient(): IndicesClient {

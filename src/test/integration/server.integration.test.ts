@@ -143,6 +143,8 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "list-ai-connectors",
           // analytics
           "report-analytics-event",
+          // environment-profiler
+          "profile-environment",
         ].sort()
       );
     } finally {
