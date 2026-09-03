@@ -1,0 +1,682 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Tines → Elastic Workflows Converter — Research &amp; Plan</title>
+<style>
+:root{--bg:#0b0e14;--card:#141924;--card2:#0d1017;--bd:#2a3244;--fg:#e6e9ef;--mut:#98a2b8;--dim:#6b7690;
+--ok:#00bfb3;--warn:#e7a13a;--bad:#f6726a;--blue:#36a2ef;--pink:#f990c7;--pur:#a78bfa;--el-teal:#00bfb3}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px 100px}
+.hero{padding:64px 0 40px;border-bottom:1px solid var(--bd);margin-bottom:44px}
+.eyebrow{font:600 12px/1 monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--ok);margin-bottom:18px}
+h1{font-size:46px;line-height:1.12;margin:0 0 20px;letter-spacing:-.02em;font-weight:700}
+.grad{background:linear-gradient(96deg,#00bfb3,#36a2ef 55%,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{font-size:18px;color:var(--mut);max-width:820px;margin:0 0 26px}
+.meta{display:flex;gap:26px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);font-family:monospace}
+.meta b{color:var(--mut);font-weight:600}
+h2{font-size:27px;margin:56px 0 18px;letter-spacing:-.01em;display:flex;align-items:baseline;gap:14px;scroll-margin-top:20px}
+h2 .n{font:700 13px/1 monospace;color:var(--ok);border:1px solid var(--ok);border-radius:5px;padding:5px 8px;flex:none}
+h3{font-size:19px;margin:34px 0 12px;color:var(--fg)}
+h4{font-size:15px;margin:20px 0 8px}
+p{margin:0 0 14px}
+.lead{color:var(--mut)}
+a{color:var(--blue)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#1b2130;border:1px solid var(--bd);
+border-radius:4px;padding:1.5px 5px;color:#cfe3f7}
+pre{background:var(--card2);border:1px solid var(--bd);border-radius:11px;padding:18px 20px;overflow:auto;
+font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.8px;line-height:1.62;margin:0 0 18px}
+pre code{background:none;border:none;padding:0}
+pre .k{color:var(--pink)}pre .s{color:#9ae6a4}pre .c{color:var(--dim);font-style:italic}pre .n{color:#f0b866}
+table{width:100%;border-collapse:collapse;margin:0 0 20px;font-size:13.6px}
+th{text-align:left;font:600 11.5px/1 monospace;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);
+padding:11px 12px;border-bottom:1px solid var(--bd)}
+td{padding:10px 12px;border-bottom:1px solid #1c2230;vertical-align:top}
+tbody tr:hover{background:#121725}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:12.6px}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:13px;padding:22px;margin:0 0 18px}
+.grid{display:grid;gap:16px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:860px){.g2,.g3{grid-template-columns:1fr}h1{font-size:33px}}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:13px;padding:20px}
+.stat .k{font:700 34px/1 monospace;margin-bottom:7px}
+.stat .l{font-size:12.8px;color:var(--mut);line-height:1.5}
+.call{border-left:3px solid var(--blue);background:#111725;border-radius:0 11px 11px 0;padding:16px 20px;margin:0 0 18px}
+.call b{display:block;margin-bottom:6px;font-size:14px}
+.call.bad{border-color:var(--bad);background:#1d1417}.call.bad b{color:var(--bad)}
+.call.warn{border-color:var(--warn);background:#1c1710}.call.warn b{color:var(--warn)}
+.call.good{border-color:var(--ok);background:#0e1c1b}.call.good b{color:var(--ok)}
+.call p{font-size:13.8px;color:var(--mut);margin:0}
+.bar{display:flex;height:26px;border-radius:7px;overflow:hidden;margin:0 0 12px;border:1px solid var(--bd)}
+.bar i{display:block;height:100%}
+.legend{display:flex;gap:20px;font-size:12.5px;color:var(--mut);margin:0 0 12px;flex-wrap:wrap}
+.dot{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:-1px}
+.tag{display:inline-block;font:600 10.5px/1 monospace;letter-spacing:.05em;text-transform:uppercase;
+padding:4px 7px;border-radius:4px;white-space:nowrap}
+.t-ok{background:rgba(0,191,179,.13);color:var(--ok);border:1px solid rgba(0,191,179,.35)}
+.t-wa{background:rgba(231,161,58,.13);color:var(--warn);border:1px solid rgba(231,161,58,.35)}
+.t-ba{background:rgba(246,114,106,.13);color:var(--bad);border:1px solid rgba(246,114,106,.35)}
+.ctrl{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 14px}
+.ctrl button{background:var(--card);border:1px solid var(--bd);color:var(--mut);border-radius:7px;
+padding:8px 14px;font:600 12.5px/1 inherit;cursor:pointer}
+.ctrl button:hover{border-color:var(--ok);color:var(--fg)}
+.ctrl button[aria-pressed=true]{background:rgba(0,191,179,.13);border-color:var(--ok);color:var(--ok)}
+.search{background:var(--card2);border:1px solid var(--bd);color:var(--fg);border-radius:7px;padding:8px 12px;
+font:12.5px/1 ui-monospace,Menlo,monospace;min-width:220px;flex:1}
+.fnwrap{max-height:460px;overflow:auto;border:1px solid var(--bd);border-radius:11px}
+.fnwrap table{margin:0}.fnwrap th{position:sticky;top:0;background:#101623;z-index:1}
+ul.tight{margin:0 0 16px;padding-left:20px}ul.tight li{margin-bottom:7px;font-size:14px}
+.flow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;margin:14px 0}
+.node{background:#1b2130;border:1px solid var(--bd);border-radius:7px;padding:7px 12px}
+.arrow{color:var(--blue)}
+.toc{background:var(--card);border:1px solid var(--bd);border-radius:13px;padding:20px 24px;margin:0 0 12px}
+.toc ol{margin:0;padding-left:20px;columns:2;font-size:14px}
+@media(max-width:860px){.toc ol{columns:1}}
+.toc li{margin-bottom:7px}.toc a{text-decoration:none}.toc a:hover{text-decoration:underline}
+.ph{border-left:2px solid var(--bd);padding-left:18px;margin:0 0 8px}
+.ph h4{margin:0 0 4px;font-size:14.5px}
+.ph p{font-size:13.3px;color:var(--mut);margin:0}
+.ph .pt{font:600 10.5px/1 monospace;color:var(--ok);letter-spacing:.05em}
+footer{margin-top:70px;padding-top:26px;border-top:1px solid var(--bd);color:var(--dim);font-size:12.6px}
+</style></head><body><div class="wrap">
+
+<header class="hero">
+ <div class="eyebrow">Schema Research &amp; Implementation Plan</div>
+ <h1>Tines Stories &rarr; <span class="grad">Elastic Workflows</span><br/>Converter</h1>
+ <p class="sub">Findings from reading both schemas end to end, the structural mismatches that make this hard,
+ and a phased plan that ships an honest converter rather than a plausible one.</p>
+ <div class="meta">
+  <span><b>Target repo</b> elastic/example-mcp-app-security</span>
+  <span><b>Branch</b> feat/tines-story-converter</span>
+  <span><b>Sources</b> Tines docs + kbn-workflows/spec/schema.ts</span>
+ </div>
+</header>
+
+<div class="toc"><ol>
+ <li><a href="#tldr">Executive summary</a></li>
+ <li><a href="#source">Source schema: Tines stories</a></li>
+ <li><a href="#target">Target schema: Elastic Workflows</a></li>
+ <li><a href="#gaps">The three structural mismatches</a></li>
+ <li><a href="#matrix">Capability matrix — 219 functions</a></li>
+ <li><a href="#actions">Action &amp; transform mapping</a></li>
+ <li><a href="#design">Design decisions</a></li>
+ <li><a href="#plan">Implementation plan</a></li>
+ <li><a href="#risks">Risks &amp; open questions</a></li>
+</ol></div>
+
+<h2 id="tldr"><span class="n">01</span>Executive summary</h2>
+<p class="lead">A Tines&rarr;Elastic converter is <b>not a translator</b>. The two systems differ in execution model,
+not just syntax, so a meaningful share of real stories cannot be converted faithfully. The plan below treats that
+as the central design constraint rather than an edge case.</p>
+
+<div class="grid g3">
+ <div class="stat"><div class="k" style="color:var(--blue)">219</div><div class="l">Tines formula functions to account for, across 13 categories</div></div>
+ <div class="stat"><div class="k" style="color:var(--pink)">3</div><div class="l">Custom Liquid filters in the Workflows engine: <code>json_parse</code>, <code>entries</code>, <code>pick</code></div></div>
+ <div class="stat"><div class="k bad">0</div><div class="l">Regex filters available &mdash; against 3 Tines regex functions in wide use</div></div>
+</div>
+
+<div class="call good">
+ <b>Recommendation — ship the common subset, report the rest</b>
+ Convert what converts, and emit an explicit fidelity report for what doesn't. The failure mode to avoid is
+ YAML that <em>validates</em> but <em>behaves differently</em> &mdash; a silently wrong containment workflow is far
+ worse than a loud refusal.
+</div>
+
+<div class="call">
+ <b>Liquid filter extensions are a separate PR</b>
+ Closing the regex/hashing/parsing gaps means touching
+ <code>create_workflow_liquid_engine.ts</code>, a shared Kibana platform file. That is a platform change with its own
+ blast radius and reviewers &mdash; it does not belong inside the converter PR.
+</div>
+
+<h2 id="source"><span class="n">02</span>Source schema: Tines stories</h2>
+<p class="lead">There is <b>no published JSON Schema</b>. <code>schema_version</code> is an internal integer (currently
+<b>18</b>). The contract is the export endpoint <code>GET /api/v1/stories/{id}/export</code> plus the action docs.</p>
+
+<pre>{
+  <span class="k">"schema_version"</span>: <span class="n">18</span>,
+  <span class="k">"standard_lib_version"</span>: <span class="n">41</span>,
+  <span class="k">"action_runtime_version"</span>: <span class="n">6</span>,
+  <span class="k">"name"</span>: <span class="s">"Suspicious login triage"</span>,
+  <span class="k">"guid"</span>: <span class="s">"8de58314250ff167127d6ae213711de9"</span>,
+  <span class="k">"agents"</span>: [ <span class="c">/* the actions */</span> ],
+  <span class="k">"links"</span>:  [ { <span class="k">"source"</span>: <span class="n">0</span>, <span class="k">"receiver"</span>: <span class="n">7</span> } ],  <span class="c">// INDICES into agents[]</span>
+  <span class="k">"diagram_layout"</span>: <span class="s">"{\"&lt;guid&gt;\":[105,-195]}"</span>,        <span class="c">// stringified JSON</span>
+  <span class="k">"entry_agent_guid"</span>: <span class="n">null</span>,
+  <span class="k">"exit_agent_guids"</span>: [],
+  <span class="k">"send_to_stories"</span>: [], <span class="k">"forms"</span>: [], <span class="k">"pages"</span>: [], <span class="k">"tags"</span>: [],
+  <span class="k">"keep_events_for"</span>: <span class="n">86400</span>,
+  <span class="k">"origin_story_identifier"</span>: <span class="s">"cloud:&lt;tenant&gt;:&lt;story&gt;"</span>
+}</pre>
+
+<div class="call warn">
+ <b>Two traps worth flagging up front</b>
+ <code>links[]</code> references agents by <b>array index</b>, not guid &mdash; any reordering breaks the graph.
+ And <code>Agents::TriggerAgent</code> is the <b>Condition</b> action, <em>not</em> a story trigger. Wire that wrong
+ and every conditional in every converted story inverts.
+</div>
+
+<h3>The eight action types</h3>
+<table>
+<thead><tr><th style="width:30%">Export type</th><th style="width:17%">UI name</th><th>Key options</th></tr></thead>
+<tbody>
+<tr><td class="mono">Agents::WebhookAgent</td><td>Webhook</td><td class="mono">secret, verbs, path, include_headers</td></tr>
+<tr><td class="mono">Agents::HTTPRequestAgent</td><td>HTTP Request</td><td class="mono">url, method, payload, headers, retry_on_status, retries, pagination</td></tr>
+<tr><td class="mono">Agents::TriggerAgent</td><td><b>Condition</b></td><td class="mono">rules[{type,value,path}], must_match</td></tr>
+<tr><td class="mono">Agents::EventTransformationAgent</td><td>Event Transform</td><td class="mono">mode + mode-specific opts</td></tr>
+<tr><td class="mono">Agents::EmailAgent</td><td>Send Email</td><td class="mono">recipients, subject, body</td></tr>
+<tr><td class="mono">Agents::IMAPAgent</td><td>Receive Email</td><td class="mono">IMAP config</td></tr>
+<tr><td class="mono">Agents::SendToStoryAgent</td><td>Send to Story</td><td class="mono">sub-story ref, payload</td></tr>
+<tr><td class="mono">AI Agent action</td><td>AI Agent</td><td class="mono">prompt, tools</td></tr>
+</tbody></table>
+
+<h3>Data manipulation is one action type with eight modes</h3>
+<p class="lead">There is no dedicated transform step. Everything is <code>EventTransformationAgent</code> with a
+<code>mode</code> discriminator.</p>
+<table>
+<thead><tr><th style="width:16%">mode</th><th style="width:34%">Purpose</th><th>Key options</th></tr></thead>
+<tbody>
+<tr><td class="mono ok">message_only</td><td><b>The workhorse.</b> Emit an arbitrary payload</td><td class="mono">payload, loop</td></tr>
+<tr><td class="mono ok">explode</td><td>Array &rarr; N separate events</td><td class="mono">path, to, limit (default 500)</td></tr>
+<tr><td class="mono bad">extract</td><td>Regex capture into named fields</td><td class="mono">matchers[{path,regexp,to}], emit_no_match</td></tr>
+<tr><td class="mono bad">implode</td><td>Reassemble a previous explode</td><td class="mono">item_path, guid_path, size_path, seconds</td></tr>
+<tr><td class="mono bad">deduplicate</td><td>Emit only if value unique</td><td class="mono">path, lookback (≤100k), period, tolerance</td></tr>
+<tr><td class="mono ok">delay</td><td>Pause before emitting</td><td class="mono">seconds | until</td></tr>
+<tr><td class="mono bad">throttle</td><td>Rate-limit across <b>all</b> story runs</td><td class="mono">interval, runs_per_interval, throttle_key</td></tr>
+<tr><td class="mono warn">automatic</td><td>AI-assisted transform</td><td class="mono">&mdash;</td></tr>
+</tbody></table>
+
+<div class="call warn">
+ <b>Two details that shape the converter</b>
+ <code>message_only</code> has its own <code>loop</code>: point it at a list and the payload evaluates per element,
+ exposing <code>LOOP.value</code>, <code>.index</code>, <code>.key</code> and &mdash; critically &mdash;
+ <code>.previous_result</code>. That is a <b>reduce</b>. Separately, <code>explode</code> stamps a correlation
+ <code>guid</code> + <code>index</code> + <code>size</code> into every child event, which is exactly what
+ <code>implode</code> consumes to rejoin the fan-out.
+</div>
+
+<h2 id="target"><span class="n">03</span>Target schema: Elastic Workflows</h2>
+<p class="lead">Source of truth: <code>src/platform/packages/shared/kbn-workflows/spec/schema.ts</code>.</p>
+
+<pre><span class="k">version</span>: <span class="s">'1'</span>
+<span class="k">name</span>: <span class="s">Suspicious login triage</span>
+<span class="k">enabled</span>: <span class="n">true</span>
+<span class="k">consts</span>: {}
+<span class="k">triggers</span>:            <span class="c"># min 1 — manual | alert | scheduled</span>
+  - <span class="k">type</span>: manual
+    <span class="k">inputs</span>: [{ name, type, required, default }]
+<span class="k">steps</span>:              <span class="c"># min 1 — ordered, NESTED tree</span>
+  - <span class="k">name</span>: enrich_user
+    <span class="k">type</span>: http     <span class="c"># if | foreach | while | switch | parallel | merge</span>
+                  <span class="c"># data.set | wait | waitForInput | waitForApproval</span>
+                  <span class="c"># workflow.execute | workflow.output | workflow.fail</span>
+                  <span class="c"># kibana.request | elasticsearch.request | elasticsearch.esql.query</span>
+    <span class="k">if</span>: <span class="s">"..."</span>       <span class="c"># KQL condition, max 2000 chars</span>
+    <span class="k">with</span>: { url: ..., method: GET }
+    <span class="k">timeout</span>: <span class="s">30s</span>
+    <span class="k">on-failure</span>:
+      <span class="k">retry</span>: { max-attempts: <span class="n">3</span>, delay: <span class="s">3s</span> }
+      <span class="k">fallback</span>: [ ...steps ]
+      <span class="k">continue</span>: <span class="n">true</span></pre>
+
+<h3>The entire data-manipulation surface is one step type</h3>
+<p><code>grep 'StepCategory.Data'</code> across the whole spec returns <b>exactly one hit</b>: <code>data.set</code>.
+No map, filter, reduce, extract, or parse step exists. All shaping happens inside Liquid.</p>
+
+<pre><span class="c">// kbn-workflows/spec/schema.ts:375</span>
+<span class="k">export const</span> DataSetStepInputSchema = z
+  .record(z.string(), z.unknown())
+  .describe(<span class="s">'Key-value pairs... Access via {{ variables.key_name }}'</span>);
+
+<span class="k">export const</span> DataSetStepSchema = BaseStepSchema.extend({
+  <span class="k">type</span>: z.literal(<span class="s">'data.set'</span>),
+  <span class="k">with</span>: DataSetStepInputSchema,
+});</pre>
+
+<div class="call warn">
+ <b>A schema constraint with real consequences</b>
+ <code>data.set</code> is <code>BaseStepSchema.extend</code> <em>only</em> &mdash; no
+ <code>.merge(StepWithForEachSchema)</code>, no <code>.merge(StepWithOnFailureSchema)</code>. It accepts
+ <code>name</code>/<code>type</code>/<code>if</code>/<code>with</code> and nothing else:
+ <b>no per-step <code>foreach</code>, no <code>on-failure</code></b>. A Tines transform inside an exploded scope
+ needs its <code>foreach</code> hoisted a level up.
+</div>
+
+<h3>The Liquid engine is an allowlist</h3>
+<p class="lead">From <code>kbn-workflows/common/utils/create_workflow_liquid_engine.ts</code>:</p>
+<div class="grid g2">
+ <div class="card">
+  <h4 style="margin-top:0">Tags &mdash; 16 permitted</h4>
+  <p style="font-size:12.8px;color:var(--mut);margin:0 0 10px">Everything else is <em>deleted from the engine</em>:
+  an unknown tag is a parse error, not a passthrough.</p>
+  <div class="mono" style="font-size:12.4px;color:var(--ok);line-height:2">
+  assign &middot; for &middot; capture &middot; case &middot; comment &middot; decrement &middot; increment &middot; cycle
+  &middot; if &middot; unless &middot; break &middot; continue &middot; raw &middot; echo &middot; liquid &middot; #</div>
+ </div>
+ <div class="card">
+  <h4 style="margin-top:0">Custom filters &mdash; all three of them</h4>
+  <table style="margin:0"><tbody>
+  <tr><td class="mono ok" style="width:38%">json_parse</td><td style="font-size:13px">JSON string &rarr; object</td></tr>
+  <tr><td class="mono ok">entries</td><td style="font-size:13px">object &rarr; <code>[{key,value}]</code></td></tr>
+  <tr><td class="mono ok">pick</td><td style="font-size:13px">keep dotted paths, preserving nesting</td></tr>
+  </tbody></table>
+  <p style="font-size:12.4px;color:var(--mut);margin:12px 0 0">Plus liquidjs built-ins.
+  <code>ownPropertyOnly: true</code>, no filesystem, <code>parseLimit</code> 150k,
+  <b><code>renderLimit</code> 1000ms</b>, <code>memoryLimit</code> 15MB.</p>
+ </div>
+</div>
+
+<div class="call bad">
+ <b>The render limit kills large loops regardless of translation quality</b>
+ Tines permits a 20,000-element loop with a 5-minute timeout. Workflows gives Liquid <b>1000ms</b> and 15MB per
+ render. Even where <code>LOOP.previous_result</code> or <code>REDUCE</code> can be faked with <code>assign</code>
+ inside <code>{% for %}</code>, a large Tines loop will not survive the translation.
+</div>
+
+<h2 id="gaps"><span class="n">04</span>The three structural mismatches</h2>
+
+<div class="card">
+<h3 style="margin-top:0">Mismatch 1 &mdash; DAG vs tree</h3>
+<table>
+<thead><tr><th style="width:22%"></th><th>Tines</th><th>Elastic Workflows</th></tr></thead>
+<tbody>
+<tr><td><b>Structure</b></td><td>flat <code>agents[]</code> + <code>links[]</code> edges</td><td>ordered, <b>nested</b> <code>steps[]</code> tree</td></tr>
+<tr><td><b>Control flow</b></td><td>implicit, via edges</td><td>explicit <code>if</code>/<code>switch</code>/<code>foreach</code></td></tr>
+<tr><td><b>Reconvergence</b></td><td>native &mdash; N in-edges allowed</td><td class="bad">no direct representation</td></tr>
+</tbody></table>
+<p style="font-size:14px;margin-bottom:0">Any node with multiple in-edges &mdash; a join &mdash; has no clean tree home.
+In the sample story inspected, one node fans out to three receivers and two paths reconverge. Common case, not edge case.</p>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">Mismatch 2 &mdash; per-event fan-out</h3>
+<p style="font-size:14px;margin-top:0">Tines actions run <b>once per event</b>; an <code>explode</code> makes every
+descendant re-run per element, implicitly and transitively. Elastic runs each step once unless wrapped in
+<code>foreach</code>.</p>
+<div class="flow">
+ <span class="node" style="border-color:var(--warn);color:var(--warn)">explode</span><span class="arrow">&rarr;</span>
+ <span class="node">enrich</span><span class="arrow">&rarr;</span>
+ <span class="node">condition</span><span class="arrow">&rarr;</span>
+ <span class="node">notify</span>
+ <span style="color:var(--dim)">&nbsp;&nbsp;last three re-run per element, automatically</span>
+</div>
+<p style="font-size:14px;margin-bottom:0">So <code>explode</code> must become a <code>foreach</code> that
+<b>swallows its entire downstream subgraph</b> &mdash; which couples the graph&rarr;tree pass to the explode pass.</p>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">Mismatch 3 &mdash; expression language</h3>
+<table>
+<thead><tr><th style="width:22%"></th><th>Tines</th><th>Elastic Workflows</th></tr></thead>
+<tbody>
+<tr><td><b>Interpolation</b></td><td class="mono">&lt;&lt;path.to.field&gt;&gt;</td><td class="mono">{{ steps.x.output.y }}</td></tr>
+<tr><td><b>Formulas</b></td><td class="mono">UPCASE(user.job)</td><td class="mono">{{ user.job | upcase }}</td></tr>
+<tr><td><b>Functions</b></td><td><b>219 unique</b>, 13 categories</td><td>3 custom + liquidjs built-ins</td></tr>
+<tr><td><b>Regex</b></td><td class="mono">REGEX_EXTRACT, REGEX_REPLACE, MATCH</td><td class="bad">none</td></tr>
+<tr><td><b>References</b></td><td>slugs (<code>My action</code>&rarr;<code>my_action</code>)</td><td class="mono">steps.&lt;name&gt;.output</td></tr>
+</tbody></table>
+</div>
+
+<h2 id="matrix"><span class="n">05</span>Capability matrix &mdash; all 219 functions</h2>
+<p class="lead">This is the load-bearing artifact of the project. If it claims a function converts when it does not,
+the tool emits confidently wrong workflows. The triage below is a <b>starting estimate</b> &mdash; every
+<span class="tag t-ok">converted</span> verdict must be earned by a passing equivalence test before it ships.</p>
+
+<div class="grid g3">
+ <div class="stat"><div class="k ok">62</div><div class="l"><b>Converted</b> — direct Liquid equivalent exists</div></div>
+ <div class="stat"><div class="k warn">64</div><div class="l"><b>Degraded</b> — expressible via multi-step Liquid or hoisted steps</div></div>
+ <div class="stat"><div class="k bad">93</div><div class="l"><b>Unconvertible</b> — no honest target in the engine</div></div>
+</div>
+
+<div class="legend">
+ <span><i class="dot" style="background:var(--ok)"></i> converted 28.3%</span>
+ <span><i class="dot" style="background:var(--warn)"></i> degraded 29.2%</span>
+ <span><i class="dot" style="background:var(--bad)"></i> unconvertible 42.5%</span>
+</div>
+<div class="bar">
+ <i style="width:28.3%;background:var(--ok)"></i>
+ <i style="width:29.2%;background:var(--warn)"></i>
+ <i style="width:42.5%;background:var(--bad)"></i>
+</div>
+
+<h3>By category</h3>
+<table>
+<thead><tr><th style="width:24%">Category</th><th style="width:8%">Total</th><th style="width:32%">Distribution</th>
+<th style="width:8%">Conv</th><th style="width:8%">Degr</th><th style="width:9%">Unconv</th></tr></thead>
+<tbody>
+<tr><td><b>Text</b></td><td class="mono">63</td><td><div class="bar" style="margin:0;height:18px"><i style="width:42.9%;background:var(--ok)"></i><i style="width:28.6%;background:var(--warn)"></i><i style="width:28.6%;background:var(--bad)"></i></div></td><td class="mono ok">27</td><td class="mono warn">18</td><td class="mono bad">18</td></tr>
+<tr><td><b>Data Parsing/Conversion</b></td><td class="mono">33</td><td><div class="bar" style="margin:0;height:18px"><i style="width:6.1%;background:var(--ok)"></i><i style="width:3.0%;background:var(--warn)"></i><i style="width:90.9%;background:var(--bad)"></i></div></td><td class="mono ok">2</td><td class="mono warn">1</td><td class="mono bad">30</td></tr>
+<tr><td><b>Arrays</b></td><td class="mono">32</td><td><div class="bar" style="margin:0;height:18px"><i style="width:46.9%;background:var(--ok)"></i><i style="width:53.1%;background:var(--warn)"></i><i style="width:0.0%;background:var(--bad)"></i></div></td><td class="mono ok">15</td><td class="mono warn">17</td><td class="mono bad">0</td></tr>
+<tr><td><b>Numbers</b></td><td class="mono">23</td><td><div class="bar" style="margin:0;height:18px"><i style="width:56.5%;background:var(--ok)"></i><i style="width:21.7%;background:var(--warn)"></i><i style="width:21.7%;background:var(--bad)"></i></div></td><td class="mono ok">13</td><td class="mono warn">5</td><td class="mono bad">5</td></tr>
+<tr><td><b>Objects</b></td><td class="mono">13</td><td><div class="bar" style="margin:0;height:18px"><i style="width:15.4%;background:var(--ok)"></i><i style="width:46.2%;background:var(--warn)"></i><i style="width:38.5%;background:var(--bad)"></i></div></td><td class="mono ok">2</td><td class="mono warn">6</td><td class="mono bad">5</td></tr>
+<tr><td><b>Dates/Times</b></td><td class="mono">13</td><td><div class="bar" style="margin:0;height:18px"><i style="width:23.1%;background:var(--ok)"></i><i style="width:69.2%;background:var(--warn)"></i><i style="width:7.7%;background:var(--bad)"></i></div></td><td class="mono ok">3</td><td class="mono warn">9</td><td class="mono bad">1</td></tr>
+<tr><td><b>Hashing/Signing</b></td><td class="mono">13</td><td><div class="bar" style="margin:0;height:18px"><i style="width:0.0%;background:var(--ok)"></i><i style="width:0.0%;background:var(--warn)"></i><i style="width:100.0%;background:var(--bad)"></i></div></td><td class="mono ok">0</td><td class="mono warn">0</td><td class="mono bad">13</td></tr>
+<tr><td><b>Encryption</b></td><td class="mono">12</td><td><div class="bar" style="margin:0;height:18px"><i style="width:0.0%;background:var(--ok)"></i><i style="width:0.0%;background:var(--warn)"></i><i style="width:100.0%;background:var(--bad)"></i></div></td><td class="mono ok">0</td><td class="mono warn">0</td><td class="mono bad">12</td></tr>
+<tr><td><b>Logic</b></td><td class="mono">7</td><td><div class="bar" style="margin:0;height:18px"><i style="width:0.0%;background:var(--ok)"></i><i style="width:100.0%;background:var(--warn)"></i><i style="width:0.0%;background:var(--bad)"></i></div></td><td class="mono ok">0</td><td class="mono warn">7</td><td class="mono bad">0</td></tr>
+<tr><td><b>Story Metadata</b></td><td class="mono">4</td><td><div class="bar" style="margin:0;height:18px"><i style="width:0.0%;background:var(--ok)"></i><i style="width:0.0%;background:var(--warn)"></i><i style="width:100.0%;background:var(--bad)"></i></div></td><td class="mono ok">0</td><td class="mono warn">0</td><td class="mono bad">4</td></tr>
+<tr><td><b>Lambdas</b></td><td class="mono">3</td><td><div class="bar" style="margin:0;height:18px"><i style="width:0.0%;background:var(--ok)"></i><i style="width:0.0%;background:var(--warn)"></i><i style="width:100.0%;background:var(--bad)"></i></div></td><td class="mono ok">0</td><td class="mono warn">0</td><td class="mono bad">3</td></tr>
+<tr><td><b>IP Addresses</b></td><td class="mono">2</td><td><div class="bar" style="margin:0;height:18px"><i style="width:0.0%;background:var(--ok)"></i><i style="width:0.0%;background:var(--warn)"></i><i style="width:100.0%;background:var(--bad)"></i></div></td><td class="mono ok">0</td><td class="mono warn">0</td><td class="mono bad">2</td></tr>
+<tr><td><b>Other</b></td><td class="mono">1</td><td><div class="bar" style="margin:0;height:18px"><i style="width:0.0%;background:var(--ok)"></i><i style="width:100.0%;background:var(--warn)"></i><i style="width:0.0%;background:var(--bad)"></i></div></td><td class="mono ok">0</td><td class="mono warn">1</td><td class="mono bad">0</td></tr>
+</tbody></table>
+
+<div class="call bad">
+ <b>Three categories are effectively total losses</b>
+ <b>Hashing/Signing</b> (13/13), <b>Encryption</b> (12/12) and <b>Data Parsing</b> (30/33) have no target.
+ Any story doing <code>HMAC_SHA256</code> request signing, <code>JWT_SIGN</code>, or
+ <code>CSV_PARSE</code>/<code>XML_PARSE</code> ingestion cannot be meaningfully converted today. It needs an escape
+ hatch to <code>elasticsearch.request</code> (Painless) or a new Liquid filter upstream.
+</div>
+
+<h3>Browse the full census</h3>
+<div class="ctrl">
+ <button data-f="all" aria-pressed="true">All 219</button>
+ <button data-f="converted">Converted</button>
+ <button data-f="degraded">Degraded</button>
+ <button data-f="unconvertible">Unconvertible</button>
+ <input class="search" id="q" placeholder="Filter by name — try REGEX, PARSE, HMAC"/>
+ <span id="cnt" style="color:var(--mut);font-size:12.5px;align-self:center"></span>
+</div>
+<div class="fnwrap">
+ <table><thead><tr><th style="width:34%">Function</th><th style="width:30%">Category</th><th>Verdict</th></tr></thead>
+ <tbody id="fnbody"></tbody></table>
+</div>
+
+<h2 id="actions"><span class="n">06</span>Action &amp; transform mapping</h2>
+<table>
+<thead><tr><th style="width:32%">Tines</th><th style="width:26%">Elastic Workflows</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td class="mono">WebhookAgent (entry)</td><td class="mono ok">triggers[{type:manual}]</td><td>Action dropped from <code>steps</code> entirely</td></tr>
+<tr><td class="mono">HTTPRequestAgent</td><td class="mono ok">type: http</td><td><code>retry_on_status</code>/<code>retries</code> &rarr; <code>on-failure.retry</code></td></tr>
+<tr><td class="mono">TriggerAgent</td><td class="mono ok">type: if</td><td><b>Condition action.</b> <code>must_match</code> drives the join</td></tr>
+<tr><td class="mono">EventTransform · message_only</td><td class="mono ok">data.set</td><td>Clean mapping</td></tr>
+<tr><td class="mono">EventTransform · explode</td><td class="mono ok">foreach</td><td>Must swallow the dominated subtree</td></tr>
+<tr><td class="mono">EventTransform · delay</td><td class="mono ok">wait</td><td>Clean mapping</td></tr>
+<tr><td class="mono">EventTransform · extract</td><td class="bad">—</td><td class="bad">Regex capture; no Liquid regex filter exists</td></tr>
+<tr><td class="mono">EventTransform · implode</td><td class="bad">—</td><td class="bad">Cross-step accumulator via guid correlation</td></tr>
+<tr><td class="mono">EventTransform · deduplicate</td><td class="bad">—</td><td class="bad">Requires cross-run state</td></tr>
+<tr><td class="mono">EventTransform · throttle</td><td class="bad">—</td><td class="bad">Rate limit spans <em>all</em> story runs</td></tr>
+<tr><td class="mono">EmailAgent</td><td class="mono warn">connector step</td><td>Maps to a Kibana connector action</td></tr>
+<tr><td class="mono">SendToStoryAgent</td><td class="mono ok">workflow.execute</td><td>Sub-workflow invocation</td></tr>
+<tr><td class="mono">IMAPAgent</td><td class="bad">—</td><td class="bad">No polling-inbox trigger type</td></tr>
+</tbody></table>
+
+<div class="call good">
+ <b>The good news</b>
+ The most common archetype &mdash; <span class="mono">webhook &rarr; HTTP enrich &rarr; condition &rarr; notify</span>
+ &mdash; maps cleanly end to end. That is the MVP target, and it covers a meaningful share of real stories.
+</div>
+
+<h3>Escape hatches for the gaps</h3>
+<ul class="tight">
+ <li><b>Regex</b> (<code>REGEX_EXTRACT</code>, <code>extract</code> mode) &rarr; <code>elasticsearch.esql.query</code> with <code>GROK</code>/<code>DISSECT</code>, or Painless via <code>elasticsearch.request</code></li>
+ <li><b>Aggregation</b> (<code>GROUP_BY</code>, <code>TALLY</code>) &rarr; ES|QL <code>STATS</code></li>
+ <li><b>Parsing</b> (<code>CSV_PARSE</code>, <code>XML_PARSE</code>) &rarr; ingest pipeline, or a new Liquid filter (separate PR)</li>
+ <li><b>Hashing / signing</b> &rarr; no in-engine option; needs a platform filter or an external connector</li>
+</ul>
+
+<h2 id="design"><span class="n">07</span>Design decisions</h2>
+
+<h3>D1 &mdash; Graph &rarr; tree via dominator analysis, hoist-and-gate for joins</h3>
+<p class="lead">Compute a topological order, then the dominator tree. A node nests under its immediate dominator.
+Join nodes (multiple in-edges) are <b>hoisted</b> to the dominator's level and gated with an <code>if</code>.</p>
+
+<div class="card" style="padding:26px 24px">
+<svg viewBox="0 0 940 300" width="100%" style="max-width:940px" role="img" aria-label="Diamond DAG converted to a nested step tree by hoisting the join node">
+ <defs>
+  <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+   <path d="M0,0 L0,6 L8,3 z" fill="#36a2ef"/></marker>
+  <marker id="arg" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+   <path d="M0,0 L0,6 L8,3 z" fill="#00bfb3"/></marker>
+ </defs>
+ <text x="0" y="16" fill="#98a2b8" font-size="12.5" font-weight="700" font-family="monospace">TINES DAG (links[] edge list)</text>
+ <text x="560" y="16" fill="#98a2b8" font-size="12.5" font-weight="700" font-family="monospace">ELASTIC STEP TREE</text>
+
+ <g font-family="-apple-system,sans-serif" font-size="12.5">
+  <rect x="130" y="44" width="118" height="34" rx="8" fill="#1b2130" stroke="#2a3244"/>
+  <text x="189" y="66" fill="#e6e9ef" text-anchor="middle">webhook</text>
+
+  <rect x="42" y="126" width="118" height="34" rx="8" fill="#1b2130" stroke="#2a3244"/>
+  <text x="101" y="148" fill="#e6e9ef" text-anchor="middle">enrich A</text>
+  <rect x="218" y="126" width="118" height="34" rx="8" fill="#1b2130" stroke="#2a3244"/>
+  <text x="277" y="148" fill="#e6e9ef" text-anchor="middle">enrich B</text>
+
+  <rect x="130" y="208" width="118" height="34" rx="8" fill="#2a1f24" stroke="#f6726a"/>
+  <text x="189" y="230" fill="#f6726a" text-anchor="middle">notify</text>
+  <text x="189" y="262" fill="#f6726a" font-size="11" text-anchor="middle">2 in-edges — join</text>
+
+  <path d="M170,78 L120,122" stroke="#36a2ef" fill="none" marker-end="url(#ar)"/>
+  <path d="M208,78 L258,122" stroke="#36a2ef" fill="none" marker-end="url(#ar)"/>
+  <path d="M120,160 L170,204" stroke="#36a2ef" fill="none" marker-end="url(#ar)"/>
+  <path d="M258,160 L208,204" stroke="#36a2ef" fill="none" marker-end="url(#ar)"/>
+ </g>
+
+ <path d="M400,150 L470,150" stroke="#00bfb3" stroke-width="2" fill="none" marker-end="url(#arg)"/>
+ <text x="435" y="140" fill="#00bfb3" font-size="11.5" text-anchor="middle" font-family="monospace">dominators</text>
+
+ <g font-family="monospace" font-size="12.5">
+  <rect x="540" y="40" width="392" height="230" rx="10" fill="#0d1017" stroke="#2a3244"/>
+  <text x="558" y="66" fill="#f990c7">steps:</text>
+  <text x="574" y="88" fill="#e6e9ef">- name: enrich_a</text>
+  <text x="590" y="106" fill="#98a2b8">type: http</text>
+  <text x="574" y="128" fill="#e6e9ef">- name: enrich_b</text>
+  <text x="590" y="146" fill="#98a2b8">type: http</text>
+  <text x="574" y="174" fill="#00bfb3">- name: notify</text>
+  <text x="590" y="192" fill="#98a2b8">type: http</text>
+  <text x="590" y="210" fill="#e7a13a">if: "enrich_a.ok or enrich_b.ok"</text>
+  <text x="574" y="240" fill="#6b7690">« hoisted once, gated —</text>
+  <text x="574" y="256" fill="#6b7690">  never duplicated »</text>
+ </g>
+</svg>
+</div>
+
+<div class="call bad">
+ <b>Why not subtree duplication</b>
+ The obvious alternative &mdash; copy the subtree down each inbound path &mdash; produces exponential YAML on
+ diamond stories and, far worse, <b>duplicates side effects</b>. An HTTP POST reachable by two paths would fire
+ <em>twice</em>. Verbose is survivable; silently doubling a containment action is not.
+</div>
+
+<p><b>Cycles:</b> Tines permits them. Workflows has <code>while</code> but no arbitrary back-edge.
+Detected cycles are reported as <b>unconvertible</b>, never approximated.</p>
+
+<h3>D2 &mdash; Explode scope is computed <em>with</em> the tree, not after it</h3>
+<div class="card" style="padding:26px 24px">
+<svg viewBox="0 0 940 210" width="100%" style="max-width:940px" role="img" aria-label="Explode node scope becomes a foreach wrapping its dominated subtree">
+ <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+  <path d="M0,0 L0,6 L8,3 z" fill="#36a2ef"/></marker></defs>
+ <text x="0" y="16" fill="#98a2b8" font-size="12.5" font-weight="700" font-family="monospace">TINES — implicit per-event fan-out</text>
+ <text x="560" y="16" fill="#98a2b8" font-size="12.5" font-weight="700" font-family="monospace">ELASTIC — explicit foreach</text>
+ <g font-family="-apple-system,sans-serif" font-size="12">
+  <rect x="0" y="60" width="104" height="32" rx="8" fill="#241f14" stroke="#e7a13a"/>
+  <text x="52" y="81" fill="#e7a13a" text-anchor="middle">explode</text>
+  <rect x="136" y="60" width="94" height="32" rx="8" fill="#1b2130" stroke="#2a3244"/>
+  <text x="183" y="81" fill="#e6e9ef" text-anchor="middle">enrich</text>
+  <rect x="262" y="60" width="94" height="32" rx="8" fill="#1b2130" stroke="#2a3244"/>
+  <text x="309" y="81" fill="#e6e9ef" text-anchor="middle">condition</text>
+  <rect x="388" y="60" width="94" height="32" rx="8" fill="#1b2130" stroke="#2a3244"/>
+  <text x="435" y="81" fill="#e6e9ef" text-anchor="middle">notify</text>
+  <path d="M104,76 L132,76" stroke="#36a2ef" marker-end="url(#ar2)"/>
+  <path d="M230,76 L258,76" stroke="#36a2ef" marker-end="url(#ar2)"/>
+  <path d="M356,76 L384,76" stroke="#36a2ef" marker-end="url(#ar2)"/>
+  <rect x="128" y="48" width="360" height="56" rx="10" fill="none" stroke="#e7a13a" stroke-dasharray="5 4"/>
+  <text x="308" y="126" fill="#e7a13a" font-size="11.5" text-anchor="middle">these re-run per element — implicitly, transitively</text>
+ </g>
+ <g font-family="monospace" font-size="12.5">
+  <rect x="540" y="40" width="392" height="150" rx="10" fill="#0d1017" stroke="#2a3244"/>
+  <text x="558" y="66" fill="#e6e9ef">- name: for_each_item</text>
+  <text x="574" y="86" fill="#f990c7">type: foreach</text>
+  <text x="574" y="106" fill="#e7a13a">foreach: "{{ steps.x.output.items }}"</text>
+  <text x="574" y="126" fill="#f990c7">steps:</text>
+  <text x="590" y="146" fill="#00bfb3">- enrich → condition → notify</text>
+  <text x="574" y="172" fill="#6b7690">« the whole dominated subtree »</text>
+ </g>
+</svg>
+</div>
+<p>You cannot compute nesting without knowing explode scopes, and you cannot compute explode scopes without the
+dominator tree. Hence <b>one pass</b>, not two.</p>
+
+<h3>D3 &mdash; The capability matrix is data, and every row is a test</h3>
+<p>The emitter is a lookup over <code>capability-matrix.ts</code>; it contains no per-function logic.
+<b>Non-negotiable rule:</b> a <span class="tag t-ok">converted</span> verdict requires a passing test proving the
+emitted Liquid matches Tines' output for at least one input. Rows without tests default to
+<span class="tag t-ba">unconvertible</span>. An untested &ldquo;converted&rdquo; claim is the single most
+dangerous failure mode this tool has.</p>
+
+<h3>D4 &mdash; Prism over Microcks for connector stubs</h3>
+<p><b>No public Tines OpenAPI spec exists</b> &mdash; verified, Tines publishes none. So we author OpenAPI 3.1 specs
+for the external APIs the fixture stories touch and drive mocks from those. <b>Prism</b> (Apache-2.0, npm, no Docker,
+validates requests against the spec) fits this repo's vitest + docker-compose CI. Microcks was rejected for MVP as
+Kubernetes-native and disproportionate. The specs are the durable asset &mdash; they port to Microcks or WireMock unchanged.</p>
+
+<h2 id="plan"><span class="n">08</span>Implementation plan</h2>
+<p class="lead">Eight phases, 46 tasks, landing in
+<code>elastic/example-mcp-app-security</code> on <code>feat/tines-story-converter</code> as an OpenSpec change.
+Phases 0&ndash;6 are headless and independently testable; the MCP surface comes last, on top of a proven core.</p>
+
+<div class="card" style="padding:26px 24px">
+<svg viewBox="0 0 940 250" width="100%" style="max-width:940px" role="img" aria-label="Conversion pipeline from story.json to workflow YAML plus fidelity report">
+ <defs><marker id="ar3" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto">
+  <path d="M0,0 L0,7 L9,3.5 z" fill="#36a2ef"/></marker></defs>
+ <g font-family="-apple-system,sans-serif" font-size="12">
+  <rect x="0" y="76" width="96" height="48" rx="9" fill="#1b2130" stroke="#36a2ef"/>
+  <text x="48" y="97" fill="#e6e9ef" text-anchor="middle" font-family="monospace" font-size="11.5">story.json</text>
+  <text x="48" y="114" fill="#6b7690" text-anchor="middle" font-size="10.5">Tines export</text>
+
+  <rect x="132" y="76" width="104" height="48" rx="9" fill="#141924" stroke="#2a3244"/>
+  <text x="184" y="95" fill="#e6e9ef" text-anchor="middle" font-size="11.5">zod parse</text>
+  <text x="184" y="112" fill="#6b7690" text-anchor="middle" font-size="10.5">Phase 0</text>
+
+  <rect x="272" y="76" width="120" height="48" rx="9" fill="#141924" stroke="#2a3244"/>
+  <text x="332" y="95" fill="#e6e9ef" text-anchor="middle" font-size="11.5">graph → tree</text>
+  <text x="332" y="112" fill="#6b7690" text-anchor="middle" font-size="10.5">Phase 3 · dominators</text>
+
+  <rect x="428" y="76" width="120" height="48" rx="9" fill="#141924" stroke="#2a3244"/>
+  <text x="488" y="95" fill="#e6e9ef" text-anchor="middle" font-size="11.5">formula → Liquid</text>
+  <text x="488" y="112" fill="#6b7690" text-anchor="middle" font-size="10.5">Phase 1–2 · matrix</text>
+
+  <rect x="584" y="76" width="110" height="48" rx="9" fill="#141924" stroke="#2a3244"/>
+  <text x="639" y="95" fill="#e6e9ef" text-anchor="middle" font-size="11.5">emit + validate</text>
+  <text x="639" y="112" fill="#6b7690" text-anchor="middle" font-size="10.5">Phase 4</text>
+
+  <rect x="742" y="26" width="190" height="52" rx="9" fill="#12211f" stroke="#00bfb3"/>
+  <text x="837" y="47" fill="#00bfb3" text-anchor="middle" font-family="monospace" font-size="11.5">workflow.yaml</text>
+  <text x="837" y="64" fill="#6b7690" text-anchor="middle" font-size="10.5">+ inline TINES-UNCONVERTIBLE</text>
+
+  <rect x="742" y="122" width="190" height="52" rx="9" fill="#241f14" stroke="#e7a13a"/>
+  <text x="837" y="143" fill="#e7a13a" text-anchor="middle" font-family="monospace" font-size="11.5">fidelity.json</text>
+  <text x="837" y="160" fill="#6b7690" text-anchor="middle" font-size="10.5">machine-readable gaps</text>
+
+  <path d="M96,100 L128,100" stroke="#36a2ef" marker-end="url(#ar3)"/>
+  <path d="M236,100 L268,100" stroke="#36a2ef" marker-end="url(#ar3)"/>
+  <path d="M392,100 L424,100" stroke="#36a2ef" marker-end="url(#ar3)"/>
+  <path d="M548,100 L580,100" stroke="#36a2ef" marker-end="url(#ar3)"/>
+  <path d="M694,92 Q720,92 720,60 L738,60" stroke="#00bfb3" fill="none" marker-end="url(#ar3)"/>
+  <path d="M694,108 Q720,108 720,146 L738,146" stroke="#e7a13a" fill="none" marker-end="url(#ar3)"/>
+
+  <rect x="272" y="180" width="422" height="42" rx="9" fill="#1a1526" stroke="#a78bfa" stroke-dasharray="5 4"/>
+  <text x="483" y="199" fill="#a78bfa" text-anchor="middle" font-size="11.5">Phase 6 — round-trip: execute vs Prism mocks, diff request sequence</text>
+  <text x="483" y="215" fill="#6b7690" text-anchor="middle" font-size="10.5">OpenAPI 3.1 specs authored (no public Tines spec exists)</text>
+  <path d="M639,124 L639,176" stroke="#a78bfa" fill="none" marker-end="url(#ar3)"/>
+ </g>
+</svg>
+</div>
+
+<h3>Phases</h3>
+<div class="grid g2">
+<div class="card"><div class="ph"><span class="pt">PHASE 0 · 6 tasks</span><h4>Schema foundation</h4>
+<p>zod schemas for the export envelope and all 8 agent types. Parse real story exports; fail loudly on unknown
+<code>type</code> rather than silently skipping.</p></div></div>
+
+<div class="card"><div class="ph"><span class="pt">PHASE 1 · 7 tasks</span><h4>Formula lexer + parser</h4>
+<p><code>&lt;&lt;...&gt;&gt;</code> extraction, function-call AST, slug resolution with Tines' documented
+sluggification and collision rules.</p></div></div>
+
+<div class="card"><div class="ph"><span class="pt">PHASE 2 · 6 tasks</span><h4>Capability matrix + emitter</h4>
+<p>All 219 rows as data. Emitter is a pure lookup — no per-function branching. Unknown function ⇒ unconvertible,
+never a guess.</p></div></div>
+
+<div class="card"><div class="ph"><span class="pt">PHASE 3 · 8 tasks</span><h4>Graph → tree</h4>
+<p>Topological sort, dominator tree, join hoisting, explode-scope resolution, cycle detection. The hardest phase;
+property-based tests over generated DAGs.</p></div></div>
+
+<div class="card"><div class="ph"><span class="pt">PHASE 4 · 6 tasks</span><h4>YAML emit + fidelity report</h4>
+<p>Inline <code># TINES-UNCONVERTIBLE:</code> comments at the exact step, plus <code>fidelity.json</code>.
+Every output validated against the live <code>WorkflowSchema</code> zod parse.</p></div></div>
+
+<div class="card"><div class="ph"><span class="pt">PHASE 5 · 5 tasks</span><h4>Golden fixtures</h4>
+<p>Real story exports → expected YAML. Diffed on every run. This is the agreed starting verification bar.</p></div></div>
+
+<div class="card"><div class="ph"><span class="pt">PHASE 6 · 5 tasks</span><h4>Round-trip harness</h4>
+<p>Author OpenAPI 3.1 specs for external APIs, stub with Prism, execute the converted workflow, diff the
+observed request sequence against the Tines-run baseline.</p></div></div>
+
+<div class="card"><div class="ph"><span class="pt">PHASE 7 · 3 tasks</span><h4>MCP tool + App UI</h4>
+<p><code>convert_tines_story</code> tool plus a React view rendering the fidelity report — side-by-side story
+graph and emitted workflow, gaps highlighted.</p></div></div>
+</div>
+
+<div class="call">
+ <b>Why the MCP surface lands last</b>
+ Phases 0–6 are headless and independently testable. Building UI on an unproven converter would mean debugging
+ graph-nesting bugs through a chat client. The core earns its correctness first.
+</div>
+
+<h2 id="risks"><span class="n">09</span>Risks &amp; open questions</h2>
+<table>
+<thead><tr><th style="width:26%">Risk</th><th style="width:11%">Severity</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td><b>Matrix claims a false "converted"</b></td><td class="bad">High</td>
+<td>Every converted row needs a passing equivalence test; untested rows default to unconvertible. This is the
+single most dangerous failure mode — it produces silently wrong automation.</td></tr>
+<tr><td><b>Schema drift</b></td><td class="warn">Medium</td>
+<td>No published Tines JSON Schema; <code>schema_version</code> 18 is observed, not contracted. Pin the version,
+fail loudly on unrecognised values.</td></tr>
+<tr><td><b>Join semantics differ subtly</b></td><td class="warn">Medium</td>
+<td>Hoist-and-gate preserves single-execution but changes ordering. Round-trip harness diffs the actual request
+sequence to catch it.</td></tr>
+<tr><td><b>Fixture stories are hard to source</b></td><td class="warn">Medium</td>
+<td>Real exports may contain customer data. Use Tines' public story library and hand-authored fixtures.</td></tr>
+<tr><td><b>Connector coverage</b></td><td>Low</td>
+<td>Tines has hundreds of integrations; Kibana connectors are fewer. Unmapped connector ⇒ reported gap, not a
+silent HTTP fallback.</td></tr>
+</tbody></table>
+
+<h3>Open questions</h3>
+<ul class="tight">
+ <li>Do we pursue the Liquid filter extension PR (regex, hashing, csv/xml) in parallel, or wait for converter data
+ showing which gaps actually bite in real stories? <b>Recommendation: wait &mdash; let the fidelity reports prioritise it.</b></li>
+ <li>Is the AI Agent action in scope at all? It has no Workflows analogue and may be better reported than approximated.</li>
+ <li>Should the fidelity report emit a numeric conversion score? Useful for tracking; risks becoming a target that
+ invites relaxing the matrix to inflate it.</li>
+</ul>
+
+<footer>
+ <p style="margin:0 0 6px"><b>Verification note.</b> Schema claims here were read directly from
+ <code>kbn-workflows/spec/schema.ts</code>, <code>builtin_step_definitions.ts</code> and
+ <code>create_workflow_liquid_engine.ts</code> in a local Kibana checkout, and from the Tines documentation.
+ The 219-function census is transcribed from Tines' formula reference.</p>
+ <p style="margin:0">The per-function verdicts are a <b>reasoned starting triage, not measured results</b> —
+ no converter code has been written or executed yet. They are the input to Phase 2, and each one is expected to be
+ confirmed or corrected by a test.</p>
+</footer>
+
+<script>
+const M=[{"f":"APPEND","c":"Text","v":"converted"},{"f":"BYTESIZE","c":"Text","v":"unconvertible"},{"f":"CAMELIZE","c":"Text","v":"degraded"},{"f":"CAPITALIZE","c":"Text","v":"converted"},{"f":"CLAMP","c":"Text","v":"degraded"},{"f":"CONST_EQUALS","c":"Text","v":"unconvertible"},{"f":"CONTAINS_URL","c":"Text","v":"unconvertible"},{"f":"DEFAULT","c":"Text","v":"converted"},{"f":"DOWNCASE","c":"Text","v":"converted"},{"f":"ENDS_WITH","c":"Text","v":"degraded"},{"f":"ESCAPE","c":"Text","v":"converted"},{"f":"ESCAPE_ONCE","c":"Text","v":"converted"},{"f":"ESTIMATED_TOKEN_COUNT","c":"Text","v":"unconvertible"},{"f":"FORCE_ARRAY","c":"Text","v":"degraded"},{"f":"HTML_DECODE","c":"Text","v":"unconvertible"},{"f":"HTML_ENCODE","c":"Text","v":"unconvertible"},{"f":"INCLUDES","c":"Text","v":"converted"},{"f":"INDEX_OF","c":"Text","v":"degraded"},{"f":"IS_BLANK","c":"Text","v":"degraded"},{"f":"IS_EMAIL","c":"Text","v":"unconvertible"},{"f":"IS_EMPTY","c":"Text","v":"degraded"},{"f":"IS_IPV4","c":"Text","v":"unconvertible"},{"f":"IS_IPV6","c":"Text","v":"unconvertible"},{"f":"IS_JSON","c":"Text","v":"degraded"},{"f":"IS_PRESENT","c":"Text","v":"degraded"},{"f":"IS_URL","c":"Text","v":"unconvertible"},{"f":"IS_XML","c":"Text","v":"unconvertible"},{"f":"IS_YAML","c":"Text","v":"unconvertible"},{"f":"LAST_INDEX_OF","c":"Text","v":"degraded"},{"f":"LEGACY_STRINGIFY","c":"Text","v":"unconvertible"},{"f":"LEVENSHTEIN_DISTANCE","c":"Text","v":"unconvertible"},{"f":"LSTRIP","c":"Text","v":"converted"},{"f":"MATCH","c":"Text","v":"unconvertible"},{"f":"NEWLINE_TO_BR","c":"Text","v":"converted"},{"f":"PAD_LEFT","c":"Text","v":"degraded"},{"f":"PAD_RIGHT","c":"Text","v":"degraded"},{"f":"PLURALIZE","c":"Text","v":"degraded"},{"f":"PREPEND","c":"Text","v":"converted"},{"f":"RANDOM_STRING","c":"Text","v":"degraded"},{"f":"REGEX_EXTRACT","c":"Text","v":"unconvertible"},{"f":"REGEX_REPLACE","c":"Text","v":"unconvertible"},{"f":"REMOVE","c":"Text","v":"converted"},{"f":"REMOVE_FIRST","c":"Text","v":"converted"},{"f":"REPLACE","c":"Text","v":"converted"},{"f":"REPLACE_FIRST","c":"Text","v":"converted"},{"f":"RSTRIP","c":"Text","v":"converted"},{"f":"SIZE","c":"Text","v":"converted"},{"f":"SLICE","c":"Text","v":"converted"},{"f":"SPLIT","c":"Text","v":"converted"},{"f":"STARTS_WITH","c":"Text","v":"degraded"},{"f":"STRIP","c":"Text","v":"converted"},{"f":"STRIP_HTML","c":"Text","v":"converted"},{"f":"STRIP_NEWLINES","c":"Text","v":"converted"},{"f":"TEXT","c":"Text","v":"converted"},{"f":"TITLEIZE","c":"Text","v":"degraded"},{"f":"TO_SNAKE_CASE","c":"Text","v":"degraded"},{"f":"TRANSLITERATE","c":"Text","v":"unconvertible"},{"f":"TRUNCATE","c":"Text","v":"converted"},{"f":"TRUNCATEWORDS","c":"Text","v":"converted"},{"f":"UPCASE","c":"Text","v":"converted"},{"f":"URL_DECODE","c":"Text","v":"converted"},{"f":"URL_ENCODE","c":"Text","v":"converted"},{"f":"UUID","c":"Text","v":"degraded"},{"f":"ARRAY","c":"Arrays","v":"converted"},{"f":"CHUNK_ARRAY","c":"Arrays","v":"degraded"},{"f":"COMPACT","c":"Arrays","v":"converted"},{"f":"CONCAT","c":"Arrays","v":"converted"},{"f":"COUNTIF","c":"Arrays","v":"degraded"},{"f":"DELETE","c":"Arrays","v":"degraded"},{"f":"DIFFERENCE","c":"Arrays","v":"degraded"},{"f":"FILTER","c":"Arrays","v":"degraded"},{"f":"FIND","c":"Arrays","v":"degraded"},{"f":"FIRST","c":"Arrays","v":"converted"},{"f":"FLATTEN","c":"Arrays","v":"degraded"},{"f":"GROUP_BY","c":"Arrays","v":"degraded"},{"f":"INSERT","c":"Arrays","v":"degraded"},{"f":"INTERSECTION","c":"Arrays","v":"degraded"},{"f":"JOIN","c":"Arrays","v":"converted"},{"f":"LAST","c":"Arrays","v":"converted"},{"f":"MAP","c":"Arrays","v":"converted"},{"f":"PUSH","c":"Arrays","v":"converted"},{"f":"RANDOM_ELEMENT","c":"Arrays","v":"degraded"},{"f":"RANGE","c":"Arrays","v":"converted"},{"f":"REJECT","c":"Arrays","v":"degraded"},{"f":"REVERSE","c":"Arrays","v":"converted"},{"f":"ROTATE","c":"Arrays","v":"degraded"},{"f":"SHUFFLE","c":"Arrays","v":"degraded"},{"f":"SLICE_ARRAY","c":"Arrays","v":"degraded"},{"f":"SORT","c":"Arrays","v":"converted"},{"f":"SORT_NATURAL","c":"Arrays","v":"converted"},{"f":"SUM","c":"Arrays","v":"converted"},{"f":"TALLY","c":"Arrays","v":"degraded"},{"f":"UNION","c":"Arrays","v":"degraded"},{"f":"UNIQ","c":"Arrays","v":"converted"},{"f":"WHERE","c":"Arrays","v":"converted"},{"f":"BASE64URL_DECODE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"BASE64URL_ENCODE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"BASE64_DECODE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"BASE64_ENCODE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"COMBINE_COLUMNS_AND_ROWS","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"CSV_PARSE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"CSV_PARSE_TO_OBJECTS","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"EML_PARSE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"GUNZIP","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"GZIP","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"HCL_PARSE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"HEX_PARSE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"JSON_PARSE","c":"Data Parsing/Conversion","v":"converted"},{"f":"JWK_TO_PEM","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"LDIF_PARSE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"MIME_HEADER_DECODE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"MSG_PARSE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"NEAT_JSON","c":"Data Parsing/Conversion","v":"degraded"},{"f":"OBJECTS_TO_CSV","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"OBJECTS_TO_MARKDOWN_TABLE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"PARSE_URL","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"PEM_TO_JWK","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"TAR","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"TO_CSV","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"TO_HEX","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"TO_JSON","c":"Data Parsing/Conversion","v":"converted"},{"f":"TO_XML","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"TO_YAML","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"UNTAR","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"UNZIP","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"XML_PARSE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"YAML_PARSE","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"ZIP","c":"Data Parsing/Conversion","v":"unconvertible"},{"f":"ABS","c":"Numbers","v":"converted"},{"f":"ACOS","c":"Numbers","v":"unconvertible"},{"f":"ASIN","c":"Numbers","v":"unconvertible"},{"f":"AT_LEAST","c":"Numbers","v":"converted"},{"f":"AT_MOST","c":"Numbers","v":"converted"},{"f":"AVERAGE","c":"Numbers","v":"degraded"},{"f":"CEIL","c":"Numbers","v":"converted"},{"f":"COS","c":"Numbers","v":"unconvertible"},{"f":"DIVIDED_BY","c":"Numbers","v":"converted"},{"f":"FLOOR","c":"Numbers","v":"converted"},{"f":"MAX","c":"Numbers","v":"converted"},{"f":"MEDIAN","c":"Numbers","v":"degraded"},{"f":"MIN","c":"Numbers","v":"converted"},{"f":"MINUS","c":"Numbers","v":"converted"},{"f":"MODULO","c":"Numbers","v":"converted"},{"f":"NUMBER","c":"Numbers","v":"unconvertible"},{"f":"PLUS","c":"Numbers","v":"converted"},{"f":"POWER","c":"Numbers","v":"degraded"},{"f":"RANDOM","c":"Numbers","v":"degraded"},{"f":"ROUND","c":"Numbers","v":"converted"},{"f":"SIN","c":"Numbers","v":"unconvertible"},{"f":"SQRT","c":"Numbers","v":"degraded"},{"f":"TIMES","c":"Numbers","v":"converted"},{"f":"DEEP_MERGE","c":"Objects","v":"degraded"},{"f":"FLATTEN_JSON","c":"Objects","v":"unconvertible"},{"f":"GET","c":"Objects","v":"degraded"},{"f":"IS_VALID_JSON_SCHEMA","c":"Objects","v":"unconvertible"},{"f":"JSONPATH","c":"Objects","v":"unconvertible"},{"f":"JSON_SCHEMA_VALIDATE","c":"Objects","v":"unconvertible"},{"f":"KEYS","c":"Objects","v":"converted"},{"f":"MERGE","c":"Objects","v":"degraded"},{"f":"OBJECT","c":"Objects","v":"degraded"},{"f":"REMOVE_KEY","c":"Objects","v":"degraded"},{"f":"SET_KEY","c":"Objects","v":"degraded"},{"f":"UNFLATTEN_JSON","c":"Objects","v":"unconvertible"},{"f":"VALUES","c":"Objects","v":"converted"},{"f":"DATE","c":"Dates/Times","v":"converted"},{"f":"DATE_DIFF","c":"Dates/Times","v":"degraded"},{"f":"DATE_PARSE","c":"Dates/Times","v":"degraded"},{"f":"DAY","c":"Dates/Times","v":"degraded"},{"f":"DISTANCE_OF_TIME_IN_WORDS","c":"Dates/Times","v":"unconvertible"},{"f":"HOUR","c":"Dates/Times","v":"degraded"},{"f":"MINUTE","c":"Dates/Times","v":"degraded"},{"f":"MONTH","c":"Dates/Times","v":"degraded"},{"f":"NOW","c":"Dates/Times","v":"converted"},{"f":"SECOND","c":"Dates/Times","v":"degraded"},{"f":"TODAY","c":"Dates/Times","v":"degraded"},{"f":"UNIX_TIMESTAMP","c":"Dates/Times","v":"converted"},{"f":"YEAR","c":"Dates/Times","v":"degraded"},{"f":"HMAC_SHA1","c":"Hashing/Signing","v":"unconvertible"},{"f":"HMAC_SHA1_BASE64","c":"Hashing/Signing","v":"unconvertible"},{"f":"HMAC_SHA256","c":"Hashing/Signing","v":"unconvertible"},{"f":"HMAC_SHA256_BASE64","c":"Hashing/Signing","v":"unconvertible"},{"f":"JWT_DECODE","c":"Hashing/Signing","v":"unconvertible"},{"f":"JWT_SIGN","c":"Hashing/Signing","v":"unconvertible"},{"f":"MD5","c":"Hashing/Signing","v":"unconvertible"},{"f":"MD5_BASE64","c":"Hashing/Signing","v":"unconvertible"},{"f":"SHA1","c":"Hashing/Signing","v":"unconvertible"},{"f":"SHA256","c":"Hashing/Signing","v":"unconvertible"},{"f":"SHA256_BASE64","c":"Hashing/Signing","v":"unconvertible"},{"f":"SHA512","c":"Hashing/Signing","v":"unconvertible"},{"f":"ZSCALER_OBFUSCATE_API_KEY","c":"Hashing/Signing","v":"unconvertible"},{"f":"AES_DECRYPT","c":"Encryption","v":"unconvertible"},{"f":"AES_ENCRYPT","c":"Encryption","v":"unconvertible"},{"f":"GENERATE_RSA_KEYS","c":"Encryption","v":"unconvertible"},{"f":"OPENSSL_DECRYPT","c":"Encryption","v":"unconvertible"},{"f":"OPENSSL_ENCRYPT","c":"Encryption","v":"unconvertible"},{"f":"RSA_AES_HYBRID_DECRYPT","c":"Encryption","v":"unconvertible"},{"f":"RSA_AES_HYBRID_ENCRYPT","c":"Encryption","v":"unconvertible"},{"f":"RSA_DECRYPT","c":"Encryption","v":"unconvertible"},{"f":"RSA_ENCRYPT","c":"Encryption","v":"unconvertible"},{"f":"RSA_SIGN","c":"Encryption","v":"unconvertible"},{"f":"TINES_DECRYPT","c":"Encryption","v":"unconvertible"},{"f":"TINES_ENCRYPT","c":"Encryption","v":"unconvertible"},{"f":"AND","c":"Logic","v":"degraded"},{"f":"ERROR","c":"Logic","v":"degraded"},{"f":"IF","c":"Logic","v":"degraded"},{"f":"IF_ERROR","c":"Logic","v":"degraded"},{"f":"NOT","c":"Logic","v":"degraded"},{"f":"OR","c":"Logic","v":"degraded"},{"f":"SWITCH","c":"Logic","v":"degraded"},{"f":"LAMBDA","c":"Lambdas","v":"unconvertible"},{"f":"MAP_LAMBDA","c":"Lambdas","v":"unconvertible"},{"f":"REDUCE","c":"Lambdas","v":"unconvertible"},{"f":"IN_CIDR","c":"IP Addresses","v":"unconvertible"},{"f":"IS_IP_ADDRESS","c":"IP Addresses","v":"unconvertible"},{"f":"PROMPT","c":"Story Metadata","v":"unconvertible"},{"f":"STORY_RUN_GUID","c":"Story Metadata","v":"unconvertible"},{"f":"STORY_RUN_LINK","c":"Story Metadata","v":"unconvertible"},{"f":"WORKBENCH_LINK","c":"Story Metadata","v":"unconvertible"},{"f":"TYPE","c":"Other","v":"degraded"}];
+const TAG={converted:'<span class="tag t-ok">converted</span>',degraded:'<span class="tag t-wa">degraded</span>',unconvertible:'<span class="tag t-ba">unconvertible</span>'};
+let f='all',q='';
+const body=document.getElementById('fnbody'),cnt=document.getElementById('cnt');
+function render(){
+  const rows=M.filter(m=>(f==='all'||m.v===f)&&(!q||m.f.toLowerCase().includes(q)||m.c.toLowerCase().includes(q)));
+  body.innerHTML=rows.map(m=>'<tr><td class="mono" style="color:#cfe3f7">'+m.f+'</td><td style="color:var(--mut);font-size:13px">'+m.c+'</td><td>'+TAG[m.v]+'</td></tr>').join('')
+    ||'<tr><td colspan="3" style="color:var(--dim);padding:20px">No matches.</td></tr>';
+  cnt.textContent=rows.length+' shown';
+}
+document.querySelectorAll('.ctrl button').forEach(b=>b.onclick=()=>{
+  f=b.dataset.f;
+  document.querySelectorAll('.ctrl button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  render();
+});
+document.getElementById('q').oninput=e=>{q=e.target.value.toLowerCase().trim();render();};
+render();
+</script>
+</div></body></html>
