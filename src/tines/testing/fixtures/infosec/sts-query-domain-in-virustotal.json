@@ -1,0 +1,404 @@
+{
+  "schema_version": 3,
+  "name": "StS Query Domain in VirusTotal",
+  "description": "",
+  "guid": "299de00a9efb6007c9dce36a8093078f",
+  "exported_at": "2021-02-25T10:01:42Z",
+  "agents": [
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Request Queued",
+      "disabled": false,
+      "guid": "626ed7d1eb9b2b7529c381af245fa7d7",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "queued",
+            "path": "{{.check_scan_status.body.verbose_msg}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Domain knowngood",
+      "disabled": false,
+      "guid": "f64d66a4abdcaf50beb3999e9f2fea4a",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "true",
+            "path": "{{.check_if_knowngood.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Delay Event",
+      "disabled": false,
+      "guid": "821ec565e282980cec642be7cbd27cf4",
+      "options": {
+        "mode": "delay",
+        "seconds": "15"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive URL",
+      "disabled": false,
+      "guid": "cdfabd3c71512fcba7563697c42d29ae",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post",
+        "include_headers": "false"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "08cdfb9f597da28362d14ee71a7f9f3d",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "scan_engine": "virustotal",
+          "malicious": "{% if domain_knowngood.rule_matched %}knowngood{% elsif trigger_if_invalid.rule_matched %}Error Submitting to VirusTotal{% elsif check_scan_status.body.positives >=1 or search_for_url_in_virustotal.body.positives >=1 %}true{% else %}false{% endif %}",
+          "number_malicious": "{% if domain_knowngood.rule_matched %}knowngood{% elsif trigger_if_invalid.rule_matched %}Error Submitting to VirusTotal{% else %}{{.check_scan_status.body.positives}}{{.search_for_url_in_virustotal.body.positives}}{% endif %}",
+          "analysis_date": "{% if domain_knowngood.rule_matched %}knowngood{% elsif trigger_if_invalid.rule_matched %}Error Submitting to VirusTotal{% else %}{{.check_scan_status.body.scan_date}}{{.search_for_url_in_virustotal.body.scan_date}}{% endif %}",
+          "url": "{{.receive_url.url}}",
+          "analysis_link": "{{.check_scan_status.body.permalink}}{{.search_for_url_in_virustotal.body.permalink}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Submit URL to VirusTotal",
+      "disabled": false,
+      "guid": "e53310be2bad5ccc7a05cd13da6255f3",
+      "options": {
+        "url": "https://www.virustotal.com/vtapi/v2/url/scan",
+        "method": "post",
+        "payload": {
+          "apikey": "[REDACTED:apikey]",
+          "url": "{{.receive_url.url}}"
+        },
+        "retry_on_status": [
+          "204"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Found in VirusTotal",
+      "disabled": false,
+      "guid": "23b503ef4b03c796efda2008b25d9a60",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": ".",
+            "path": "{{.search_for_url_in_virustotal.body.scan_id}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Send to Story Agent",
+      "disabled": false,
+      "guid": "daecca969a7a2952b7ef83842fd42e03",
+      "options": {
+        "story": "{% story StS Query Domain in VirusTotal %}",
+        "payload": {
+          "url": "https://badsite.com/page"
+        },
+        "send_payload_as_body": "false"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Not Found in VirusTotal",
+      "disabled": false,
+      "guid": "a1e994310cb76d55e2ca611389b7d20e",
+      "options": {
+        "rules": [
+          {
+            "type": "!regex",
+            "value": ".",
+            "path": "{{.search_for_url_in_virustotal.body.scan_id}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Invalid",
+      "disabled": false,
+      "guid": "09a30a46bcf040324fda9a34b3fb77de",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "invalid",
+            "path": "{{.submit_url_to_virustotal.body.verbose_msg}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check if knowngood",
+      "disabled": false,
+      "guid": "637579020e8e2cda899418720b9451f8",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "{% global_resource known_good_domains %}",
+            "path": "{{.extract_domain.url_domain[0][0]}}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Domain Not knowngood",
+      "disabled": false,
+      "guid": "f86952633946b097b01fd7ce3c27da84",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "false",
+            "path": "{{.check_if_knowngood.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Check Scan Status",
+      "disabled": false,
+      "guid": "6c7e67a1dc2d36dcff9b2603dd215fb4",
+      "options": {
+        "url": "https://www.virustotal.com/vtapi/v2/url/report",
+        "content_type": "form",
+        "method": "post",
+        "payload": {
+          "apikey": "[REDACTED:apikey]",
+          "resource": "{{.submit_url_to_virustotal.body.scan_id}}{{.search_for_url_in_virustotal.body.scan_id}}"
+        },
+        "headers": {},
+        "log_error_on_status": [],
+        "retry_on_status": [
+          "204"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search for URL in VirusTotal",
+      "disabled": false,
+      "guid": "d82d312486e8e66a8cfd74f7758dcdce",
+      "options": {
+        "url": "https://www.virustotal.com/vtapi/v2/url/report",
+        "content_type": "form",
+        "method": "post",
+        "payload": {
+          "apikey": "[REDACTED:apikey]",
+          "resource": "{{.receive_url.url}}"
+        },
+        "headers": {},
+        "log_error_on_status": [],
+        "retry_on_status": [
+          "204"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Delay Event",
+      "disabled": false,
+      "guid": "fad1f9df58f5ab2c2a2d250c457270e2",
+      "options": {
+        "mode": "delay",
+        "seconds": "3"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Success",
+      "disabled": false,
+      "guid": "6c019977ef5965462e949ca683d4988e",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "200",
+            "path": "{{.submit_url_to_virustotal.status}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Scan Finished",
+      "disabled": false,
+      "guid": "c900a0e56b1dbf37c09f6b89b306249e",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "finished",
+            "path": "{{.check_scan_status.body.verbose_msg}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Extract Domain",
+      "disabled": false,
+      "guid": "365a88a554905f5ce7ac4a77581f97e8",
+      "options": {
+        "mode": "extract",
+        "matchers": [
+          {
+            "path": "{{.receive_url.url}}",
+            "regexp": "^(?:https?:\\/\\/)?(?:[^@\\n]+@)?(?:www\\.)?([^:\\/\\n?]+)",
+            "to": "url_domain"
+          }
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 2
+    },
+    {
+      "source": 1,
+      "receiver": 4
+    },
+    {
+      "source": 2,
+      "receiver": 12
+    },
+    {
+      "source": 3,
+      "receiver": 17
+    },
+    {
+      "source": 5,
+      "receiver": 9
+    },
+    {
+      "source": 5,
+      "receiver": 15
+    },
+    {
+      "source": 6,
+      "receiver": 4
+    },
+    {
+      "source": 8,
+      "receiver": 5
+    },
+    {
+      "source": 9,
+      "receiver": 4
+    },
+    {
+      "source": 10,
+      "receiver": 11
+    },
+    {
+      "source": 10,
+      "receiver": 1
+    },
+    {
+      "source": 11,
+      "receiver": 13
+    },
+    {
+      "source": 12,
+      "receiver": 0
+    },
+    {
+      "source": 12,
+      "receiver": 16
+    },
+    {
+      "source": 13,
+      "receiver": 6
+    },
+    {
+      "source": 13,
+      "receiver": 8
+    },
+    {
+      "source": 14,
+      "receiver": 12
+    },
+    {
+      "source": 15,
+      "receiver": 14
+    },
+    {
+      "source": 16,
+      "receiver": 4
+    },
+    {
+      "source": 17,
+      "receiver": 10
+    }
+  ],
+  "diagram_layout": "{\"626ed7d1eb9b2b7529c381af245fa7d7\":[-510.0,-810.0],\"f64d66a4abdcaf50beb3999e9f2fea4a\":[-1020.0,-1545.0],\"821ec565e282980cec642be7cbd27cf4\":[-510.0,-720.0],\"cdfabd3c71512fcba7563697c42d29ae\":[-840.0,-1830.0],\"08cdfb9f597da28362d14ee71a7f9f3d\":[-1005.0,-510.0],\"e53310be2bad5ccc7a05cd13da6255f3\":[-510.0,-1185.0],\"23b503ef4b03c796efda2008b25d9a60\":[-960.0,-1035.0],\"daecca969a7a2952b7ef83842fd42e03\":[-630.0,-1830.0],\"a1e994310cb76d55e2ca611389b7d20e\":[-510.0,-1290.0],\"09a30a46bcf040324fda9a34b3fb77de\":[-720.0,-1035.0],\"637579020e8e2cda899418720b9451f8\":[-840.0,-1620.0],\"f86952633946b097b01fd7ce3c27da84\":[-705.0,-1545.0],\"6c7e67a1dc2d36dcff9b2603dd215fb4\":[-510.0,-885.0],\"d82d312486e8e66a8cfd74f7758dcdce\":[-510.0,-1380.0],\"fad1f9df58f5ab2c2a2d250c457270e2\":[-510.0,-1005.0],\"6c019977ef5965462e949ca683d4988e\":[-510.0,-1095.0],\"c900a0e56b1dbf37c09f6b89b306249e\":[-765.0,-810.0],\"365a88a554905f5ce7ac4a77581f97e8\":[-840.0,-1725.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "cdfabd3c71512fcba7563697c42d29ae",
+  "exit_agent_guids": [
+    "08cdfb9f597da28362d14ee71a7f9f3d"
+  ],
+  "exit_agent_guid": "08cdfb9f597da28362d14ee71a7f9f3d",
+  "send_to_stories": [],
+  "form": {
+    "name": "StS Submit Query Domain in VirusTotal Form",
+    "description": "",
+    "fields": [],
+    "visibility": "world",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

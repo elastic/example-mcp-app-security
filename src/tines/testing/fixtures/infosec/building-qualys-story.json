@@ -1,0 +1,742 @@
+{
+  "schema_version": 3,
+  "name": "[Building] - Qualys Story",
+  "description": "Qualys API",
+  "guid": "249c86f4ee56e664f2fe19265f6d52a2",
+  "exported_at": "2021-02-25T10:17:22Z",
+  "agents": [
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create New Incident Ticket in ServiceNow",
+      "disabled": false,
+      "guid": "3fbc6d844a57e0ab99352c023a11f06a",
+      "options": {
+        "url": "https://{{servicenowurl}}/api/now/v1/table/incident",
+        "content_type": "json",
+        "method": "post",
+        "basic_auth": "username:{{ .CREDENTIAL.servicenow }}",
+        "payload": {
+          "short_description": "New Ticket with Interesting Subject",
+          "comments": "[code] A new ticket with a particular body. <br> The ticket has the characteristic <i>interesting characteristic</i>. <br> The Event in question is lorum ipsum. <br><br>  This ticket will be updated automatically.<br><br> [/code]"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Single Scans",
+      "disabled": false,
+      "guid": "3dced960f174d235955b7f7f9efba559",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "^$",
+            "path": "{{list_qualys_scans.body.SCAN_LIST_OUTPUT.RESPONSE.SCAN_LIST.SCAN | size }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Multiple Scans",
+      "disabled": false,
+      "guid": "0cdcf28bd806aa5d32a949baf13ee95e",
+      "options": {
+        "rules": [
+          {
+            "type": "field>=value",
+            "value": "1",
+            "path": "{{list_qualys_scans.body.SCAN_LIST_OUTPUT.RESPONSE.SCAN_LIST.SCAN | size }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Scans",
+      "disabled": false,
+      "guid": "c414f2f24136e63e47fe5a338387c489",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "individual_scan": "{{list_qualys_scans.body.SCAN_LIST_OUTPUT.RESPONSE.SCAN_LIST.SCAN | as_object }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Deduplicate Events",
+      "disabled": false,
+      "guid": "353156ef5378d854e8743bd79c06428c",
+      "options": {
+        "mode": "deduplicate",
+        "lookback": "100",
+        "path": "{{.explode_scans.individual_scan.REF}}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Complete",
+      "disabled": false,
+      "guid": "676f08af1d5cae7185d96bc470273587",
+      "options": {
+        "rules": [
+          {
+            "type": "field>value",
+            "value": "0",
+            "path": "{{.get_scan_by_id.body | size}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Scans",
+      "disabled": false,
+      "guid": "bc160003cd5d63b61d6c636ced8311c4",
+      "options": {
+        "mode": "explode",
+        "path": "{{.list_qualys_scans.body.SCAN_LIST_OUTPUT.RESPONSE.SCAN_LIST.SCAN}}",
+        "to": "individual_scan"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Delay 180 seconds",
+      "disabled": false,
+      "guid": "a618caf2d98ed8eb33ca3bce47500b8f",
+      "options": {
+        "mode": "delay",
+        "seconds": 180
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Incomplete",
+      "disabled": false,
+      "guid": "df84070f02bd950db0764c41d6ba49bd",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "Unable to fetch",
+            "path": "{{.get_scan_by_id.body.SIMPLE_RETURN.RESPONSE.TEXT}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Scan by ID",
+      "disabled": false,
+      "guid": "60aa7f05a6394cb68fce15da650bf6df",
+      "options": {
+        "url": "https://qualysguard.qg2.apps.qualys.eu/api/2.0/fo/scan/",
+        "method": "get",
+        "payload": {
+          "scan_ref": "{{.start_scan.body.SIMPLE_RETURN.RESPONSE.ITEM_LIST.ITEM.last.VALUE}}",
+          "action": "fetch",
+          "output_format": "json",
+          "mode": "extended"
+        },
+        "headers": {
+          "Authorization": "Basic {{.CREDENTIAL.qualys}}",
+          "Host": "qualysguard.qg2.apps.qualys.eu",
+          "X-Requested-With": "Tines",
+          "Accept-Encoding": "gzip, deflate",
+          "Content-Length": "0",
+          "cache-control": "no-cache",
+          "User-Agent": "Tines",
+          "Accept": "*/*"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Issue in Jira",
+      "disabled": false,
+      "guid": "40ceba3e8984c139629b76fc34e5f417",
+      "options": {
+        "url": "https://{% global_resource jira_domain %}/rest/api/2/issue",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "fields": {
+            "project": {
+              "key": "DEMO"
+            },
+            "issuetype": {
+              "name": "Task"
+            },
+            "assignee": {
+              "name": "thomas"
+            },
+            "priority": {
+              "name": "Highest"
+            },
+            "description": "A {% if enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '5'%}*{color:red}Critical{color}*{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '4' %}*{color:red}High{color}*{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '3' %}*{color:orange}Medium{color}*{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '2' %}*{color:yellow}Low{color}*{% else %}*{color:green}Informational{color}*{% endif %} Vulnerability for {{.explode_findings.individual_finding.ip}} in Qualys{% line_break %}{% line_break %}h2. *Host Vulnerability Summary*{% line_break %}{% line_break %}*IP:* {{.explode_findings.individual_finding.ip}} {% line_break %}*DNS:* {{.explode_findings.individual_finding.dns}}{% line_break %}*Protocol - Port:* {{.explode_findings.individual_finding.protocol}} - {{.explode_findings.individual_finding.port}} {% line_break %}*Result:* {{.explode_findings.individual_finding.result}}{% line_break %}{% line_break %}h2. *Vulnerability Details*{% line_break %}{% line_break %}*Title:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.TITLE}}{% line_break %}*Category:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.CATEGORY}}{% line_break %}*Type:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.VULN_TYPE}}{% line_break %}*Data Published:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.PUBLISHED_DATETIME}}{% line_break %}*Diagnosis:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.DIAGNOSIS}}{% line_break %}*Consequence:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.CONSEQUENCE}}{% line_break %}*Solution:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SOLUTION}}{% line_break %}h2. *Links & References*{% line_break %}{% line_break %}*[Link to Qualys|https://{% global_resource qualys %}/portal-front/module/vm/#/vulndetails/{{.explode_findings.individual_finding.qid}}?detail=KB]{% line_break %}* Link to SOP/Playbook:{% line_break %}",
+            "summary": "{% if enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '5'%}Critical{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '4' %}High{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '3' %}Medium{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '2' %}Low{% else %}Informational{% endif %} Vulnerability for {{.explode_findings.individual_finding.ip}} "
+          }
+        },
+        "basic_auth": [
+          "{% global_resource jira_svc_user %}",
+          "{% credential jira_svc_pwd %}"
+        ],
+        "log_error_on_status": []
+      },
+      "schedule": [],
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Medium or Higher Severity",
+      "disabled": false,
+      "guid": "fa39402cf9e043406162c8417dbc1f11",
+      "options": {
+        "rules": [
+          {
+            "type": "field>=value",
+            "value": "2",
+            "path": "{{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Delay Event",
+      "disabled": false,
+      "guid": "c8e999c2cfdbe4551d561ea7040eeaf3",
+      "options": {
+        "mode": "delay",
+        "seconds": "{{.explode_findings.index | times: 30 }}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "List Qualys Scans",
+      "disabled": false,
+      "guid": "246d0d0c66fc84752d1a930c68d0df53",
+      "options": {
+        "url": "https://qualysguard.qg2.apps.qualys.eu/api/2.0/fo/scan/",
+        "method": "get",
+        "payload": {
+          "action": "list"
+        },
+        "headers": {
+          "Authorization": "Basic {{.CREDENTIAL.qualys}}",
+          "Host": "qualysguard.qg2.apps.qualys.eu",
+          "X-Requested-With": "Tines",
+          "User-Agent": "Tines"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Individual Report",
+      "disabled": false,
+      "guid": "e9647c0c17230ae74bd8cd011732e909",
+      "options": {
+        "url": "https://{% global_resource qualys %}/api/2.0/fo/report/",
+        "method": "post",
+        "payload": {
+          "id": "6965841",
+          "action": "fetch"
+        },
+        "headers": {
+          "Authorization": "[REDACTED:authorization]",
+          "Host": "qualysapi.qg2.apps.qualys.com",
+          "X-Requested-With": "Tines",
+          "Accept-Encoding": "gzip, deflate",
+          "Content-Length": "0",
+          "cache-control": "no-cache",
+          "User-Agent": "Tines",
+          "Accept": "*/*"
+        },
+        "timeout": "300",
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "List Qualys Reports",
+      "disabled": false,
+      "guid": "16e9a5b1bd78be0bbabeb1a8503816cd",
+      "options": {
+        "url": "https://{% global_resource qualys %}/api/2.0/fo/report/",
+        "method": "get",
+        "payload": {
+          "action": "list"
+        },
+        "headers": {
+          "Authorization": "[REDACTED:authorization]",
+          "Host": "{% global_resource qualys %}",
+          "X-Requested-With": "Tines",
+          "User-Agent": "Tines"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Attach report email",
+      "disabled": false,
+      "guid": "f9a49d7c4c50dc11f8cd5d1bb71d49c4",
+      "options": {
+        "url": "https://graph.microsoft.com/v1.0/users/thomas@tines.dev/sendMail",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "message": {
+            "subject": "Tines test- Qualys Vulnerability Report",
+            "body": {
+              "contentType": "HTML",
+              "content": "Hi Thomas,<br><br> Please find the vulnerability report from Qualys you requested. Please work on remediating the vulnerabilities.<br> Reach out to Security Engineering in case of any queries. <br><br> Thanks, <br> Security Automation"
+            },
+            "toRecipients": [
+              {
+                "emailAddress": {
+                  "address": "thomas@tines.io"
+                }
+              }
+            ],
+            "attachments": [
+              {
+                "@odata.type": "microsoft.graph.fileAttachment",
+                "name": "scan_report.csv",
+                "contentBytes": "{{.download_saved_report.body | base64_encode}}"
+              }
+            ]
+          },
+          "saveToSentItems": "true"
+        },
+        "headers": {
+          "Authorization": "[REDACTED:authorization]"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Delay for 2 minutes",
+      "disabled": false,
+      "guid": "2e20ed2c1171d9b039b3b0ba770adbce",
+      "options": {
+        "mode": "delay",
+        "seconds": "180"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Issue in Jira",
+      "disabled": false,
+      "guid": "af10c45ed88611b08bec01245fad75d4",
+      "options": {
+        "url": "https://tines.service-now.com/table/incident",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "fields": {
+            "project": {
+              "key": "DEMO"
+            },
+            "issuetype": {
+              "name": "Task"
+            },
+            "assignee": {
+              "name": "thomas"
+            },
+            "priority": {
+              "name": "Highest"
+            },
+            "description": "A {% if enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '5'%}*{color:red}Critical{color}*{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '4' %}*{color:red}High{color}*{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '3' %}*{color:orange}Medium{color}*{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '2' %}*{color:yellow}Low{color}*{% else %}*{color:green}Informational{color}*{% endif %} Vulnerability for {{.explode_findings.individual_finding.ip}} in Qualys{% line_break %}{% line_break %}h2. *Host Vulnerability Summary*{% line_break %}{% line_break %}*IP:* {{.explode_findings.individual_finding.ip}} {% line_break %}*DNS:* {{.explode_findings.individual_finding.dns}}{% line_break %}*Protocol - Port:* {{.explode_findings.individual_finding.protocol}} - {{.explode_findings.individual_finding.port}} {% line_break %}*Result:* {{.explode_findings.individual_finding.result}}{% line_break %}{% line_break %}h2. *Vulnerability Details*{% line_break %}{% line_break %}*Title:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.TITLE}}{% line_break %}*Category:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.CATEGORY}}{% line_break %}*Type:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.VULN_TYPE}}{% line_break %}*Data Published:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.PUBLISHED_DATETIME}}{% line_break %}*Diagnosis:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.DIAGNOSIS}}{% line_break %}*Consequence:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.CONSEQUENCE}}{% line_break %}*Solution:* {{.enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SOLUTION}}{% line_break %}h2. *Links & References*{% line_break %}{% line_break %}*[Link to Qualys|https://{% global_resource qualys %}/portal-front/module/vm/#/vulndetails/{{.explode_findings.individual_finding.qid}}?detail=KB]{% line_break %}* Link to SOP/Playbook:{% line_break %}",
+            "summary": "{% if enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '5'%}Critical{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '4' %}High{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '3' %}Medium{% elsif enrich_findings.body.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.SEVERITY_LEVEL == '2' %}Low{% else %}Informational{% endif %} Vulnerability for {{.explode_findings.individual_finding.ip}} "
+          }
+        },
+        "basic_auth": [
+          "{% global_resource jira_svc_user %}",
+          "{% credential jira_svc_pwd %}"
+        ],
+        "log_error_on_status": []
+      },
+      "schedule": [],
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Enrich Findings",
+      "disabled": false,
+      "guid": "487fafdfdaf10079b532aa25b0aaa06e",
+      "options": {
+        "url": "https://qualysguard.qg2.apps.qualys.eu/api/2.0/fo/knowledge_base/vuln/",
+        "method": "get",
+        "payload": {
+          "action": "list",
+          "ids": "{{.explode_findings.individual_finding.qid}}"
+        },
+        "headers": {
+          "Authorization": "Basic {{.CREDENTIAL.qualys}}",
+          "Host": "{% global_resource qualys %}",
+          "X-Requested-With": "Tines",
+          "User-Agent": "Tines"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Query Qualys Report",
+      "disabled": false,
+      "guid": "80ced47fe991c0b44528f4db0e7441c4",
+      "options": {
+        "url": "https://qualysguard.qg2.apps.qualys.eu/api/2.0/fo/report/",
+        "method": "post",
+        "payload": {
+          "action": "list",
+          "id": "{{.run_report_in_qualys.body.SIMPLE_RETURN.RESPONSE.ITEM_LIST.ITEM.VALUE}}"
+        },
+        "headers": {
+          "Authorization": "[REDACTED:authorization]",
+          "Host": "qualysguard.qg2.apps.qualys.eu",
+          "X-Requested-With": "Tines",
+          "User-Agent": "Tines"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Run Report in Qualys",
+      "disabled": false,
+      "guid": "2157fc9e0b7ba9da9ba3689ed55ea75d",
+      "options": {
+        "url": "https://qualysguard.qg2.apps.qualys.eu/api/2.0/fo/report/",
+        "method": "post",
+        "payload": {
+          "action": "launch",
+          "template_id": "1515808",
+          "output_format": "csv",
+          "report_title": "Technical Report for 68.183.71.64",
+          "report_type": "Scan",
+          "ips": "68.183.71.64"
+        },
+        "headers": {
+          "Authorization": "[REDACTED:authorization]",
+          "Host": "qualysguard.qg2.apps.qualys.eu",
+          "X-Requested-With": "Tines",
+          "User-Agent": "Tines"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Finished",
+      "disabled": false,
+      "guid": "a261e9f5cabbd2993fc15906eedec3fd",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "path": "{{.query_qualys_report.body.REPORT_LIST_OUTPUT.RESPONSE.REPORT_LIST.REPORT.STATUS.STATE}}",
+            "value": "Finished"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Download Saved Report",
+      "disabled": false,
+      "guid": "89d452a6cbde7eaa6f28410543f95af5",
+      "options": {
+        "url": "https://qualysguard.qg2.apps.qualys.eu/api/2.0/fo/report/",
+        "method": "post",
+        "payload": {
+          "id": "{{.run_report_in_qualys.body.SIMPLE_RETURN.RESPONSE.ITEM_LIST.ITEM.VALUE}}",
+          "action": "fetch"
+        },
+        "headers": {
+          "Authorization": "[REDACTED:authorization]",
+          "Host": "qualysguard.qg2.apps.qualys.eu",
+          "X-Requested-With": "Tines",
+          "Accept-Encoding": "gzip, deflate",
+          "Content-Length": "0",
+          "cache-control": "no-cache",
+          "User-Agent": "Tines",
+          "Accept": "*/*"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Running",
+      "disabled": false,
+      "guid": "3deeafbacd8c8dd29678ead9cc13ffef",
+      "options": {
+        "rules": [
+          {
+            "type": "field!=value",
+            "path": "{{.query_qualys_report.body.REPORT_LIST_OUTPUT.RESPONSE.REPORT_LIST.REPORT.STATUS.STATE}}",
+            "value": "Finished"
+          },
+          {
+            "type": "field==value",
+            "path": "{{.query_qualys_report.status}}",
+            "value": "200"
+          }
+        ],
+        "must_match": "2"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Deduplicate Events",
+      "disabled": false,
+      "guid": "967fae0865785463870fbe80a58f9c10",
+      "options": {
+        "mode": "deduplicate",
+        "lookback": "100",
+        "path": "{{.explode_findings.individual_finding.ip}}{{.explode_findings.individual_finding.dns}}{{.explode_findings.individual_finding.qid}}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Findings",
+      "disabled": false,
+      "guid": "bff811eabe420a5407abc7a25fe718ad",
+      "options": {
+        "mode": "explode",
+        "path": "{{.get_scan_by_id.body}}",
+        "to": "individual_finding"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Start Scan",
+      "disabled": false,
+      "guid": "ac87263a966acf8fa12dc55f2cf08184",
+      "options": {
+        "url": "https://qualysguard.qg2.apps.qualys.eu/api/2.0/fo/scan/",
+        "method": "post",
+        "payload": {
+          "action": "launch",
+          "scan_title": "TK vulnerability scan",
+          "ip": "68.183.71.64",
+          "option_id": "1250044"
+        },
+        "headers": {
+          "Authorization": "Basic {{.CREDENTIAL.qualys}}",
+          "Host": "qualysguard.qg2.apps.qualys.eu",
+          "X-Requested-With": "Tines",
+          "Accept-Encoding": "gzip, deflate",
+          "Content-Length": "0",
+          "cache-control": "no-cache",
+          "User-Agent": "Tines",
+          "Accept": "*/*"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Scan by ID",
+      "disabled": false,
+      "guid": "6dc2c4e72be151aef60ccaed9466ee94",
+      "options": {
+        "url": "https://qualysguard.qg2.apps.qualys.eu/api/2.0/fo/scan/",
+        "method": "get",
+        "payload": {
+          "scan_ref": "{{.start_scan.body.SIMPLE_RETURN.RESPONSE.ITEM_LIST.ITEM.last.VALUE}}",
+          "action": "fetch",
+          "output_format": "json",
+          "mode": "extended"
+        },
+        "headers": {
+          "Authorization": "Basic {{.CREDENTIAL.qualys}}",
+          "Host": "qualysguard.qg2.apps.qualys.eu",
+          "X-Requested-With": "Tines",
+          "Accept-Encoding": "gzip, deflate",
+          "cache-control": "no-cache",
+          "User-Agent": "Tines"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 1,
+      "receiver": 3
+    },
+    {
+      "source": 2,
+      "receiver": 6
+    },
+    {
+      "source": 3,
+      "receiver": 4
+    },
+    {
+      "source": 4,
+      "receiver": 5
+    },
+    {
+      "source": 5,
+      "receiver": 28
+    },
+    {
+      "source": 6,
+      "receiver": 4
+    },
+    {
+      "source": 7,
+      "receiver": 9
+    },
+    {
+      "source": 8,
+      "receiver": 7
+    },
+    {
+      "source": 9,
+      "receiver": 8
+    },
+    {
+      "source": 9,
+      "receiver": 5
+    },
+    {
+      "source": 11,
+      "receiver": 10
+    },
+    {
+      "source": 11,
+      "receiver": 18
+    },
+    {
+      "source": 12,
+      "receiver": 19
+    },
+    {
+      "source": 13,
+      "receiver": 1
+    },
+    {
+      "source": 13,
+      "receiver": 2
+    },
+    {
+      "source": 17,
+      "receiver": 20
+    },
+    {
+      "source": 19,
+      "receiver": 11
+    },
+    {
+      "source": 20,
+      "receiver": 22
+    },
+    {
+      "source": 20,
+      "receiver": 24
+    },
+    {
+      "source": 21,
+      "receiver": 20
+    },
+    {
+      "source": 22,
+      "receiver": 23
+    },
+    {
+      "source": 23,
+      "receiver": 16
+    },
+    {
+      "source": 24,
+      "receiver": 17
+    },
+    {
+      "source": 25,
+      "receiver": 12
+    },
+    {
+      "source": 26,
+      "receiver": 25
+    },
+    {
+      "source": 27,
+      "receiver": 9
+    },
+    {
+      "source": 28,
+      "receiver": 26
+    }
+  ],
+  "diagram_layout": "{\"3fbc6d844a57e0ab99352c023a11f06a\":[345.0,-15.0],\"3dced960f174d235955b7f7f9efba559\":[1170.0,-1095.0],\"0cdcf28bd806aa5d32a949baf13ee95e\":[930.0,-1095.0],\"c414f2f24136e63e47fe5a338387c489\":[1170.0,-990.0],\"353156ef5378d854e8743bd79c06428c\":[930.0,-870.0],\"676f08af1d5cae7185d96bc470273587\":[900.0,-750.0],\"bc160003cd5d63b61d6c636ced8311c4\":[930.0,-990.0],\"a618caf2d98ed8eb33ca3bce47500b8f\":[525.0,-705.0],\"df84070f02bd950db0764c41d6ba49bd\":[525.0,-795.0],\"60aa7f05a6394cb68fce15da650bf6df\":[690.0,-870.0],\"40ceba3e8984c139629b76fc34e5f417\":[900.0,-30.0],\"fa39402cf9e043406162c8417dbc1f11\":[900.0,-165.0],\"c8e999c2cfdbe4551d561ea7040eeaf3\":[900.0,-345.0],\"246d0d0c66fc84752d1a930c68d0df53\":[1095.0,-1200.0],\"e9647c0c17230ae74bd8cd011732e909\":[525.0,-1215.0],\"16e9a5b1bd78be0bbabeb1a8503816cd\":[300.0,-1215.0],\"f9a49d7c4c50dc11f8cd5d1bb71d49c4\":[45.0,-885.0],\"2e20ed2c1171d9b039b3b0ba770adbce\":[-165.0,-960.0],\"af10c45ed88611b08bec01245fad75d4\":[660.0,-30.0],\"487fafdfdaf10079b532aa25b0aaa06e\":[900.0,-240.0],\"80ced47fe991c0b44528f4db0e7441c4\":[45.0,-1140.0],\"2157fc9e0b7ba9da9ba3689ed55ea75d\":[45.0,-1215.0],\"a261e9f5cabbd2993fc15906eedec3fd\":[45.0,-1050.0],\"89d452a6cbde7eaa6f28410543f95af5\":[45.0,-975.0],\"3deeafbacd8c8dd29678ead9cc13ffef\":[-165.0,-1050.0],\"967fae0865785463870fbe80a58f9c10\":[900.0,-450.0],\"bff811eabe420a5407abc7a25fe718ad\":[900.0,-540.0],\"ac87263a966acf8fa12dc55f2cf08184\":[690.0,-1005.0],\"6dc2c4e72be151aef60ccaed9466ee94\":[900.0,-645.0]}",
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "exit_agent_guid": null,
+  "send_to_stories": [],
+  "form": {
+    "name": "[Building] [Do Not Share] - Qualys Story Form",
+    "description": "",
+    "fields": [],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

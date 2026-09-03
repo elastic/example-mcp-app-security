@@ -1,0 +1,323 @@
+{
+  "schema_version": 3,
+  "name": "STS Analyze IP Address",
+  "description": "",
+  "guid": "4c7e0ec55ea41c903ba8bf8720475a5a",
+  "exported_at": "2021-02-25T10:00:47Z",
+  "agents": [
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Search IP in Splunk",
+      "disabled": false,
+      "guid": "4e0d5e9ce07b69f680d8ab5e1b672325",
+      "options": {
+        "story": "{% story [Example] STS Search Splunk %}",
+        "payload": {
+          "search": "search source=proxy host=webproxy sourcetype=Bluecoat s_ip={{.webhook_agent.body.ipaddress}} | table s_ip _time c_ip cs_host cs_method cs_uri_path sc_status cs_Referer cs_User_Agent _raw"
+        },
+        "send_payload_as_body": "false"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search for IP Address in Abuse IPDB",
+      "disabled": false,
+      "guid": "814f5557ad4590177bc30c969077b730",
+      "options": {
+        "url": "https://api.abuseipdb.com/api/v2/check",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "maxAgeInDays": "90",
+          "ipAddress": "{{.webhook_agent.body.ipaddress}}",
+          "verbose": "true"
+        },
+        "headers": {
+          "key": "{% credential abuseipdb_bot %}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get IP Address Reputation Details in Talos Intelligence",
+      "disabled": false,
+      "guid": "413a3d89628ce6476654ad61555ccacf",
+      "options": {
+        "url": "https://talosintelligence.com/sb_api/query_lookup",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "query": "/api/v2/details/ip/",
+          "query_entry": "{{.webhook_agent.body.ipaddress}}"
+        },
+        "headers": {
+          "Referer": "https://talosintelligence.com/reputation_center/lookup?search="
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Tor Node",
+      "disabled": false,
+      "guid": "4fd7e714f74a3407bb96941e9ab3cf60",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "path": "{{.get_tor_nodes.body}}",
+            "value": "{{.webhook_agent.body.ipaddress}}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Check IP Reputation using APIVoid",
+      "disabled": false,
+      "guid": "b3f0df3ab69e159305034141a0620b41",
+      "options": {
+        "url": "https://endpoint.apivoid.com/iprep/v1/pay-as-you-go/",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "key": "{% credential apivoid %}",
+          "ip": "{{.webhook_agent.body.ipaddress}}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Lookup IP in GreyNoise RIOT",
+      "disabled": false,
+      "guid": "07178a624bdaacb59f04fbbf0fe5c6ca",
+      "options": {
+        "url": "https://api.greynoise.io/v2/riot/{{.webhook_agent.body.ipaddress }}",
+        "content_type": "json",
+        "method": "get",
+        "payload": {},
+        "headers": {
+          "key": "{{ .CREDENTIAL.greynoise }}"
+        },
+        "log_on_error": [
+          "404"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search Indicators in Trustar",
+      "disabled": false,
+      "guid": "6869cae4221937bbbe12199072a838c2",
+      "options": {
+        "url": "https://api.trustar.co/api/1.3/indicators/metadata",
+        "content_type": "json",
+        "method": "post",
+        "payload": [
+          {
+            "value": "{{.ioc}}"
+          }
+        ],
+        "headers": {
+          "Authorization": "[REDACTED:authorization]"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "cf1236578395dc0b6aae67a73ee3b381",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "ip": "{{.webhook_agent.body.ipaddress}}",
+          "greynoise": "{% if lookup_ip_in_greynoise.body.seen == true %}{{.lookup_ip_in_greynoise.body.classification}}{% else %}new{% endif %}",
+          "talos_email_score": "{{.get_ip_address_reputation_details_in_talos_intelligence.body.email_score_name}}",
+          "apivoid_score": "{{.check_ip_reputation_using_apivoid.body.data.report.blacklists.detections}}",
+          "abuse_ipdb": "{{.search_for_ip_address_in_abuse_ipdb.body.data.abuseConfidenceScore}}",
+          "location": "{{.check_ip_reputation_using_apivoid.body.data.report.information.city_name}}, {{.check_ip_reputation_using_apivoid.body.data.report.information.region_name}}, {{.check_ip_reputation_using_apivoid.body.data.report.information.country_name}}",
+          "TorNode": "{{.trigger_if_tor_node.rule_matched}}",
+          "virustotal_score": "{{.search_for_ip_address_in_virustotal.body.data.attributes.last_analysis_stats | as_object }}",
+          "jira_results": "{{.search_issues_in_jira.body.issues | size }}",
+          "splunk_results": "{{.search_ip_in_splunk.results | size }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search Issues in Jira",
+      "disabled": false,
+      "guid": "6516c15d2cbd43e2192e6628f051725a",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/search",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "jql": "project=DEMO AND text ~ \"{{.webhook_agent.body.ipaddress}}\""
+        },
+        "basic_auth": "[REDACTED:basic_auth]"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Lookup IP in GreyNoise",
+      "disabled": false,
+      "guid": "f7279ade3ba050c0db1e675bc662e0af",
+      "options": {
+        "url": "https://api.greynoise.io/v2/noise/context/{{.webhook_agent.body.ipaddress}}",
+        "content_type": "json",
+        "method": "get",
+        "payload": {},
+        "headers": {
+          "key": "{% credential greynoise %}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search for IP Address in VirusTotal",
+      "disabled": false,
+      "guid": "0274502d5c2f68728a0fb138cb848920",
+      "options": {
+        "url": "https://www.virustotal.com/api/v3/ip_addresses/{{.webhook_agent.body.ipaddress}}",
+        "method": "get",
+        "payload": {},
+        "headers": {
+          "x-apikey": "{{.CREDENTIAL.virustotal}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Webhook Agent",
+      "disabled": false,
+      "guid": "bebc6b9675d86ada7ba60035db2fbf38",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "TEST USING ME - Analyze IP",
+      "disabled": false,
+      "guid": "4c09f0c325c85ec6a79343f02b2965a1",
+      "options": {
+        "story": "{% story STS Analyze IP Address %}",
+        "payload": {
+          "ipaddress": "218.74.39.3"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Tor Nodes",
+      "disabled": false,
+      "guid": "ee984f5475e8ccbd0383f79c3ade212a",
+      "options": {
+        "url": "https://check.torproject.org/cgi-bin/TorBulkExitList.py?ip=1.1.1.1",
+        "content_type": "json",
+        "method": "get",
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 6
+    },
+    {
+      "source": 1,
+      "receiver": 8
+    },
+    {
+      "source": 2,
+      "receiver": 10
+    },
+    {
+      "source": 3,
+      "receiver": 2
+    },
+    {
+      "source": 4,
+      "receiver": 1
+    },
+    {
+      "source": 5,
+      "receiver": 13
+    },
+    {
+      "source": 6,
+      "receiver": 7
+    },
+    {
+      "source": 8,
+      "receiver": 0
+    },
+    {
+      "source": 9,
+      "receiver": 5
+    },
+    {
+      "source": 10,
+      "receiver": 4
+    },
+    {
+      "source": 11,
+      "receiver": 9
+    },
+    {
+      "source": 13,
+      "receiver": 3
+    }
+  ],
+  "diagram_layout": "{\"4e0d5e9ce07b69f680d8ab5e1b672325\":[105.0,-165.0],\"814f5557ad4590177bc30c969077b730\":[105.0,-344.0],\"413a3d89628ce6476654ad61555ccacf\":[105.0,-630.0],\"4fd7e714f74a3407bb96941e9ab3cf60\":[105.0,-705.0],\"b3f0df3ab69e159305034141a0620b41\":[105.0,-435.0],\"07178a624bdaacb59f04fbbf0fe5c6ca\":[105.0,-855.0],\"6869cae4221937bbbe12199072a838c2\":[105.0,-90.0],\"cf1236578395dc0b6aae67a73ee3b381\":[105.0,0.0],\"6516c15d2cbd43e2192e6628f051725a\":[105.0,-255.0],\"f7279ade3ba050c0db1e675bc662e0af\":[105.0,-945.0],\"0274502d5c2f68728a0fb138cb848920\":[105.0,-525.0],\"bebc6b9675d86ada7ba60035db2fbf38\":[105.0,-1020.0],\"4c09f0c325c85ec6a79343f02b2965a1\":[-315.0,-900.0],\"ee984f5475e8ccbd0383f79c3ade212a\":[105.0,-765.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "bebc6b9675d86ada7ba60035db2fbf38",
+  "exit_agent_guids": [
+    "cf1236578395dc0b6aae67a73ee3b381"
+  ],
+  "exit_agent_guid": "cf1236578395dc0b6aae67a73ee3b381",
+  "send_to_stories": [],
+  "form": {
+    "name": "STS Analyze IP Address Form",
+    "description": "",
+    "fields": [],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

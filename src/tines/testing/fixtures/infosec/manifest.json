@@ -1,0 +1,141 @@
+{
+  "sourceRepository": "elastic/infosec",
+  "sourceRevision": "master (downloaded 2026-09-03)",
+  "sourceScope": "detection_and_analytics/tines/**/*.json files containing top-level agents[] and links[]",
+  "confidentiality": "SANITIZED_FIXTURES_ONLY",
+  "redaction": {
+    "fields": [
+      "options.secret"
+    ],
+    "replacement": "REDACTED",
+    "rawPrivateRepositoryFilesCommitted": false
+  },
+  "stories": [
+    {
+      "file": "create-onboarding-github-tasks.json",
+      "sourcePath": "github issue managment/create-onboarding-github-tasks.json",
+      "schemaVersion": 3,
+      "storyName": "Create Onboarding Github tasks",
+      "agents": 13,
+      "links": 14,
+      "embeddedStories": 0
+    },
+    {
+      "file": "detect-unreviewed-gh-issues.json",
+      "sourcePath": "outputs/create_alert_in_thehive/detect_unreviewed_GH_issues.json",
+      "schemaVersion": null,
+      "storyName": null,
+      "agents": 9,
+      "links": 0,
+      "embeddedStories": 0
+    },
+    {
+      "file": "aaron-test.json",
+      "sourcePath": "poc_stories/aaron-test.json",
+      "schemaVersion": 3,
+      "storyName": "aaron test",
+      "agents": 13,
+      "links": 8,
+      "embeddedStories": 0
+    },
+    {
+      "file": "alert-testing.json",
+      "sourcePath": "poc_stories/alert-testing.json",
+      "schemaVersion": 3,
+      "storyName": "Alert Testing",
+      "agents": 14,
+      "links": 11,
+      "embeddedStories": 1
+    },
+    {
+      "file": "building-qualys-story.json",
+      "sourcePath": "poc_stories/building-qualys-story.json",
+      "schemaVersion": 3,
+      "storyName": "[Building] - Qualys Story",
+      "agents": 29,
+      "links": 27,
+      "embeddedStories": 0
+    },
+    {
+      "file": "slack-interactive-bot-example.json",
+      "sourcePath": "poc_stories/slack-interactive-bot-example.json",
+      "schemaVersion": 3,
+      "storyName": "Slack Interactive Bot Example",
+      "agents": 24,
+      "links": 22,
+      "embeddedStories": 0
+    },
+    {
+      "file": "spam-analysis.json",
+      "sourcePath": "poc_stories/spam-analysis.json",
+      "schemaVersion": 3,
+      "storyName": "Spam Analysis",
+      "agents": 60,
+      "links": 67,
+      "embeddedStories": 6
+    },
+    {
+      "file": "sts-analyze-attachment-in-virustotal.json",
+      "sourcePath": "poc_stories/sts-analyze-attachment-in-virustotal.json",
+      "schemaVersion": 3,
+      "storyName": "StS Analyze Attachment in VirusTotal",
+      "agents": 19,
+      "links": 22,
+      "embeddedStories": 0
+    },
+    {
+      "file": "sts-analyze-email-address.json",
+      "sourcePath": "poc_stories/sts-analyze-email-address.json",
+      "schemaVersion": 3,
+      "storyName": "STS Analyze Email Address",
+      "agents": 9,
+      "links": 8,
+      "embeddedStories": 0
+    },
+    {
+      "file": "sts-analyze-headers.json",
+      "sourcePath": "poc_stories/sts-analyze-headers.json",
+      "schemaVersion": 3,
+      "storyName": "StS Analyze Headers",
+      "agents": 14,
+      "links": 15,
+      "embeddedStories": 0
+    },
+    {
+      "file": "sts-analyze-ip-address.json",
+      "sourcePath": "poc_stories/sts-analyze-ip-address.json",
+      "schemaVersion": 3,
+      "storyName": "STS Analyze IP Address",
+      "agents": 14,
+      "links": 12,
+      "embeddedStories": 0
+    },
+    {
+      "file": "sts-query-domain-in-virustotal.json",
+      "sourcePath": "poc_stories/sts-query-domain-in-virustotal.json",
+      "schemaVersion": 3,
+      "storyName": "StS Query Domain in VirusTotal",
+      "agents": 18,
+      "links": 20,
+      "embeddedStories": 0
+    },
+    {
+      "file": "sts-query-urlscan.json",
+      "sourcePath": "poc_stories/sts-query-urlscan.json",
+      "schemaVersion": 3,
+      "storyName": "StS Query URLScan",
+      "agents": 15,
+      "links": 13,
+      "embeddedStories": 0
+    },
+    {
+      "file": "web-application-scan-export.json",
+      "sourcePath": "poc_stories/web-application-scan-export.json",
+      "schemaVersion": 3,
+      "storyName": "Web Application Scan Export",
+      "agents": 7,
+      "links": 6,
+      "embeddedStories": 0
+    }
+  ]
+}

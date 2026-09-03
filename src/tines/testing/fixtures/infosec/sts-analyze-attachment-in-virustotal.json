@@ -1,0 +1,452 @@
+{
+  "schema_version": 3,
+  "name": "StS Analyze Attachment in VirusTotal",
+  "description": "",
+  "guid": "9f3161f26eb96e457f0eaee18391bd79",
+  "exported_at": "2021-02-25T10:01:22Z",
+  "agents": [
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Scan Error",
+      "disabled": false,
+      "guid": "3f7bf1f436b87e0335ae50bd67bc6642",
+      "options": {
+        "rules": [
+          {
+            "type": "!regex",
+            "value": "1|-2",
+            "path": "{{.search_hash_in_virustotal.body.response_code}}"
+          },
+          {
+            "type": "!regex",
+            "value": "204",
+            "path": "{{.search_hash_in_virustotal.status}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Attachment Not Knowngood",
+      "disabled": false,
+      "guid": "c2ed4b6e4ecd1dbc8849f540a2c61772",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "false",
+            "path": "{{.check_if_knowngood.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check if Knowngood",
+      "disabled": false,
+      "guid": "0c1f5a9f301966c8912cb44bb9f29e0e",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "deadbeef",
+            "path": "{{.receive_attachments.file_hash}}"
+          },
+          {
+            "type": "regex",
+            "value": ".png",
+            "path": "{{.receive_attachments.file_name}}"
+          }
+        ],
+        "must_match": "1",
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Scan Completed",
+      "disabled": false,
+      "guid": "72a1ada610bf260a599df340690738e0",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "1",
+            "path": "{{.search_hash_in_virustotal.body.response_code}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Delay Event",
+      "disabled": false,
+      "guid": "2e0dee8047bb62a23e93e03f69373286",
+      "options": {
+        "mode": "delay",
+        "seconds": "10"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search Hash in VirusTotal",
+      "disabled": false,
+      "guid": "939d317108b84edb8de08cd599ad5329",
+      "options": {
+        "url": "https://www.virustotal.com/vtapi/v2/file/report",
+        "method": "get",
+        "headers": {},
+        "payload": {
+          "apikey": "[REDACTED:apikey]",
+          "resource": "{{.receive_attachments.file_hash}}"
+        },
+        "log_error_on_status": [],
+        "retry_on_status": [
+          "204",
+          "429"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Increment Counter",
+      "disabled": false,
+      "guid": "21412cf98a99aa8ba9f65240ccd21d74",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "counter": "{{ .increment_counter | plus: 1}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Counter More Than 20",
+      "disabled": false,
+      "guid": "4b19f051cb34a25043bfa1cb39417c0f",
+      "options": {
+        "rules": [
+          {
+            "type": "field>=value",
+            "value": "20",
+            "path": "{{.increment_counter.counter}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Send to Story Agent",
+      "disabled": false,
+      "guid": "8927e6aa9d0e2d00f347bd249a0ec2c0",
+      "options": {
+        "story": "{% story StS Analyze Attachment in VirusTotal %}",
+        "payload": {
+          "file_hash": "39faec87e3efac12b85ddb37e4311574",
+          "file_name": "me.pdf",
+          "base64_encoded_contents": "aaaaaaaa"
+        },
+        "send_payload_as_body": "false"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Counter Less Than 20",
+      "disabled": false,
+      "guid": "e61d2d43178cacc0ddd323e6e31c56c0",
+      "options": {
+        "rules": [
+          {
+            "type": "field<value",
+            "value": "20",
+            "path": "{{.increment_counter.counter}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Delay Event",
+      "disabled": false,
+      "guid": "ae097178c17b5155cb4bafface524e6c",
+      "options": {
+        "mode": "delay",
+        "seconds": "15"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Scan Queued",
+      "disabled": false,
+      "guid": "df8514da81ec1662f4e46ad0c262be18",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "1",
+            "path": "{{.search_hash_in_virustotal.body.response_code}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Attachment Knowngood",
+      "disabled": false,
+      "guid": "0bb3216a3a25b8f219468a57a57dc429",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "true",
+            "path": "{{.check_if_knowngood.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Hash Found in VirusTotal",
+      "disabled": false,
+      "guid": "7130f62f2eb5cfe7ae154b84827022e5",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": ".",
+            "path": "{{.search_hash_in_virustotal.body.scan_id}}"
+          },
+          {
+            "type": "field!=value",
+            "value": "204",
+            "path": "{{.search_hash_in_virustotal.status}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive Attachments",
+      "disabled": false,
+      "guid": "e43baf86e5d3296b888f189d05f2bffc",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post",
+        "include_headers": "false"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "9646ead82297c742c86a1af1a7613c39",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "new": "{% if hash_found_in_virustotal.rule_matched %}false{% elsif scan_error.rule_matched%}error{% elsif check_if_knowngood.rule_matched%}knowngood{% else %}true{% endif %}",
+          "analysis_date": "{% if scan_error.rule_matched%}error{% elsif counter_more_than_20.rule_matched%}timed out{% elsif check_if_knowngood.rule_matched %}knowngood{% else %}{{.search_hash_in_virustotal.body.scan_date}}{% endif %}",
+          "malicious": "{% if search_hash_in_virustotal.body.positives > 0 %}true{% elsif scan_error.rule_matched%}error{% elsif check_if_knowngood.rule_matched%}knowngood{% elsif counter_more_than_20.rule_matched%}timed out{% else %}false{% endif %}",
+          "engine": "VirusTotal",
+          "file_name": "{{.receive_attachments.file_name}}",
+          "analysis_link": "{{.search_hash_in_virustotal.body.permalink}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Submit File to VirusTotal",
+      "disabled": false,
+      "guid": "84e61b47e968542eb8179b40b6889fa5",
+      "options": {
+        "url": "https://www.virustotal.com/vtapi/v2/file/scan",
+        "content_type": "data",
+        "method": "post",
+        "payload": {
+          "file": {
+            "contents": "{{.receive_attachments.base64_encoded_contents | base64_decode}}",
+            "filename": "{{file_name}}"
+          },
+          "apikey": "[REDACTED:apikey]"
+        },
+        "headers": {},
+        "log_error_on_status": [],
+        "retry_on_status": [
+          "204"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Hash Not Found In VirusTotal",
+      "disabled": false,
+      "guid": "e29d9c00b42852da5ae8f0d7968a1de7",
+      "options": {
+        "rules": [
+          {
+            "type": "!regex",
+            "value": ".",
+            "path": "{{.search_hash_in_virustotal.body.scan_id}}"
+          },
+          {
+            "type": "field!=value",
+            "value": "204",
+            "path": "{{.search_hash_in_virustotal.status}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search Hash in VirusTotal",
+      "disabled": false,
+      "guid": "dfa480f2c6cbf92f939b020d9e4a9f20",
+      "options": {
+        "url": "https://www.virustotal.com/vtapi/v2/file/report",
+        "method": "get",
+        "headers": {},
+        "payload": {
+          "apikey": "[REDACTED:apikey]",
+          "resource": "{{.submit_file_to_virustotal.body.scan_id}}"
+        },
+        "log_error_on_status": [],
+        "retry_on_status": [
+          "204"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 15
+    },
+    {
+      "source": 1,
+      "receiver": 5
+    },
+    {
+      "source": 2,
+      "receiver": 12
+    },
+    {
+      "source": 2,
+      "receiver": 1
+    },
+    {
+      "source": 3,
+      "receiver": 15
+    },
+    {
+      "source": 4,
+      "receiver": 18
+    },
+    {
+      "source": 5,
+      "receiver": 17
+    },
+    {
+      "source": 5,
+      "receiver": 13
+    },
+    {
+      "source": 6,
+      "receiver": 7
+    },
+    {
+      "source": 6,
+      "receiver": 9
+    },
+    {
+      "source": 7,
+      "receiver": 15
+    },
+    {
+      "source": 9,
+      "receiver": 10
+    },
+    {
+      "source": 10,
+      "receiver": 18
+    },
+    {
+      "source": 11,
+      "receiver": 6
+    },
+    {
+      "source": 12,
+      "receiver": 15
+    },
+    {
+      "source": 13,
+      "receiver": 15
+    },
+    {
+      "source": 14,
+      "receiver": 2
+    },
+    {
+      "source": 16,
+      "receiver": 4
+    },
+    {
+      "source": 17,
+      "receiver": 16
+    },
+    {
+      "source": 18,
+      "receiver": 3
+    },
+    {
+      "source": 18,
+      "receiver": 11
+    },
+    {
+      "source": 18,
+      "receiver": 0
+    }
+  ],
+  "diagram_layout": "{\"3f7bf1f436b87e0335ae50bd67bc6642\":[-600.0,-735.0],\"c2ed4b6e4ecd1dbc8849f540a2c61772\":[-630.0,-1320.0],\"0c1f5a9f301966c8912cb44bb9f29e0e\":[-750.0,-1410.0],\"72a1ada610bf260a599df340690738e0\":[-780.0,-735.0],\"2e0dee8047bb62a23e93e03f69373286\":[-405.0,-900.0],\"939d317108b84edb8de08cd599ad5329\":[-630.0,-1215.0],\"21412cf98a99aa8ba9f65240ccd21d74\":[-405.0,-660.0],\"4b19f051cb34a25043bfa1cb39417c0f\":[-660.0,-585.0],\"8927e6aa9d0e2d00f347bd249a0ec2c0\":[-495.0,-1485.0],\"e61d2d43178cacc0ddd323e6e31c56c0\":[-405.0,-585.0],\"ae097178c17b5155cb4bafface524e6c\":[-405.0,-510.0],\"df8514da81ec1662f4e46ad0c262be18\":[-405.0,-735.0],\"0bb3216a3a25b8f219468a57a57dc429\":[-915.0,-1320.0],\"7130f62f2eb5cfe7ae154b84827022e5\":[-735.0,-1080.0],\"e43baf86e5d3296b888f189d05f2bffc\":[-750.0,-1500.0],\"9646ead82297c742c86a1af1a7613c39\":[-915.0,-435.0],\"84e61b47e968542eb8179b40b6889fa5\":[-405.0,-990.0],\"e29d9c00b42852da5ae8f0d7968a1de7\":[-405.0,-1080.0],\"dfa480f2c6cbf92f939b020d9e4a9f20\":[-405.0,-825.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "e43baf86e5d3296b888f189d05f2bffc",
+  "exit_agent_guids": [
+    "9646ead82297c742c86a1af1a7613c39"
+  ],
+  "exit_agent_guid": "9646ead82297c742c86a1af1a7613c39",
+  "send_to_stories": [],
+  "form": {
+    "name": "StS Analyze Attachment in VirusTotal Form",
+    "description": "",
+    "fields": [],
+    "visibility": "world",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

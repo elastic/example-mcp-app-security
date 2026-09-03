@@ -1,0 +1,104 @@
+{
+  "agents": [
+    {
+      "disabled": false,
+      "name": "MERGED_PR Rule",
+      "options": "{\"rules\":[{\"type\":\"in\",\"value\":\"default\",\"path\":\"{{ .explode_array_of_alerts.individual_record.signal.rule.building_block_type }}\"},{\"type\":\"in\",\"value\":\"MERGED_PR\",\"path\":\"{{ .explode_array_of_alerts.individual_record.signal.rule.tags }}\"}]}",
+      "position": {
+        "x": 1095,
+        "y": -570
+      },
+      "type": "trigger"
+    },
+    {
+      "disabled": false,
+      "name": "Query Elasticsearch for pr",
+      "options": "{\"url\":\"https://{{ .RESOURCE.whitesector_es_url }}/*:github_audit/_search\",\"content_type\":\"json\",\"method\":\"post\",\"payload\":{\"query\":{\"bool\":{\"must\":[],\"filter\":[{\"bool\":{\"filter\":[{\"bool\":{\"should\":[{\"match_phrase\":{\"pull_request.id\":\"{{ .explode_array_of_alerts.individual_record.pull_request.id}}\"}}],\"minimum_should_match\":1}},{\"bool\":{\"should\":[{\"match_phrase\":{\"action\":\"submitted\"}}],\"minimum_should_match\":1}},{\"bool\":{\"should\":[{\"match_phrase\":{\"review.state\":\"approved\"}}],\"minimum_should_match\":1}},{\"bool\":{\"must_not\":{\"bool\":{\"should\":[{\"match_phrase\":{\"review.user.login\":\"{{ .explode_array_of_alerts.individual_record.pull_request.user.login }}\"}}],\"minimum_should_match\":1}}}}]}}],\"should\":[],\"must_not\":[]}}},\"basic_auth\":[\"{{.CREDENTIAL.whitesector_es_user }}\",\"{{.CREDENTIAL.whitesector_es_password }}\"]}",
+      "position": {
+        "x": 1095,
+        "y": -480
+      },
+      "type": "httpRequest"
+    },
+    {
+      "disabled": false,
+      "name": "Check if zero results",
+      "options": "{\"rules\":[{\"type\":\"field==value\",\"value\":\"0\",\"path\":\"{{.query_elasticsearch_for_pr.body.hits.total.value }}\"}]}",
+      "position": {
+        "x": 1095,
+        "y": -390
+      },
+      "type": "trigger"
+    },
+    {
+      "disabled": false,
+      "name": "Extract Artifacts - Github",
+      "options": "{\"mode\":\"message_only\",\"payload\":{\"username\":\"{{ .explode_array_of_alerts.individual_record.pull_request.user.login }}\",\"team\":\"{{ .explode_array_of_alerts.individual_record.repository.full_name }}\",\"signal_risk_score\":\"70\",\"original_time\":\"{{ .explode_array_of_alerts.individual_record.['@timestamp'] | date: '%Y-%m-%d %T UTC' }}\"}}",
+      "position": {
+        "x": 1095,
+        "y": -315
+      },
+      "type": "eventTransformation"
+    },
+    {
+      "disabled": false,
+      "name": "Create GH PR Alert in TheHive",
+      "options": "{\"story\":\"{{ .STORY.create_alert_in_thehive }}\",\"payload\":{\"observables\":\"{{ .extract_artifacts_github | as_object }}\",\"base\":{\"title\":\"Unreviewed GH Pull Request to Branch {{.explode_array_of_alerts.individual_record.pull_request.base.ref }} in {{.explode_array_of_alerts.individual_record.repository.full_name }}\",\"type\":\"github\",\"source\":\"{{ .set_source.alert_source }}\",\"sourceRef\":\"{{ .explode_array_of_alerts.individual_record._id | truncate: 34, \\\"\\\" }}\",\"severity\":\"3\",\"tlp\":\"2\",\"tags\":\"{{ .concat_tags.tags | as_object }}\",\"description\":\"PR Merged without being reviewed {{ .explode_array_of_alerts.individual_record.pull_request._links.html.href }}\"}}}",
+      "position": {
+        "x": 1095,
+        "y": -225
+      },
+      "type": "sendToStory"
+    },
+    {
+      "disabled": false,
+      "name": "check if not cloud",
+      "options": "{\"rules\":[{\"type\":\"not in\",\"value\":\"cloud\",\"path\":\"{{ .explode_array_of_alerts.individual_record.signal.rule.tags }}\"}]}",
+      "position": {
+        "x": 1005,
+        "y": -105
+      },
+      "type": "trigger"
+    },
+    {
+      "disabled": false,
+      "name": "Send Alert to Slack - GH Alert",
+      "options": "{\"url\":\"https://slack.com/api/chat.postMessage\",\"content_type\":\"json\",\"method\":\"post\",\"payload\":{\"channel\":\"{{ .RESOURCE.channel_infosec_alerts_dev }}\",\"attachments\":[{\"color\":\"#f2c744\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*<{{.explode_array_of_alerts.individual_record.pull_request._links.html.href}}|Unreviewed GH Pull Request was merged>*\"},\"accessory\":{\"type\":\"overflow\",\"options\":[{\"text\":{\"type\":\"plain_text\",\"text\":\"Mark as Read\",\"emoji\":true},\"value\":\"{{.create_gh_pr_alert_in_thehive.thehive_alert_id}}\"},{\"text\":{\"type\":\"plain_text\",\"text\":\"False Positive\",\"emoji\":true},\"value\":\"{{.create_gh_pr_alert_in_thehive.thehive_alert_id}}\"},{\"text\":{\"type\":\"plain_text\",\"text\":\"New Case From Alert\",\"emoji\":true},\"value\":\"{{.create_gh_pr_alert_in_thehive.thehive_alert_id}}\"},{\"text\":{\"type\":\"plain_text\",\"text\":\"Merge Alert\",\"emoji\":true},\"value\":\"{{.create_gh_pr_alert_in_thehive.thehive_alert_id}}\"}],\"action_id\":\"overflow-action\"}},{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"Unreviewed or Self Approved GH Pull Request to Branch `{{.explode_array_of_alerts.individual_record.pull_request.base.ref }}` in `{{.explode_array_of_alerts.individual_record.repository.full_name }}`\\n- *PR submitter*: `{{.explode_array_of_alerts.individual_record.pull_request.user.login }}`\\n- *PR Title*: `{{.explode_array_of_alerts.individual_record.pull_request.title}}`\\n- *PR Branches* `{{.explode_array_of_alerts.individual_record.pull_request.head.ref}} -> {{.explode_array_of_alerts.individual_record.pull_request.base.ref}}`\\n- *<https://kibana-app.whitesector.inf.elasticnet.co/s/infosec-detections/app/discover#/view/efc51dd0-1b71-11ec-a226-1fe37e01cbfa?_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:now-24h%2Fh,to:now))&_a=(columns:!(pull_request._links.html.href,action,pull_request.user.login,review.state,review.user.login,pull_request.number,pull_request.base.label,pull_request.head.ref,pull_request.base.ref),filters:!(),grid:(columns:(review.user.login:(width:132.5))),index:'32fea8d0-b158-11ea-a5c5-db5dfc905e8a',interval:auto,query:(language:kuery,query:'pull_request.number%20:%20{{.explode_array_of_alerts.individual_record.pull_request.number}}'),sort:!(!('@timestamp',desc)))|Pull Request activity in Kibana>*\"}]}]}]},\"headers\":{\"Authorization\":\"Bearer {{ .CREDENTIAL.slack_oauth }}\"}}",
+      "position": {
+        "x": 975,
+        "y": -15
+      },
+      "type": "httpRequest"
+    },
+    {
+      "disabled": false,
+      "name": "Send Alert to Slack - Cloud GH Alert",
+      "options": "{\"url\":\"https://slack.com/api/chat.postMessage\",\"content_type\":\"json\",\"method\":\"post\",\"payload\":{\"channel\":\"{{ .RESOURCE.channel_infosec_alerts_cloud }}\",\"attachments\":[{\"color\":\"#f2c744\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*<{{.explode_array_of_alerts.individual_record.pull_request._links.html.href}}|Unreviewed GH Pull Request was merged>*\"},\"accessory\":{\"type\":\"overflow\",\"options\":[{\"text\":{\"type\":\"plain_text\",\"text\":\"Mark as Read\",\"emoji\":true},\"value\":\"{{.create_gh_pr_alert_in_thehive.thehive_alert_id}}\"},{\"text\":{\"type\":\"plain_text\",\"text\":\"False Positive\",\"emoji\":true},\"value\":\"{{.create_gh_pr_alert_in_thehive.thehive_alert_id}}\"},{\"text\":{\"type\":\"plain_text\",\"text\":\"New Case From Alert\",\"emoji\":true},\"value\":\"{{.create_gh_pr_alert_in_thehive.thehive_alert_id}}\"},{\"text\":{\"type\":\"plain_text\",\"text\":\"Merge Alert\",\"emoji\":true},\"value\":\"{{.create_gh_pr_alert_in_thehive.thehive_alert_id}}\"}],\"action_id\":\"overflow-action\"}},{\"type\":\"context\",\"elements\":[{\"type\":\"mrkdwn\",\"text\":\"Unreviewed or Self Approved GH Pull Request to Branch `{{.explode_array_of_alerts.individual_record.pull_request.base.ref }}` in `{{.explode_array_of_alerts.individual_record.repository.full_name }}`\\n- *PR submitter*: `{{.explode_array_of_alerts.individual_record.pull_request.user.login }}`\\n- *PR Title*: `{{.explode_array_of_alerts.individual_record.pull_request.title}}`\\n- *PR Branches* `{{.explode_array_of_alerts.individual_record.pull_request.head.ref}} -> {{.explode_array_of_alerts.individual_record.pull_request.base.ref}}`\\n- *<https://kibana-app.whitesector.inf.elasticnet.co/s/infosec-detections/app/discover#/view/efc51dd0-1b71-11ec-a226-1fe37e01cbfa?_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:now-24h%2Fh,to:now))&_a=(columns:!(pull_request._links.html.href,action,pull_request.user.login,review.state,review.user.login,pull_request.number,pull_request.base.label,pull_request.head.ref,pull_request.base.ref),filters:!(),grid:(columns:(review.user.login:(width:132.5))),index:'32fea8d0-b158-11ea-a5c5-db5dfc905e8a',interval:auto,query:(language:kuery,query:'pull_request.number%20:%20{{.explode_array_of_alerts.individual_record.pull_request.number}}'),sort:!(!('@timestamp',desc)))|Pull Request activity in Kibana>*\"}]}]}]},\"headers\":{\"Authorization\":\"Bearer {{ .CREDENTIAL.slack_oauth }}\"}}",
+      "position": {
+        "x": 1215,
+        "y": -15
+      },
+      "type": "httpRequest"
+    },
+    {
+      "disabled": false,
+      "name": "check if cloud",
+      "options": "{\"rules\":[{\"type\":\"in\",\"value\":\"cloud\",\"path\":\"{{ .explode_array_of_alerts.individual_record.signal.rule.tags }}\"}]}",
+      "position": {
+        "x": 1215,
+        "y": -105
+      },
+      "type": "trigger"
+    }
+  ],
+  "links": [],
+  "diagramNotes": [
+    {
+      "position": {
+        "x": 1080,
+        "y": -735
+      },
+      "content": "This Branch is for the detection that alerts on force merging or self approved PRs in sensitive repos. \n- [ ] Update to send alerts to different channels based on the Repo\nhttps://github.com/elastic/infosec/issues/2920"
+    }
+  ]
+}

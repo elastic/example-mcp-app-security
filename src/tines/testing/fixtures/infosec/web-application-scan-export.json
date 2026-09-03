@@ -1,0 +1,178 @@
+{
+  "schema_version": 3,
+  "name": "Web Application Scan Export",
+  "description": null,
+  "guid": "d18e8ea324d433b856d5d86cb0652e2b",
+  "exported_at": "2021-02-25T10:17:16Z",
+  "agents": [
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "HTTP Request Action",
+      "disabled": false,
+      "guid": "0be835c81a3e809280cd55a8506c03bc",
+      "options": {
+        "url": "http://www.example.com/_doc/",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "key": "value",
+          "something": "the event contained {{ .somekey }}"
+        },
+        "headers": {}
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Deduplicate Events",
+      "disabled": false,
+      "guid": "54c2bddf2b740908f9d2060dcbcd8462",
+      "options": {
+        "mode": "deduplicate",
+        "lookback": "100",
+        "path": "{{.person.name}}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Findings",
+      "disabled": false,
+      "guid": "d350076026631b576384ebb351c70595",
+      "options": {
+        "mode": "explode",
+        "path": "{{.list_reports_in_qualys.body.ServiceResponse.data.Finding}}",
+        "to": "individual_finding"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Enrich Findings",
+      "disabled": false,
+      "guid": "518c2bd94d10ba5679466aab14c5f1f1",
+      "options": {
+        "url": "https://{{ .RESOURCE.qualys }}/qps/rest/3.0/get/was/finding/{{ .explode_findings.individual_finding.id }}",
+        "method": "get",
+        "headers": {
+          "Authorization": "Basic {{.CREDENTIAL.qualys}}",
+          "Host": "{{ .RESOURCE.qualys }}",
+          "X-Requested-With": "Tines",
+          "User-Agent": "Tines"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger Agent",
+      "disabled": false,
+      "guid": "479694bca9c68ce68c83299b65515e4e",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "false",
+            "path": "{{ .list_reports_in_qualys.body.ServiceResponse.hasMoreRecords}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger More Findings",
+      "disabled": false,
+      "guid": "301d1ae77438d185c23df3f07c3b9312",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{ .list_reports_in_qualys.body.ServiceResponse.hasMoreRecords}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "List Reports in Qualys",
+      "disabled": false,
+      "guid": "21465b06b5af1e4dde3d5e0e29139b0b",
+      "options": {
+        "url": "https://{{ .RESOURCE.qualys }}/qps/rest/3.0/search/was/finding/",
+        "method": "post",
+        "headers": {
+          "Authorization": "Basic {{ .CREDENTIAL.qualys }}",
+          "Host": "{{ .RESOURCE.qualys }}",
+          "X-Requested-With": "Tines",
+          "User-Agent": "Tines",
+          "Content-Type": "application/xml"
+        },
+        "payload": "<ServiceRequest>\n    <filters>\n        <Criteria field=\"status\" operator=\"NOT EQUALS\">FIXED</Criteria>\n    </filters>\n    \n    <preferences>\n    {% if .list_reports_in_qualys.body.ServiceResponse.hasMoreRecords == \"true\"%}\n        <startFromId>{{ .list_reports_in_qualys.body.ServiceResponse.lastId}}</startFromId>\n    {% endif %}\n        <limitResults>10</limitResults>\n    </preferences>\n</ServiceRequest>"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 2,
+      "receiver": 3
+    },
+    {
+      "source": 4,
+      "receiver": 2
+    },
+    {
+      "source": 5,
+      "receiver": 6
+    },
+    {
+      "source": 5,
+      "receiver": 2
+    },
+    {
+      "source": 6,
+      "receiver": 4
+    },
+    {
+      "source": 6,
+      "receiver": 5
+    }
+  ],
+  "diagram_layout": "{\"0be835c81a3e809280cd55a8506c03bc\":[120.0,675.0],\"54c2bddf2b740908f9d2060dcbcd8462\":[360.0,675.0],\"d350076026631b576384ebb351c70595\":[360.0,465.0],\"518c2bd94d10ba5679466aab14c5f1f1\":[360.0,570.0],\"479694bca9c68ce68c83299b65515e4e\":[150.0,300.0],\"301d1ae77438d185c23df3f07c3b9312\":[360.0,300.0],\"21465b06b5af1e4dde3d5e0e29139b0b\":[240.0,180.0]}",
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "exit_agent_guid": null,
+  "send_to_stories": [],
+  "form": {
+    "name": "New story for clement.fouque@elastic.co Form",
+    "description": "",
+    "fields": [
+      {
+        "name": "Short text 1",
+        "description": "",
+        "required": false,
+        "type": "SHORT_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 0,
+        "max_characters": null
+      }
+    ],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

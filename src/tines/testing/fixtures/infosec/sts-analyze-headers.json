@@ -1,0 +1,325 @@
+{
+  "schema_version": 3,
+  "name": "StS Analyze Headers",
+  "description": "",
+  "guid": "97ff49cbe168c9366b1317ca79cf939f",
+  "exported_at": "2021-02-25T10:01:03Z",
+  "agents": [
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check for Authentication Results",
+      "disabled": false,
+      "guid": "9420f55da0d1ab5bb4018f4d50a016a5",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": ".",
+            "path": "{{.receive_headers.body.headers.Authentication-Results}}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Extract IPs from Headers",
+      "disabled": false,
+      "guid": "387709db6452598cd97534bf8b494117",
+      "options": {
+        "mode": "extract",
+        "matchers": [
+          {
+            "path": "{{.receive_headers.body.headers.Received | regex_replace: '(127\\.)|(10\\.)|(172\\.1[6-9]\\.)|(172\\.2[0-9]\\.)|(172\\.3[0-1]\\.)|(192\\.168\\.)', ''}}.",
+            "regexp": "(?<=\\[|\\(|\\s)\\d{1,3}(?:\\.\\d{1,3}){3}(?=\\]|\\)|\\s)",
+            "to": "ips"
+          }
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "de1cf695d39915a94ea9cdb223216bfa",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "spf": "{{.extract_mail_auth.spf}}",
+          "dkim": "{{.extract_mail_auth.dkim}}",
+          "dmarc": "{{.extract_mail_auth.dmarc}}",
+          "initial_ip": "{{.extract_ips_from_headers.ips.last | default: 'not found'}}",
+          "organization": "{{.lookup_ip_in_maxmind.body.traits.organization | default: 'Unknown'}}",
+          "country": "{{.lookup_ip_in_maxmind.body.country.names.en | default: 'Unknown'}}",
+          "city": "{{.lookup_ip_in_maxmind.body.city.names.en | default: 'Unknown'}}",
+          "recent_spam_activity": "{% if .search_ip_rep_in_ip_quality_score.body.fraud_score >= 85 %}Identified spam in the past 24-48 hours{% elsif .search_ip_rep_in_ip_quality_score.body.fraud_score >= 75 %}Identified spam in the past month{% else %}Not associated with recent spam activity{% endif %}",
+          "ip_sender_reputation": "{% assign score = .search_ip_rep_in_ip_quality_score.body.fraud_score %}{% if score >=85 %}Bad{% elsif score >= 75 %}Poor{% elsif score >= 50 %}Suspicious{% elsif score >=11 %}OK{% elsif score <=10%}Good{% else %}unknown{% endif %}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "IPs Found",
+      "disabled": false,
+      "guid": "24cf1141e36f590fb10b469de0f16ce4",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{.check_for_ips_in_headers.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Auth Results Found",
+      "disabled": false,
+      "guid": "1c5cb2552c34dbeb9b2e445f891833a4",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{.check_for_authentication_results.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check for IPs in Headers",
+      "disabled": false,
+      "guid": "de3950e0386a7fc51e2489bffdb8d76d",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b",
+            "path": "{{.receive_headers.body.headers.Received}}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search IP Rep in IP Quality Score",
+      "disabled": false,
+      "guid": "c0561ce9ae81b23261991294917930f7",
+      "options": {
+        "url": "https://ipqualityscore.com/api/json/ip/{{.CREDENTIAL.ipqualityscore}}/{{.extract_ips_from_headers.ips.last}}?strictness=1&allow_public_access_points=true&lighter_penalties=true",
+        "content_type": "json",
+        "method": "get",
+        "headers": {},
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Lookup IP in MaxMind",
+      "disabled": false,
+      "guid": "b69ba8b370ec05294180fdb655932c8a",
+      "options": {
+        "url": "https://geoip.maxmind.com/geoip/v2.1/city/{{.extract_ips_from_headers.ips.last}}?pretty",
+        "content_type": "json",
+        "method": "get",
+        "payload": {},
+        "basic_auth": [
+          "{{.RESOURCE.maxmind_account_id}}",
+          "{{.CREDENTIAL.maxmind_licence_key}}"
+        ],
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Monitor for API Failure",
+      "disabled": false,
+      "guid": "b2efccba40c3310a26ccc0408aa858c5",
+      "options": {
+        "rules": [
+          {
+            "type": "!regex",
+            "value": "200",
+            "path": "{{.search_ip_rep_in_ip_quality_score.status}}"
+          },
+          {
+            "type": "!regex",
+            "value": "200",
+            "path": "{{.lookup_ip_in_maxmind.status}}"
+          }
+        ],
+        "must_match": "1"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "IPs Not Found",
+      "disabled": false,
+      "guid": "55c1731caba45d9d32b9fb4b1d329024",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "false",
+            "path": "{{.check_for_ips_in_headers.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Auth Results Not Found",
+      "disabled": false,
+      "guid": "54d213392c62f02332459bdefe45b7e5",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "false",
+            "path": "{{.check_for_authentication_results.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Extract Mail Auth",
+      "disabled": false,
+      "guid": "d82fdd6db6fcc07200e166edf964a572",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "spf": "{% if receive_headers.body.headers.received-spf contains 'Fail' or receive_headers.body.headers.received-spf contains 'fail' %}fail{% elsif receive_headers.body.headers.received-spf contains 'pass' %}pass{% elsif receive_headers.body.headers.received-spf %}found{% else %}not_found{% endif %}",
+          "dkim": "{% if receive_headers.body.headers.DKIM-Signature %}found{% else %}not_found{% endif %}",
+          "dmarc": "{% if receive_headers.body.headers.dmarc contains 'pass' or receive_headers.body.headers.dmarc contains 'Pass' %}pass{% elsif receive_headers.body.headers.dmarc contains 'fail' or receive_headers.body.headers.dmarc contains 'Fail' %}fail{% elsif receive_headers.body.headers.dmarc %}found{% else %}not_found{% endif %}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive Headers",
+      "disabled": false,
+      "guid": "29ac3888a803a0bebc1138c1cb71b249",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Extract Mail Auth",
+      "disabled": false,
+      "guid": "10465b12f67a151804f830240051edb1",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "spf": "{% if receive_headers.body.headers.Authentication-Results contains 'spf=pass' %}pass{% elsif receive_headers.body.headers.Authenticaion-Results contains 'spf=fail' receive_headers.body.headers.Authenticaion-Results contains 'spf=softfail' %}fail{% elsif receive_headers.body.headers.Authenticaion-Results contains 'spf=neutral' %}neutral{% else %}unknown{% endif %}",
+          "dkim": "{% if receive_headers.body.headers.Authentication-Results contains 'dkim=pass' %}pass{% elsif receive_headers.body.headers.Authenticaion-Results contains 'dkim=fail' %}fail{% elsif receive_headers.body.headers.Authenticaion-Results contains 'dkim=temperror' %}error{% else %}unknown{% endif %}",
+          "dmarc": "{% if receive_headers.body.headers.Authentication-Results contains 'dmarc=pass' %}pass{% elsif receive_headers.body.headers.Authenticaion-Results contains 'dmarc=fail' %}fail{% else %}unknown{% endif %}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 4
+    },
+    {
+      "source": 0,
+      "receiver": 10
+    },
+    {
+      "source": 1,
+      "receiver": 6
+    },
+    {
+      "source": 3,
+      "receiver": 1
+    },
+    {
+      "source": 4,
+      "receiver": 13
+    },
+    {
+      "source": 5,
+      "receiver": 9
+    },
+    {
+      "source": 5,
+      "receiver": 3
+    },
+    {
+      "source": 6,
+      "receiver": 7
+    },
+    {
+      "source": 7,
+      "receiver": 0
+    },
+    {
+      "source": 7,
+      "receiver": 8
+    },
+    {
+      "source": 9,
+      "receiver": 0
+    },
+    {
+      "source": 10,
+      "receiver": 11
+    },
+    {
+      "source": 11,
+      "receiver": 2
+    },
+    {
+      "source": 12,
+      "receiver": 5
+    },
+    {
+      "source": 13,
+      "receiver": 2
+    }
+  ],
+  "diagram_layout": "{\"9420f55da0d1ab5bb4018f4d50a016a5\":[303.0,411.0],\"387709db6452598cd97534bf8b494117\":[75.0,150.0],\"de1cf695d39915a94ea9cdb223216bfa\":[303.0,666.0],\"24cf1141e36f590fb10b469de0f16ce4\":[75.0,75.0],\"1c5cb2552c34dbeb9b2e445f891833a4\":[303.0,501.0],\"de3950e0386a7fc51e2489bffdb8d76d\":[300.0,-15.0],\"c0561ce9ae81b23261991294917930f7\":[75.0,240.0],\"b69ba8b370ec05294180fdb655932c8a\":[75.0,330.0],\"b2efccba40c3310a26ccc0408aa858c5\":[-147.0,411.0],\"55c1731caba45d9d32b9fb4b1d329024\":[303.0,81.0],\"54d213392c62f02332459bdefe45b7e5\":[93.0,501.0],\"d82fdd6db6fcc07200e166edf964a572\":[93.0,591.0],\"29ac3888a803a0bebc1138c1cb71b249\":[300.0,-105.0],\"10465b12f67a151804f830240051edb1\":[303.0,591.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "29ac3888a803a0bebc1138c1cb71b249",
+  "exit_agent_guids": [
+    "de1cf695d39915a94ea9cdb223216bfa"
+  ],
+  "exit_agent_guid": "de1cf695d39915a94ea9cdb223216bfa",
+  "send_to_stories": [],
+  "form": {
+    "name": "StS Analyze Headers Form",
+    "description": "",
+    "fields": [],
+    "visibility": "world",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

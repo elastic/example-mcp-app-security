@@ -1,0 +1,382 @@
+{
+  "schema_version": 3,
+  "name": "Create Onboarding Github tasks",
+  "description": "Using the webform for this Tines ",
+  "guid": "f7af960d97fe665ce33d8fda12e42c01",
+  "exported_at": "2021-09-08T12:08:35Z",
+  "agents": [
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Onboarding Start",
+      "disabled": false,
+      "guid": "15a04877a1a067c02d2f46a470f1e50f",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Onboarding Issue",
+      "disabled": false,
+      "guid": "535b1fd02a6bd5ac9f12324a30ac2cf5",
+      "options": {
+        "url": "https://api.github.com/repos/elastic/infosec/issues",
+        "content_type": "json",
+        "method": "post",
+        "headers": {
+          "Authorization": "token {{.CREDENTIAL.github_infosecmachine }}"
+        },
+        "payload": {
+          "title": "Onboarding {{.onboarding_start.body.first_name}} {{.onboarding_start.body.last_name}} - {{.get_onboarding_task_content.body.name }}",
+          "body": "{{.decode_onboarding_file.message }}\ncc {{.onboarding_start.mentor_github_username}}",
+          "labels": [
+            "InfoSec-Onboarding"
+          ],
+          "assignee": "{{.onboarding_start.body.github_user_name}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Onboarding Tasks from Github",
+      "disabled": false,
+      "guid": "e6cc116de403e58aa74a9c7df49b394f",
+      "options": {
+        "url": "https://api.github.com/repos/elastic/infosec/contents/onboarding/onboarding_tasks",
+        "content_type": "json",
+        "method": "get",
+        "headers": {
+          "Authorization": "token {{.CREDENTIAL.github_infosecmachine }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get onboarding Task content",
+      "disabled": false,
+      "guid": "e7d1705a2d005d4d82378b6abe86978a",
+      "options": {
+        "url": "{{.explode_list_of_github_files_array.individual_record.url }}",
+        "content_type": "json",
+        "method": "get",
+        "headers": {
+          "Authorization": "token {{.CREDENTIAL.github_infosecmachine }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode list of github files Array",
+      "disabled": false,
+      "guid": "84ec86d991f41c7088ef26b49d2c3f18",
+      "options": {
+        "mode": "explode",
+        "path": "{{.get_onboarding_tasks_from_github.body }}",
+        "to": "individual_record"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Decode Onboarding File",
+      "disabled": false,
+      "guid": "96c472bcbedb93d4b4e1019ba0229c8f",
+      "options": {
+        "mode": "message_only",
+        "message": "{{ .remove_newlines.message | base64_decode }}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Remove newlines",
+      "disabled": false,
+      "guid": "4ec5273e7a163a320492a2fcfc75e3dd",
+      "options": {
+        "mode": "message_only",
+        "message": "{{ .get_onboarding_task_content.body.content  | strip_newlines }}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Onboarding Tasks from Github",
+      "disabled": false,
+      "guid": "da6080b0fc92530f74f893c1ce0847af",
+      "options": {
+        "url": "https://api.github.com/repos/elastic/infosec/contents/onboarding/onboarding_tasks/{{.explode_team_name_array.individual_record }}",
+        "content_type": "json",
+        "method": "get",
+        "headers": {
+          "Authorization": "token {{.CREDENTIAL.github_infosecmachine }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Team name Array",
+      "disabled": false,
+      "guid": "a5b97ee29b57b1f6c12e86778932b5c3",
+      "options": {
+        "mode": "explode",
+        "path": "{{.onboarding_start.body.team_name }}",
+        "to": "individual_record"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Implode an Array",
+      "disabled": false,
+      "guid": "411e6479064c43a8eae200547146238d",
+      "options": {
+        "mode": "implode",
+        "guid_path": "{% story_run_guid %}",
+        "size_path": "{{.explode_list_of_github_files_array.size }}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Onboarding Overview Issue",
+      "disabled": false,
+      "guid": "546ff82459aca3c666153fa9d413469e",
+      "options": {
+        "url": "https://api.github.com/repos/elastic/infosec/issues",
+        "content_type": "json",
+        "method": "post",
+        "headers": {
+          "Authorization": "token {{.CREDENTIAL.github_infosecmachine }}"
+        },
+        "payload": {
+          "title": "Onboarding {{.onboarding_start.body.first_name}} {{.onboarding_start.body.last_name}} - Task Overview",
+          "body": "The purpose of this issue is to track the status of all of the other onboarding tasks for {{.onboarding_start.body.first_name}} {{.onboarding_start.body.last_name}}\n{% assign tasks = {{.implode_an_array}} | where: {{.is_a_file.rule_matched}}, true %}\n{% for task in tasks %}\n- [ ] #{{task.create_onboarding_issue.body.number}} - {{task.create_onboarding_issue.body.title}}{% endfor %}\n\ncc {{.onboarding_start.mentor_github_username}}",
+          "labels": [
+            "InfoSec-Onboarding"
+          ],
+          "assignee": "{{.onboarding_start.body.github_user_name}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "is a file",
+      "disabled": false,
+      "guid": "2682b4db6c75fd864273566a245f8e8a",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "file",
+            "path": "{{ .explode_list_of_github_files_array.individual_record.type }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "not a file",
+      "disabled": false,
+      "guid": "ec88c2df7b9efc8db04a279c37071a31",
+      "options": {
+        "rules": [
+          {
+            "type": "field!=value",
+            "value": "file",
+            "path": "{{ .explode_list_of_github_files_array.individual_record.type }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [
+    {
+      "content": "This is to create an 'overview' event. that tracks the completion status of the other events.\n\nStill in progress\n",
+      "position": [
+        1035.0,
+        1245.0
+      ],
+      "guid": "458ff70d199cf78c8b025e3695aa3827"
+    },
+    {
+      "content": "This is to filter out the directories that return an empty task content value",
+      "position": [
+        375.0,
+        765.0
+      ],
+      "guid": "dfcc2d8e40501198491e34d790beb7d5"
+    }
+  ],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 8
+    },
+    {
+      "source": 0,
+      "receiver": 2
+    },
+    {
+      "source": 1,
+      "receiver": 9
+    },
+    {
+      "source": 2,
+      "receiver": 4
+    },
+    {
+      "source": 3,
+      "receiver": 6
+    },
+    {
+      "source": 4,
+      "receiver": 12
+    },
+    {
+      "source": 4,
+      "receiver": 11
+    },
+    {
+      "source": 5,
+      "receiver": 1
+    },
+    {
+      "source": 6,
+      "receiver": 5
+    },
+    {
+      "source": 7,
+      "receiver": 4
+    },
+    {
+      "source": 8,
+      "receiver": 7
+    },
+    {
+      "source": 9,
+      "receiver": 10
+    },
+    {
+      "source": 11,
+      "receiver": 3
+    },
+    {
+      "source": 12,
+      "receiver": 9
+    }
+  ],
+  "diagram_layout": "{\"15a04877a1a067c02d2f46a470f1e50f\":[810.0,375.0],\"535b1fd02a6bd5ac9f12324a30ac2cf5\":[810.0,1095.0],\"e6cc116de403e58aa74a9c7df49b394f\":[660.0,585.0],\"e7d1705a2d005d4d82378b6abe86978a\":[810.0,855.0],\"84ec86d991f41c7088ef26b49d2c3f18\":[810.0,690.0],\"96c472bcbedb93d4b4e1019ba0229c8f\":[810.0,1005.0],\"4ec5273e7a163a320492a2fcfc75e3dd\":[810.0,945.0],\"da6080b0fc92530f74f893c1ce0847af\":[930.0,585.0],\"a5b97ee29b57b1f6c12e86778932b5c3\":[930.0,480.0],\"411e6479064c43a8eae200547146238d\":[810.0,1200.0],\"546ff82459aca3c666153fa9d413469e\":[810.0,1290.0],\"2682b4db6c75fd864273566a245f8e8a\":[810.0,780.0],\"ec88c2df7b9efc8db04a279c37071a31\":[645.0,780.0]}",
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "exit_agent_guid": null,
+  "send_to_stories": [],
+  "form": {
+    "name": "Onboarding Github creation",
+    "description": "",
+    "fields": [
+      {
+        "name": "Team Name",
+        "description": "Select for Team specific tasks",
+        "required": false,
+        "type": "OPTION",
+        "multi_select": true,
+        "options": [
+          "Risk",
+          "Detections_Intel_Response",
+          "SecEng",
+          "Assurance"
+        ],
+        "ranking": 1744830464,
+        "max_characters": null
+      },
+      {
+        "name": "First Name",
+        "description": "Name of the new Elastician\n",
+        "required": true,
+        "type": "SHORT_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 0,
+        "max_characters": null
+      },
+      {
+        "name": "Last Name",
+        "description": "Last name of the new Elastician",
+        "required": true,
+        "type": "SHORT_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 1073741824,
+        "max_characters": null
+      },
+      {
+        "name": "Elastic Email",
+        "description": "Elastic.co email address of the new Elastician",
+        "required": true,
+        "type": "EMAIL",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 1610612736,
+        "max_characters": null
+      },
+      {
+        "name": "Github User Name",
+        "description": "",
+        "required": true,
+        "type": "SHORT_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 1342177280,
+        "max_characters": null
+      },
+      {
+        "name": "Mentor Github Name",
+        "description": "",
+        "required": true,
+        "type": "SHORT_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 1879048192,
+        "max_characters": null
+      }
+    ],
+    "visibility": "saml",
+    "agent_guid": "15a04877a1a067c02d2f46a470f1e50f",
+    "success_message": "Thank you for your submission"
+  }
+}

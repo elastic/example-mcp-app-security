@@ -1,0 +1,515 @@
+{
+  "schema_version": 3,
+  "name": "Alert Testing",
+  "description": "Testing a connector in Whitesector that sends to a webhook agent. Events will the be passed to TheHive to create an alert.",
+  "guid": "1827de943c25db562007a840c99a6331",
+  "exported_at": "2021-02-25T10:03:58Z",
+  "agents": [
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Array of Alerts",
+      "disabled": false,
+      "guid": "e3e4707408af0081d513621792cb4d73",
+      "options": {
+        "mode": "explode",
+        "path": "{{.receive_siem_detection_alert.body._json}}",
+        "to": "individual_record"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Create Artifact Structure",
+      "disabled": false,
+      "guid": "8c74538bf5731a2fed5c78fc1a44eb0e",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "data": "{% capture array %}{% if .extract_artifacts.eg_alert_id != \"\" %}{\"data\": \"{{.extract_artifacts.eg_alert_id}}\", \"dataType\": \"eg_alert_id\", \"message\": \"\"}{% endif %}|{% if .extract_artifacts.username != \"\" %}{\"data\": \"{{.extract_artifacts.username}}\", \"dataType\": \"username\", \"message\": \"\"}{% endif %}|{% if .extract_artifacts.user_agent != \"\" %}{\"data\": \"{{.extract_artifacts.user_agent}}\", \"dataType\": \"user-agent\", \"message\": \"\"}{% endif %}|{% if .extract_artifacts.ip != \"\" %}{\"data\": \"{{.extract_artifacts.ip}}\", \"dataType\": \"ip\", \"message\": \"\"}{% endif %}|{% if .extract_artifacts.hostname != \"\" %}{\"data\": \"{{.extract_artifacts.hostname}}\", \"dataType\": \"hostname\", \"message\": \"\"}{% endif %}|{% if .extract_artifacts.sha256 != \"\" %}{\"data\": \"{{.extract_artifacts.sha256}}\", \"dataType\": \"hash\", \"message\": \"\"}{% endif %}{% endcapture%}\n{{ array | split: '|' | as_object }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Discard \"END_OF_ALERTS\" object",
+      "disabled": false,
+      "guid": "a65bc03da31de0e480107674471ad19b",
+      "options": {
+        "rules": [
+          {
+            "type": "not in",
+            "value": "END_OF_ALERTS",
+            "path": "{{ .explode_array_of_alerts.individual_record.END_OF_ALERTS}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive SIEM Detection Alert",
+      "disabled": false,
+      "guid": "5be3eb00f61b490a9dfa51189b6e9038",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Create Artifact Structure",
+      "disabled": false,
+      "guid": "d7966f01aa494871663a5d8ac5f2dde1",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "data": "{% capture array %}{% if .extract_artifacts.hostname != \"\" %}{\"data\": \"{{.extract_artifacts.hostname}}\", \"dataType\": \"hostname\", \"message\": \"\"}{% endif %}|{% if .extract_artifacts.sha256 != \"\" %}{\"data\": \"{{.extract_artifacts.sha256}}\", \"dataType\": \"hash\", \"message\": \"\"}{% endif %}{% endcapture%}\n{{ array | split: '|' | as_object }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Event Transform Agent",
+      "disabled": false,
+      "guid": "52e2e4f5ca30ad4230c81202f2e60d76",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "full": "{{.RESOURCE.test_template}}",
+          "custom": "{{ .RESOURCE.test_template | where: 'variable', .test.variable | get: 'contents' | as_object }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Query MISP",
+      "disabled": false,
+      "guid": "7481b5820ba321487e8931d8b0ff4f2b",
+      "options": {
+        "story": "{{ .STORY.elastic_test.misp_query }}",
+        "payload": {
+          "key": "value",
+          "value": "{{.extract_artifacts.sha256}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Form Tags",
+      "disabled": false,
+      "guid": "6f291172997dc6846907792b1b85f39e",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "tags": "{% if tags_to_array.tags != \"\" %}[{% for tag in tags_to_array.tags %}\"{{ tag }}\"{% if forloop.last == false %}, {% endif %}{% endfor %}]{% else %}\"[]\"{% endif %}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Parse Artifact Structure",
+      "disabled": false,
+      "guid": "6fa52f7b3927d2fcc9417efdbfd0f754",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "artifacts": "[{% for i in .create_artifact_structure.data %}{{ i | json | json_parse }}{% if forloop.last == false %},{% endif %}{% endfor %}]"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Artifacts to Alert",
+      "disabled": false,
+      "guid": "d6431761bc71bc2abfea8a603e91a5f9",
+      "options": {
+        "url": "{{ .RESOURCE.the_hive_url }}/api/alert/{{.create_alert_in_thehive.body.id}}",
+        "content_type": "json",
+        "method": "patch",
+        "payload": {
+          "artifacts": "{{.parse_artifact_structure.artifacts | as_object}}"
+        },
+        "headers": {
+          "Authorization": "Bearer {{ .CREDENTIAL.the_hive_api_key }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Alert in TheHive",
+      "disabled": false,
+      "guid": "da5b94ed943482d360e59161b77b3404",
+      "options": {
+        "url": "{{.RESOURCE.the_hive_url}}/api/alert",
+        "method": "post",
+        "content_type": "json",
+        "payload": {
+          "title": "{{.explode_array_of_alerts.individual_record.signal.rule.name}}",
+          "description": "----------\n{{.explode_array_of_alerts.individual_record.signal.rule.description}}\n\n----------\n\n### Links\n{% if .explode_array_of_alerts.individual_record.signal.rule.id %} | [Link to SIEM Rule](https://kibana.whitesector.inf.elasticnet.co/s/infosec-detections/app/siem#/detections/rules/id/{{.explode_array_of_alerts.individual_record.signal.rule.id}}){% endif %}{% if .explode_array_of_alerts.individual_record.event.reference %} | [Link to Alert]({{.explode_array_of_alerts.individual_record.event.reference}}){% endif %}{% if .explode_array_of_alerts.individual_record.labels.endpoint_id %} | [Link to Endpoint](https://thunderbolt.inf.elasticnet.co/endpoints/{{.explode_array_of_alerts.individual_record.labels.endpoint_id}}){% endif %} |\n\n\n### References\n{% assign references = .explode_array_of_alerts.individual_record.signal.rule.references | split: \",\" %}\n{% for url in references %}\n- {{url}}\n\n{% endfor %} \n\n\n{% if .explode_array_of_alerts.individual_record.signal.rule.false_positives != empty %}\n### False Positive Notes\n```\n{{.explode_array_of_alerts.individual_record.signal.rule.false_positives}}\n```\n{% endif %}\n\n\n{% if .query_misp.misp_lookup_result != \"None\" %}\n### MISP Hits\n*A match for `{{.extract_artifacts.sha256}}` was found in MISP!*\n\n[{{.query_misp.misp_lookup_result.info}}](https://misp-app.inf.elasticnet.co/events/view/{{.query_misp.misp_lookup_result.id}})\n{% endif %}\n\n\n### Additional Context\n----------\n{% if .explode_array_of_alerts.individual_record.host.name %}{{.explode_array_of_alerts.individual_record.host.name | prepend: \"Hostname: `\" | append: \"`\"}}{% endif %}\n\n{% if .explode_array_of_alerts.individual_record.host.os.name %}{{.explode_array_of_alerts.individual_record.host.os.name | prepend: \"Host OS: `\" | append: \"`\"}}{% endif %}\n\n{% if .explode_array_of_alerts.individual_record.process.executable %}{{.explode_array_of_alerts.individual_record.process.executable | prepend: \"Executable: `\" | append: \"`\"}}{% endif %}\n\n{% if .explode_array_of_alerts.individual_record.process.args %}{{.explode_array_of_alerts.individual_record.process.args | prepend: \"Args: `\" | append: \"`\"}}{% endif %}\n\n{% if .explode_array_of_alerts.individual_record.process.command_line %}{{.explode_array_of_alerts.individual_record.process.command_line  | prepend: \"Command Line: `\" | append: \"`\"}}{% endif %}\n\nSignal Risk Score: `{{.explode_array_of_alerts.individual_record.signal.rule.risk_score}}`\n\nSignal Severity: `{{.explode_array_of_alerts.individual_record.signal.rule.severity}}`\n\n----------",
+          "type": "testing",
+          "source": "Tines PoC - Daniel",
+          "sourceRef": "{{\"now\" | date: '%s' }} alert-ref",
+          "severity": "{% if .explode_array_of_alerts.individual_record.signal.rule.severity == \"low\" %}1{% elsif .explode_array_of_alerts.individual_record.signal.rule.severity == \"medium\" %}2{% elsif .explode_array_of_alerts.individual_record.signal.rule.severity == \"high\" %}3{% elsif .explode_array_of_alerts.individual_record.signal.rule.severity == \"critical\" %}4{% endif %}",
+          "tlp": 1,
+          "caseTemplate": "Watcher alert",
+          "tags": "{{ .form_tags.tags }}",
+          "customFields": {
+            "watcherAlertName": {
+              "string": "{{.explode_array_of_alerts.individual_record.signal.rule.name}}"
+            }
+          }
+        },
+        "headers": {
+          "Authorization": "Bearer {{ .CREDENTIAL.the_hive_api_key }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Alert in TheHive - Backup",
+      "disabled": false,
+      "guid": "1d6c93e42ee1c580a62382afb22e5e44",
+      "options": {
+        "url": "{{.RESOURCE.the_hive_url}}/api/alert",
+        "method": "post",
+        "content_type": "json",
+        "payload": {
+          "title": "{{.explode_array_of_alerts.individual_record.signal.rule.name}}",
+          "description": "----------\n{{.explode_array_of_alerts.individual_record.signal.rule.description}}\n\n----------\n\n### Links\n{% if .explode_array_of_alerts.individual_record.signal.rule.id %} | [Link to SIEM Rule](https://kibana.whitesector.inf.elasticnet.co/s/infosec-detections/app/siem#/detections/rules/id/{{.explode_array_of_alerts.individual_record.signal.rule.id}}){% endif %}{% if .explode_array_of_alerts.individual_record.event.reference %} | [Link to Alert]({{.explode_array_of_alerts.individual_record.event.reference}}){% endif %}{% if .explode_array_of_alerts.individual_record.labels.endpoint_id %} | [Link to Endpoint](https://thunderbolt.inf.elasticnet.co/endpoints/{{.explode_array_of_alerts.individual_record.labels.endpoint_id}}){% endif %} |\n\n\n### References\n{% assign references = .explode_array_of_alerts.individual_record.signal.rule.references | split: \",\" %}\n{% for url in references %}\n- {{url}}\n\n{% endfor %} \n\n\n{% if .explode_array_of_alerts.individual_record.signal.rule.false_positives != empty %}\n### False Positive Notes\n```\n{{.explode_array_of_alerts.individual_record.signal.rule.false_positives}}\n```\n{% endif %}\n\n\n{% if .query_misp.misp_lookup_result != \"None\" %}\n### MISP Hits\n*A match for `{{.extract_artifacts.sha256}}` was found in MISP!*\n\n[{{.query_misp.misp_lookup_result.info}}](https://misp-app.inf.elasticnet.co/events/view/{{.query_misp.misp_lookup_result.id}})\n{% endif %}\n\n\n### Additional Context\n----------\n{% if .explode_array_of_alerts.individual_record.host.name %}{{.explode_array_of_alerts.individual_record.host.name | prepend: \"Hostname: `\" | append: \"`\"}}{% endif %}\n\n{% if .explode_array_of_alerts.individual_record.host.os.name %}{{.explode_array_of_alerts.individual_record.host.os.name | prepend: \"Host OS: `\" | append: \"`\"}}{% endif %}\n\n{% if .explode_array_of_alerts.individual_record.process.executable %}{{.explode_array_of_alerts.individual_record.process.executable | prepend: \"Executable: `\" | append: \"`\"}}{% endif %}\n\n{% if .explode_array_of_alerts.individual_record.process.args %}{{.explode_array_of_alerts.individual_record.process.args | prepend: \"Args: `\" | append: \"`\"}}{% endif %}\n\n{% if .explode_array_of_alerts.individual_record.process.command_line %}{{.explode_array_of_alerts.individual_record.process.command_line  | prepend: \"Command Line: `\" | append: \"`\"}}{% endif %}\n\nSignal Risk Score: `{{.explode_array_of_alerts.individual_record.signal.rule.risk_score}}`\n\nSignal Severity: `{{.explode_array_of_alerts.individual_record.signal.rule.severity}}`\n\n----------",
+          "type": "testing",
+          "source": "Tines PoC - Daniel",
+          "sourceRef": "{{\"now\" | date: '%s' }} alert-ref",
+          "severity": "{% if .explode_array_of_alerts.individual_record.signal.rule.severity == \"low\" %}1{% elsif .explode_array_of_alerts.individual_record.signal.rule.severity == \"medium\" %}2{% elsif .explode_array_of_alerts.individual_record.signal.rule.severity == \"high\" %}3{% elsif .explode_array_of_alerts.individual_record.signal.rule.severity == \"critical\" %}4{% endif %}",
+          "tlp": 1,
+          "caseTemplate": "Watcher alert",
+          "tags": "{{.form_tags.message | as_object}}",
+          "customFields": {
+            "watcherAlertName": {
+              "string": "{{.explode_array_of_alerts.individual_record.signal.rule.name}}"
+            }
+          }
+        },
+        "headers": {
+          "Authorization": "Bearer {{ .CREDENTIAL.the_hive_api_key }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Tags to Array",
+      "disabled": false,
+      "guid": "b05062c95419ca7e3ecbda6bd8dbdc6b",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "tags": "{{ .explode_array_of_alerts.individual_record.signal.rule.tags | split: ',' | as_object }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Extract Artifacts",
+      "disabled": false,
+      "guid": "2ed46d02a3a2e416d2bfe96a9e0f18d7",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "hostname": "{{.explode_array_of_alerts.individual_record.host.name}}",
+          "sha256": "{% if .explode_array_of_alerts.individual_record.file.hash.sha256 %}{{.explode_array_of_alerts.individual_record.file.hash.sha256}}{% elsif .explode_array_of_alerts.individual_record.endgame.data.hashes.sha256 %}{{.explode_array_of_alerts.individual_record.endgame.data.hashes.sha256}}{% endif %}",
+          "tags": "{{ .form_tags.tags }}",
+          "ip": "{{ .explode_array_of_alerts.individual_record.host.ip }}",
+          "username": "{% if .explode_array_of_alerts.individual_record.user.name %}{{.explode_array_of_alerts.individual_record.user.name}}{% elsif .explode_array_of_alerts.individual_record.source.user.full_name %}{{.explode_array_of_alerts.individual_record.source.user.full_name}}{% endif %}",
+          "user_agent": "{{.explode_array_of_alerts.individual_record.user_agent.device.name}}",
+          "team": "{{.explode_array_of_alerts.individual_record.fields.team}}",
+          "cloud_project_id": "{{.explode_array_of_alerts.individual_record.cloud.project.id}}",
+          "eg_alert_id": "{{.explode_array_of_alerts.individual_record.endgame.metadata.message_id}}",
+          "email": "{{.explode_array_of_alerts.individual_record.okta.actor.alternate_id}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 2
+    },
+    {
+      "source": 1,
+      "receiver": 8
+    },
+    {
+      "source": 2,
+      "receiver": 12
+    },
+    {
+      "source": 3,
+      "receiver": 0
+    },
+    {
+      "source": 4,
+      "receiver": 8
+    },
+    {
+      "source": 6,
+      "receiver": 10
+    },
+    {
+      "source": 7,
+      "receiver": 13
+    },
+    {
+      "source": 8,
+      "receiver": 9
+    },
+    {
+      "source": 10,
+      "receiver": 4
+    },
+    {
+      "source": 12,
+      "receiver": 7
+    },
+    {
+      "source": 13,
+      "receiver": 10
+    }
+  ],
+  "diagram_layout": "{\"e3e4707408af0081d513621792cb4d73\":[360.0,-1035.0],\"8c74538bf5731a2fed5c78fc1a44eb0e\":[600.0,-510.0],\"a65bc03da31de0e480107674471ad19b\":[360.0,-960.0],\"5be3eb00f61b490a9dfa51189b6e9038\":[360.0,-1125.0],\"d7966f01aa494871663a5d8ac5f2dde1\":[360.0,-510.0],\"52e2e4f5ca30ad4230c81202f2e60d76\":[1350.0,-810.0],\"7481b5820ba321487e8931d8b0ff4f2b\":[135.0,-735.0],\"6f291172997dc6846907792b1b85f39e\":[360.0,-780.0],\"6fa52f7b3927d2fcc9417efdbfd0f754\":[360.0,-420.0],\"d6431761bc71bc2abfea8a603e91a5f9\":[360.0,-330.0],\"da5b94ed943482d360e59161b77b3404\":[360.0,-600.0],\"1d6c93e42ee1c580a62382afb22e5e44\":[645.0,-600.0],\"b05062c95419ca7e3ecbda6bd8dbdc6b\":[360.0,-855.0],\"2ed46d02a3a2e416d2bfe96a9e0f18d7\":[360.0,-690.0]}",
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "exit_agent_guid": null,
+  "send_to_stories": [
+    {
+      "schema_version": 3,
+      "name": "MISP query",
+      "description": null,
+      "guid": "0eceef4535e9cfecd098263b311c9d98",
+      "exported_at": "2021-02-25T10:03:58Z",
+      "agents": [
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Form Input",
+          "disabled": false,
+          "guid": "1e3d95e0727b0eb491468f7d35fc99c2",
+          "options": {
+            "secret": "[REDACTED:secret]",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Return Results",
+          "disabled": false,
+          "guid": "826121ed324668e1e0c5b395d2a63071",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "misp_lookup_result": "{% if .match.rule_matched == true %}{{.explode_event_array.individual_event.Event | as_object}}{% else .no_match.rule_matched == true %}None{% endif %}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Retrieve Event by Event ID from MISP",
+          "disabled": false,
+          "guid": "c4844699aba9d3d1e3072e7077733c45",
+          "options": {
+            "url": "{{ .RESOURCE.misp_url }}/events/restSearch",
+            "content_type": "json",
+            "method": "POST",
+            "payload": {
+              "eventid": "{{ .explode_attribute_array.individual_attribute.event_id }}",
+              "returnFormat": "json"
+            },
+            "headers": {
+              "Authorization": "{{ .CREDENTIAL.misp_api }}",
+              "Accept": "application/json"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Search attribute in MISP",
+          "disabled": false,
+          "guid": "7e0fd36e73640deafce4ef90cdfa9534",
+          "options": {
+            "url": "{{ .RESOURCE.misp_url }}/attributes/restSearch",
+            "content_type": "json",
+            "method": "POST",
+            "payload": {
+              "value": "{{ .form_input.body.value}}",
+              "returnFormat": "json"
+            },
+            "headers": {
+              "Authorization": "{{ .CREDENTIAL.misp_api }}",
+              "Accept": "application/json"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Explode Attribute Array",
+          "disabled": false,
+          "guid": "d05e9459112cffecdde1a20cf8d9d35c",
+          "options": {
+            "mode": "explode",
+            "path": "{{.search_attribute_in_misp.body.response.Attribute}}",
+            "to": "individual_attribute"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Explode Event Array",
+          "disabled": false,
+          "guid": "75c5c55d751808e4c5471d9869adc437",
+          "options": {
+            "mode": "explode",
+            "path": "{{.retrieve_event_by_event_id_from_misp.body.response}}",
+            "to": "individual_event"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Match",
+          "disabled": false,
+          "guid": "487d50a03342554d2a504f52e82cd416",
+          "options": {
+            "rules": [
+              {
+                "type": "field>=value",
+                "value": "1",
+                "path": "{{.search_attribute_in_misp.headers.x-result-count}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "No Match",
+          "disabled": false,
+          "guid": "2a7f854c1191ba2a130c21e9d14ab68f",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "0",
+                "path": "{{.search_attribute_in_misp.headers.x-result-count}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        }
+      ],
+      "diagram_notes": [],
+      "links": [
+        {
+          "source": 0,
+          "receiver": 3
+        },
+        {
+          "source": 2,
+          "receiver": 5
+        },
+        {
+          "source": 3,
+          "receiver": 7
+        },
+        {
+          "source": 3,
+          "receiver": 6
+        },
+        {
+          "source": 4,
+          "receiver": 2
+        },
+        {
+          "source": 5,
+          "receiver": 1
+        },
+        {
+          "source": 6,
+          "receiver": 4
+        },
+        {
+          "source": 7,
+          "receiver": 1
+        }
+      ],
+      "diagram_layout": "{\"1e3d95e0727b0eb491468f7d35fc99c2\":[-135.0,-540.0],\"826121ed324668e1e0c5b395d2a63071\":[60.0,-15.0],\"c4844699aba9d3d1e3072e7077733c45\":[-165.0,-180.0],\"7e0fd36e73640deafce4ef90cdfa9534\":[-165.0,-435.0],\"d05e9459112cffecdde1a20cf8d9d35c\":[-165.0,-270.0],\"75c5c55d751808e4c5471d9869adc437\":[-165.0,-90.0],\"487d50a03342554d2a504f52e82cd416\":[-120.0,-345.0],\"2a7f854c1191ba2a130c21e9d14ab68f\":[60.0,-345.0]}",
+      "send_to_story_enabled": true,
+      "entry_agent_guid": "1e3d95e0727b0eb491468f7d35fc99c2",
+      "exit_agent_guids": [
+        "826121ed324668e1e0c5b395d2a63071"
+      ],
+      "exit_agent_guid": "826121ed324668e1e0c5b395d2a63071",
+      "form": {
+        "name": "Search attribute",
+        "description": "",
+        "fields": [
+          {
+            "name": "value",
+            "description": "Attribute value",
+            "required": true,
+            "type": "SHORT_TEXT",
+            "multi_select": false,
+            "options": [
+              "Option 1",
+              "Option 2"
+            ],
+            "ranking": 0,
+            "max_characters": null
+          }
+        ],
+        "visibility": "tenant",
+        "agent_guid": "1e3d95e0727b0eb491468f7d35fc99c2",
+        "success_message": "Thank you for your submission"
+      }
+    }
+  ],
+  "form": {
+    "name": "New story for daniel.gallagher@elastic.co (1) Form",
+    "description": "",
+    "fields": [],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

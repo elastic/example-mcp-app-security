@@ -1,0 +1,266 @@
+{
+  "schema_version": 3,
+  "name": "aaron test",
+  "description": "",
+  "guid": "64514ac4dfa8f6be9b5e93cdf13a5622",
+  "exported_at": "2021-02-25T10:04:07Z",
+  "agents": [
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if event category is authentication",
+      "disabled": false,
+      "guid": "7383d23a17cdbef4b0fffb08c8ed3dde",
+      "options": {
+        "rules": [
+          {
+            "type": "in",
+            "path": "{{.explode_an_array.individual_record.event.category}}",
+            "value": "authentication"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if event category is network",
+      "disabled": false,
+      "guid": "572c99a26f973d9a5dd02b5c1fa82fbf",
+      "options": {
+        "rules": [
+          {
+            "type": "in",
+            "path": "{{.explode_an_array.individual_record.event.category}}",
+            "value": "network"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Slack message to infosec-alerts-dev",
+      "disabled": false,
+      "guid": "c5de8728e1f7e5e204a3f3b431c32deb",
+      "options": {
+        "url": "https://{{.CREDENTIAL.infosec_alerts_dev_slack_webhook}}",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "text": "`{{.explode_an_array.individual_record.signal.rule.name}}` fired on `{{.explode_an_array.individual_record.host.name}}`"
+        },
+        "headers": {}
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode an Array",
+      "disabled": false,
+      "guid": "e24e90606d092bedcf823df2a14f29bb",
+      "options": {
+        "mode": "explode",
+        "path": "{{.receive_event_from_kibana.body._json}}",
+        "to": "individual_record"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger except for 'END' field",
+      "disabled": false,
+      "guid": "4fa411b7c612d45bf051ec1e1ab55de6",
+      "options": {
+        "rules": [
+          {
+            "type": "not in",
+            "value": "\"END\"",
+            "path": "{{.explode_an_array.individual_record.Test}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if event category is process",
+      "disabled": false,
+      "guid": "999ab774b7aafb14af3f88c62c4b9766",
+      "options": {
+        "rules": [
+          {
+            "type": "in",
+            "path": "{{.explode_an_array.individual_record.event.category}}",
+            "value": "process"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "HTTP Request Action",
+      "disabled": false,
+      "guid": "810a3bfaf3be35a65f293efd59466860",
+      "options": {
+        "url": "http://www.example.com",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "key": "value",
+          "something": "the event contained {{ .somekey }}"
+        },
+        "headers": {}
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive event from Kibana",
+      "disabled": false,
+      "guid": "84b8dd21fe8425d8aff5a0e307ef5357",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check for /analyzedomain",
+      "disabled": false,
+      "guid": "1877e0db0d218f9b6c8a01e03d5798aa",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "/analyzedomain",
+            "path": "{{ .command}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive event from Kibana",
+      "disabled": false,
+      "guid": "059c5c2dc02ef323d3d2ec3f7d18fcd7",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "infosec-tines slackbot receive slash command",
+      "disabled": false,
+      "guid": "2046ce0bbe6aaf39ebb5324f74d947a7",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post",
+        "response": "Hi {{.user_name}}! Thanks for submitting your {{.command}} request to Tines. Processing now"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Retrieve Domain Report in VirusTotal",
+      "disabled": false,
+      "guid": "9542d683a164f7b227a189df77aa7473",
+      "options": {
+        "url": "https://www.virustotal.com/vtapi/v2/domain/report",
+        "method": "get",
+        "payload": {
+          "apikey": "{{ .CREDENTIAL.virustotal }}",
+          "domain": "{{STORY.text}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if event category is file",
+      "disabled": false,
+      "guid": "3adbef5d61885bf36d8955aa12eb0a8e",
+      "options": {
+        "rules": [
+          {
+            "type": "in",
+            "path": "{{.explode_an_array.individual_record.event.category}}",
+            "value": "file"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 3,
+      "receiver": 4
+    },
+    {
+      "source": 4,
+      "receiver": 5
+    },
+    {
+      "source": 4,
+      "receiver": 12
+    },
+    {
+      "source": 4,
+      "receiver": 1
+    },
+    {
+      "source": 4,
+      "receiver": 0
+    },
+    {
+      "source": 7,
+      "receiver": 3
+    },
+    {
+      "source": 8,
+      "receiver": 11
+    },
+    {
+      "source": 10,
+      "receiver": 8
+    }
+  ],
+  "diagram_layout": "{\"7383d23a17cdbef4b0fffb08c8ed3dde\":[45.0,-255.0],\"572c99a26f973d9a5dd02b5c1fa82fbf\":[-675.0,-255.0],\"c5de8728e1f7e5e204a3f3b431c32deb\":[-390.0,-30.0],\"e24e90606d092bedcf823df2a14f29bb\":[-300.0,-465.0],\"4fa411b7c612d45bf051ec1e1ab55de6\":[-300.0,-375.0],\"999ab774b7aafb14af3f88c62c4b9766\":[-435.0,-255.0],\"810a3bfaf3be35a65f293efd59466860\":[-585.0,-660.0],\"84b8dd21fe8425d8aff5a0e307ef5357\":[-300.0,-585.0],\"1877e0db0d218f9b6c8a01e03d5798aa\":[-15.0,90.0],\"059c5c2dc02ef323d3d2ec3f7d18fcd7\":[-810.0,-570.0],\"2046ce0bbe6aaf39ebb5324f74d947a7\":[-15.0,-30.0],\"9542d683a164f7b227a189df77aa7473\":[-15.0,180.0],\"3adbef5d61885bf36d8955aa12eb0a8e\":[-210.0,-255.0]}",
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "exit_agent_guid": null,
+  "send_to_stories": [],
+  "form": {
+    "name": "New story for aaron.jewitt@elastic.co Form",
+    "description": "",
+    "fields": [
+      {
+        "name": "Url 1",
+        "description": "",
+        "required": false,
+        "type": "URL",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 0,
+        "max_characters": null
+      }
+    ],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

@@ -1,0 +1,356 @@
+{
+  "schema_version": 3,
+  "name": "StS Query URLScan",
+  "description": "",
+  "guid": "98b885842b1f1e75e4b53f293458c3db",
+  "exported_at": "2021-02-25T10:01:56Z",
+  "agents": [
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if knowngood",
+      "disabled": false,
+      "guid": "ee6e9074c9dd8aa32a64d89a353ad523",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "true",
+            "path": "{{.check_if_knowngood.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Extract Domain",
+      "disabled": false,
+      "guid": "b8b20cb94aa1f755806c8bd080662563",
+      "options": {
+        "mode": "extract",
+        "matchers": [
+          {
+            "path": "{{.receive_urls.body.url}}",
+            "regexp": "^(?:https?:\\/\\/)?(?:[^@\\n]+@)?(?:www\\.)?([^:\\/\\n?]+)",
+            "to": "domain"
+          }
+        ],
+        "message": "This is an optional message"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Delay Event",
+      "disabled": false,
+      "guid": "d5a418d0cb8920b9f6c7004dee5b024d",
+      "options": {
+        "mode": "delay",
+        "seconds": "60"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Known Good by URLScan",
+      "disabled": false,
+      "guid": "26c75f5423cf7cd8af541961213d35de",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "prevented",
+            "path": "{{.submit_to_urlscan.body.message}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "33fc22b63423bd180fc4fd8b64a58c7b",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "url": "{{.receive_urls.body.url}}",
+          "malicious": "false",
+          "analysis_link": "knowngood",
+          "analysis_date": "knowngood",
+          "scan_engine": "knowngood",
+          "page_screenshot": "knowngood",
+          "screenshot": "{{.download_screenshot.body.base64encodedcontents}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive URLs",
+      "disabled": false,
+      "guid": "b1b7cba962fc9b1a9353a3d16f82cd74",
+      "options": {
+        "secret": "[REDACTED:secret]",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Scan Started",
+      "disabled": false,
+      "guid": "466d4b19f85e1b3c624b98b66f8355cc",
+      "options": {
+        "rules": [
+          {
+            "type": "!regex",
+            "value": "prevented",
+            "path": "{{.submit_to_urlscan.body.message}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Submit to URLScan",
+      "disabled": false,
+      "guid": "b3609ed92e61e99f1f498a5c7586518b",
+      "options": {
+        "url": "https://urlscan.io/api/v1/scan/",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "url": "{{.receive_urls.body.url}}",
+          "visibility": "private"
+        },
+        "headers": {
+          "API-Key": "{% credential urlscan_io %}"
+        },
+        "fail_on_status": "true",
+        "log_error_on_status": [],
+        "retry_on_status": [
+          "429"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get URLScan Results",
+      "disabled": false,
+      "guid": "9a44ca2e37657e9c7e04f31fe0c553a0",
+      "options": {
+        "url": "https://urlscan.io/api/v1/result/{{.submit_to_urlscan.body.uuid}}",
+        "method": "get",
+        "headers": {},
+        "fail_on_status": "true",
+        "retry_on_status": [
+          "400",
+          "429"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "7331f5416a8f619faeac6743d827fb5d",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "url": "{{.receive_urls.body.url}}",
+          "malicious": "false",
+          "analysis_link": "knowngood",
+          "analysis_date": "knowngood",
+          "scan_engine": "knowngood",
+          "page_screenshot": "knowngood",
+          "screenshot": "{{.download_screenshot.body.base64encodedcontents}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Download Screenshot",
+      "disabled": false,
+      "guid": "f2b5062623f4f2865a4c7f3a63d28010",
+      "options": {
+        "url": "{{.get_urlscan_results.body.task.screenshotURL}}",
+        "content_type": "json",
+        "method": "get",
+        "payload": {},
+        "headers": {},
+        "log_error_on_status": [],
+        "retry_on_status": [
+          "429"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Send to Story Agent",
+      "disabled": false,
+      "guid": "66502d9a6741c859f835182892f80c74",
+      "options": {
+        "story": "{{.STORY.elastic_test.sts_query_urlscan}}",
+        "payload": {
+          "url": "https://irishtimes.com",
+          "guid": "fffffff"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check if Knowngood",
+      "disabled": false,
+      "guid": "271e277cfd68dca414a2a289685883d4",
+      "options": {
+        "rules": [
+          {
+            "type": "in",
+            "value": "{{.RESOURCE.known_good_domains | as_object}}",
+            "path": "{{.extract_domain.domain}}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Not knowngood",
+      "disabled": false,
+      "guid": "c30e8c4f8394f7efb36a1dd7042e06f2",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "false",
+            "path": "{{.check_if_knowngood.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "2d40f8af7bc408cd0eeace14082e0909",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "url": "{{.receive_urls.body.url}}",
+          "malicious": "{% if trigger_if_knowngood.rule_matched%}false{% elsif get_urlscan_results.body.verdicts.overall.malicious == true %}true{% else %}false{% endif%}",
+          "analysis_link": "{% if trigger_if_knowngood.rule_matched %}knowngood{% elsif get_urlscan_results.body.task.reportURL %}{{ .get_urlscan_results.body.task.reportURL}}{% else %}error{% endif %}",
+          "analysis_date": "{% if trigger_if_knowngood.rule_matched %}knowngood{% elsif get_urlscan_results.body.task.time %}{{.get_urlscan_results.body.task.time}}{% else %}error{% endif %}",
+          "scan_engine": "{% if trigger_if_knowngood.rule_matched %}knowngood{% else %}URLScan{% endif %}",
+          "page_screenshot": "{% if trigger_if_knowngood.rule_matched %}knowngood{% elsif get_urlscan_results.body.task.screenshotURL %}{{.get_urlscan_results.body.task.screenshotURL}}{% else %}n/a{% endif %}",
+          "screenshot": "{{.download_screenshot.body.base64encodedcontents}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 9
+    },
+    {
+      "source": 1,
+      "receiver": 12
+    },
+    {
+      "source": 2,
+      "receiver": 8
+    },
+    {
+      "source": 3,
+      "receiver": 4
+    },
+    {
+      "source": 5,
+      "receiver": 1
+    },
+    {
+      "source": 6,
+      "receiver": 2
+    },
+    {
+      "source": 7,
+      "receiver": 3
+    },
+    {
+      "source": 7,
+      "receiver": 6
+    },
+    {
+      "source": 8,
+      "receiver": 10
+    },
+    {
+      "source": 10,
+      "receiver": 14
+    },
+    {
+      "source": 12,
+      "receiver": 0
+    },
+    {
+      "source": 12,
+      "receiver": 13
+    },
+    {
+      "source": 13,
+      "receiver": 7
+    }
+  ],
+  "diagram_layout": "{\"ee6e9074c9dd8aa32a64d89a353ad523\":[1530.0,465.0],\"b8b20cb94aa1f755806c8bd080662563\":[1275.0,254.0],\"d5a418d0cb8920b9f6c7004dee5b024d\":[1273.0,761.0],\"26c75f5423cf7cd8af541961213d35de\":[1001.0,685.0],\"33fc22b63423bd180fc4fd8b64a58c7b\":[1001.0,987.0],\"b1b7cba962fc9b1a9353a3d16f82cd74\":[1275.0,165.0],\"466d4b19f85e1b3c624b98b66f8355cc\":[1276.0,694.0],\"b3609ed92e61e99f1f498a5c7586518b\":[1275.0,585.0],\"9a44ca2e37657e9c7e04f31fe0c553a0\":[1274.0,830.0],\"7331f5416a8f619faeac6743d827fb5d\":[1530.0,689.0],\"f2b5062623f4f2865a4c7f3a63d28010\":[1275.0,921.0],\"66502d9a6741c859f835182892f80c74\":[1560.0,166.0],\"271e277cfd68dca414a2a289685883d4\":[1275.0,330.0],\"c30e8c4f8394f7efb36a1dd7042e06f2\":[1275.0,451.0],\"2d40f8af7bc408cd0eeace14082e0909\":[1269.0,994.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "b1b7cba962fc9b1a9353a3d16f82cd74",
+  "exit_agent_guids": [
+    "7331f5416a8f619faeac6743d827fb5d",
+    "2d40f8af7bc408cd0eeace14082e0909",
+    "33fc22b63423bd180fc4fd8b64a58c7b"
+  ],
+  "exit_agent_guid": "7331f5416a8f619faeac6743d827fb5d",
+  "send_to_stories": [],
+  "form": {
+    "name": "StS Query URLScan Form",
+    "description": "",
+    "fields": [
+      {
+        "name": "url",
+        "description": "enter the url you want to scan",
+        "required": false,
+        "type": "SHORT_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 0,
+        "max_characters": null
+      }
+    ],
+    "visibility": "world",
+    "agent_guid": "b1b7cba962fc9b1a9353a3d16f82cd74",
+    "success_message": "Thank you for your submission"
+  }
+}
