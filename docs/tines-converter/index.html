@@ -109,7 +109,7 @@ footer{margin-top:87.5px;padding-top:32.5px;border-top:1px solid var(--bd);color
  <li><a href="#actions">Action &amp; transform mapping</a></li>
  <li><a href="#design">Design decisions</a></li>
  <li><a href="#plan">Implementation plan</a></li>
- <li><a href="#validation">Validation against a real story</a>
+ <li><a href="#validation">Validation: elastic/infosec corpus</a>
 <a href="#d10">D10 &mdash; cycles &rarr; while</a>
 <a href="#risks">Risks &amp; open questions</a></li>
 </ol></div>
@@ -658,62 +658,46 @@ graph and emitted workflow, gaps highlighted.</p></div></div>
 </div>
 
 
-<h2 id="validation">Validation against a real story</h2>
-<p class="sub">On 2026-09-03 the plan was tested against a live Tines tenant (2 stories, read-only export).
-Everything below is <b>measured</b>, not inferred &mdash; and it corrected three claims.</p>
+<h2 id="validation">Validation against the elastic/infosec corpus</h2>
+<p class="sub">On 2026-09-03 the plan was tested against the <code>elastic/infosec</code> corpus &mdash; Elastic's own
+Tines estate: 14 top-level stories, 360 agents, 7 embedded sub-stories, schema_version 3 era (2021). Sanitized
+(<code>options.secret</code> redacted) and vendored as golden fixtures. Everything below is measured, not inferred.</p>
 
 <div class="call warn">
-<b>The headline: the tree-flattening assumption broke on the very first real story.</b>
-<code>Analyze CrowdStrike detections</code> (13 actions, 13 links) contains a genuine
-<b>fan-in join</b>: <code>Implode behaviors</code> has indegree 2, fed by both
-<code>Search for IoC in VirusTotal</code> and <code>Trigger if IoC is not different to sha256</code>.
-A DAG with a join does not flatten to a step tree without either duplicating the shared subgraph
-or introducing an explicit rejoin. This was listed as a medium risk; it is now a
-<b>confirmed blocker for the naive approach</b>, present in the first non-trivial story examined.
-</div>
+<p><b>The headline.</b> Two assumptions did not survive. First, <b>fan-in joins are the norm</b>: 16 of 21 story graphs
+contain them, max indegree 7 (<code>Implode Analysis</code> in <code>spam-analysis</code>, fed by seven parallel
+enrichment branches). Second, <b>cycles are common</b>: 8 cycles across 7 of 14 stories &mdash; all async-API polling
+loops (see D10). The design's "cycles are rare, report unconvertible" stance would have hard-failed half this corpus.</p></div>
 
+<h3>What the corpus measured</h3>
 <table>
-<thead><tr><th>Claim in this report</th><th>Reality</th><th>Status</th></tr></thead>
+<thead><tr><th>Measure</th><th>Result</th><th>Verdict</th></tr></thead>
 <tbody>
-<tr><td><code>schema_version</code> is 18</td><td>Live export is <b>30</b>; std lib 94, runtime 87</td><td class="bad">corrected</td></tr>
-<tr><td>Graph is a DAG; joins are a risk</td><td>Pure DAG confirmed (no cycles), but a real fan-in join exists</td><td class="warn">confirmed + escalated</td></tr>
-<tr><td>Interpolation is <code>&lt;&lt;path&gt;&gt;</code> + formulas</td><td>Confirmed. 53 interpolations, 43 unique</td><td class="ok">holds</td></tr>
-<tr><td>Credentials are referenced, not embedded</td><td>Confirmed &mdash; all 4 are <code>&lt;&lt;CREDENTIAL.x&gt;&gt;</code>; secret scan found zero literals</td><td class="ok">holds</td></tr>
-<tr><td><em>(not covered)</em></td><td><code>&lt;&lt;RESOURCE.*&gt;&gt;</code> &mdash; a second global-lookup namespace this report never mentioned</td><td class="bad">gap</td></tr>
-</tbody>
-</table>
+<tr><td>Fan-in joins</td><td>16 of 21 graphs; max indegree 7</td><td class="bad">confirmed blocker for naive tree flattening</td></tr>
+<tr><td>Cycles</td><td>8 in 7 of 14 stories; 100% polling pattern</td><td class="warn">falsified "rare"; converted via D10 <code>while</code></td></tr>
+<tr><td>Dialect</td><td>100% legacy <code>{{.path}}</code> + raw <code>{% liquid %}</code> tags</td><td class="bad">gap &mdash; lexer must handle both dialects</td></tr>
+<tr><td>schema_version</td><td>3 (2021) here; 30 in a live 2026 tenant</td><td class="warn">drift range 3&rarr;30; pin and fail loudly</td></tr>
+<tr><td>Secrets</td><td>44 <code>options.secret</code> fields, all redactable by pattern</td><td class="ok">holds &mdash; credential-by-reference confirmed</td></tr>
+</tbody></table>
 
-<h3>What the real story actually uses</h3>
-<p>Action mix: 7&times; <code>HTTPRequestAgent</code>, 5&times; <code>EventTransformationAgent</code>,
-1&times; <code>TriggerAgent</code>. Notably <b>4 of the 5 transform modes in one story</b> are the
-hard ones &mdash; <code>explode</code>&times;2, <code>implode</code>, <code>deduplicate</code>,
-<code>throttle</code>. The stateful modes are not exotic edge cases; they are the backbone of an
-ordinary SOAR story.</p>
+<h3>Action mix (360 agents)</h3>
+<p><span class="mono">TriggerAgent 118</span> &middot; <span class="mono">EventTransformation 107</span> &middot;
+<span class="mono">HTTPRequest 85</span> &middot; <span class="mono">Webhook 21</span> &middot;
+<span class="mono">SendToStory 19</span> &middot; <span class="mono">IMAP 1</span>. The Condition action is the single
+most common agent type &mdash; conditional routing dominates real stories, which validates making the
+<code>TriggerAgent</code> &rarr; <code>if</code> mapping a named trap in the schema. Transform modes:
+<span class="mono">message_only 60</span>, <span class="mono">explode 14</span>, <span class="mono">delay 14</span>,
+<span class="mono">extract 10</span>, <span class="mono">implode 5</span>, <span class="mono">deduplicate 4</span>.</p>
 
-<p>Formula usage was <b>far lighter than the 219-function matrix implies</b>: only 5 distinct
-functions appear &mdash; <code>DEFAULT</code>&times;4, <code>DATE</code>&times;3,
-<code>REPLACE</code>&times;2, <code>PLUS</code>, <code>LIQUID_SIZE</code>. This is a single sample and
-must not be over-read, but it supports the recommendation to let real fidelity reports prioritise the
-Liquid filter work rather than pre-building all 219. <code>DEFAULT</code> and <code>PLUS</code> map
-cleanly to Liquid; <code>REPLACE</code> nests two-deep in one expression; <code>LIQUID_SIZE</code>
-is used as <code>implode</code>'s <code>size_path</code> &mdash; it is load-bearing control flow, not
-cosmetic formatting.</p>
+<p><b>Sub-workflows are real</b>: 19 <code>SendToStoryAgent</code> calls plus 7 embedded sub-stories &mdash; story-to-story
+composition is a load-bearing pattern in this corpus, not an exotic one. The <code>workflow.execute</code> mapping
+carries real weight.</p>
 
-<h3>The explode/implode pair, as actually written</h3>
-<pre>explode:  path = =explode_detections.individual_detection.behaviors
-          to   = individual_behavior
-implode:  guid_path = =explode_behaviors.guid
-          size_path = =LIQUID_SIZE(explode_behaviors, "dot_notation")</pre>
-<p>Note the <code>=</code> prefix marking a formula-valued option, and that <code>implode</code>
-correlates purely by <code>guid</code> + computed size. The <code>foreach</code> mapping must
-reproduce that correlation, and the join sits precisely where the fan-in occurs &mdash; the two
-hardest findings are the same finding.</p>
-
-<div class="call">
-<b>Sample size caveat.</b> Two stories, one of them a trivial 2-action starter with no links.
-That is enough to <em>falsify</em> claims (and it falsified three), but nowhere near enough to
-<em>validate</em> the converter. The capability matrix remains triage, not measurement.
-</div>
+<p class="sub" style="margin-top:18px">Corpus caveats: single organization (Elastic's own infosec team), 2021-era
+schema 3 &mdash; the modern <code>&lt;&lt;&gt;&gt;</code> dialect and newer agent types are absent. A live 2026 tenant
+export (schema 30, 2 stories) covered those separately and confirmed the <code>&lt;&lt;&gt;&gt;</code> dialect,
+<code>&lt;&lt;RESOURCE.*&gt;&gt;</code> namespace, and join shapes. Together: three corpora, 29 stories, ~900 agents.
+Enough to falsify repeatedly; the capability matrix remains triage until the converter runs.</p>
 
 <h2 id="d10">Corpus correction: cycles &rarr; <code>while</code> (D10)</h2>
 <p class="sub">The sanitized <code>elastic/infosec</code> corpus &mdash; 14 stories, 360 agents, 7 embedded sub-stories, vendored as golden fixtures &mdash; falsified the design&rsquo;s &ldquo;cycles are rare, report unconvertible&rdquo; stance.</p>
