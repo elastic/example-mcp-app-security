@@ -35,8 +35,6 @@ td{padding:10px 12px;border-bottom:1px solid #1c2230;vertical-align:top}
 tbody tr:hover{background:#121725}
 .mono{font-family:ui-monospace,Menlo,monospace;font-size:12.6px}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
-table.cmp td.ok,table.cmp td.no{font-weight:600;text-align:center;width:110px}
-table.cmp td.no{color:var(--bad)}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:13px;padding:22px;margin:0 0 18px}
 .grid{display:grid;gap:16px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
 @media(max-width:860px){.g2,.g3{grid-template-columns:1fr}h1{font-size:33px}}
@@ -524,40 +522,40 @@ emitted Liquid matches Tines' output for at least one input. Rows without tests 
 <span class="tag t-ba">unconvertible</span>. An untested &ldquo;converted&rdquo; claim is the single most
 dangerous failure mode this tool has.</p>
 
-<h3>D4 &mdash; Microcks (Testcontainers) for connector stubs, Prism as offline fallback</h3>
+<h3>D4 &mdash; Microcks (Testcontainers) as the only connector stub engine</h3>
 <p><b>No public Tines OpenAPI spec exists</b> &mdash; verified, Tines publishes none. So we author OpenAPI 3.1 specs
 for the external APIs the fixture stories touch. <b>Those specs are the durable asset and are mock-engine agnostic.</b></p>
 
 <div class="call warn"><b>Correction.</b> An earlier draft rejected Microcks as &ldquo;Kubernetes-native and
 disproportionate.&rdquo; That was wrong. <code>@microcks/microcks-testcontainers</code> (Apache-2.0, CNCF incubating)
 boots a throwaway <code>microcks-uber</code> container from a single call &mdash; no Kubernetes, no standing server.
-Microcks is now the primary stub engine.</div>
+Microcks is the sole stub engine; a later draft's Prism fallback was also dropped.</div>
 
-<table class="cmp">
-<thead><tr><th>Capability</th><th>Prism</th><th>Microcks</th></tr></thead>
+<table>
+<thead><tr><th>Capability</th><th>What it buys this project</th></tr></thead>
 <tbody>
-<tr><td>Serve examples from OpenAPI</td><td class="ok">yes</td><td class="ok">yes</td></tr>
-<tr><td>Validate request against spec</td><td class="ok">yes</td><td class="ok">yes</td></tr>
-<tr><td><b>Verify a mock was invoked</b> <code>getServiceInvocationsCount</code></td><td class="no">no</td><td class="ok">yes</td></tr>
-<tr><td><b>Content-based dispatch</b> (divergent responses)</td><td class="no">limited</td><td class="ok">yes</td></tr>
-<tr><td><b>Stateful mocks</b> across a call sequence</td><td class="no">no</td><td class="ok">yes</td></tr>
-<tr><td>Contract-test a live implementation</td><td class="no">no</td><td class="ok">yes</td></tr>
-<tr><td>Boots without Docker</td><td class="ok">yes</td><td class="no">no</td></tr>
+<tr><td class="mono"><code>getServiceInvocationsCount</code></td><td>Call-equivalence assertions</td></tr>
+<tr><td class="mono">Content-based dispatchers</td><td>Driving both branches of a converted <code>if</code></td></tr>
+<tr><td class="mono">Stateful mocks</td><td><code>explode</code> &rarr; per-item HTTP &rarr; <code>implode</code> chains</td></tr>
+<tr><td class="mono"><code>testEndpoint</code></td><td>Contract-testing emitted HTTP calls against the spec</td></tr>
 </tbody></table>
+<p>None of these are offered by a spec-replay mock (Prism, WireMock static stubs).</p>
 
-<p>Three of those map onto verification requirements Prism cannot satisfy.
-<b>(1) Invocation counting</b> is how we prove the converted workflow made the same calls as the story &mdash; with Prism
-we would assert on our own client's logs, marking our own homework. <b>(2) Content-based dispatch</b> is required to
-drive both branches of a converted <code>if</code>. <b>(3) Stateful mocks</b> are the only honest way to test a
-converted <code>explode</code> &rarr; per-item HTTP &rarr; <code>implode</code> chain where call N+1 depends on call N.</p>
+<p>Why those matter concretely. <b>(1) Invocation counting</b> is how we prove the converted workflow made the same
+calls as the story &mdash; without it we assert on our own client's logs, marking our own homework.
+<b>(2) Content-based dispatch</b> is required to drive both branches of a converted <code>if</code>.
+<b>(3) Stateful mocks</b> are the only honest way to test a converted <code>explode</code> &rarr; per-item HTTP &rarr;
+<code>implode</code> chain where call N+1 depends on call N.</p>
 
 <p>Cost is one Docker dependency, already being paid by the in-flight
-<code>e2e-mcp-app-test-harness-with-local-docker-es</code> change. <b>Prism is retained</b> behind a two-implementation
-<code>StubEngine</code> interface so unit suites still run without Docker; its <code>invocationCount</code> throws
-<code>NotSupported</code> so a weaker guarantee fails loudly instead of passing silently.</p>
+<code>e2e-mcp-app-test-harness-with-local-docker-es</code> change. <b>No fallback engine and no
+<code>StubEngine</code> abstraction</b> &mdash; Docker is a given in this project's environments, so a seam whose second
+implementation must throw <code>NotSupported</code> for the assertions that matter buys nothing. Phases 0&ndash;3 are
+pure functions over JSON needing no HTTP, so the containerised suite starts at Phase 6; if Docker is absent it fails
+<b>loudly</b> rather than degrading to a weaker green.</p>
 
 <h2 id="plan"><span class="n">08</span>Implementation plan</h2>
-<p class="lead">Eight phases, 59 tasks, landing in
+<p class="lead">Eight phases, 57 tasks, landing in
 <code>elastic/example-mcp-app-security</code> on <code>feat/tines-story-converter</code> as an OpenSpec change.
 Phases 0&ndash;6 are headless and independently testable; the MCP surface comes last, on top of a proven core.</p>
 
@@ -634,7 +632,7 @@ Every output validated against the live <code>WorkflowSchema</code> zod parse.</
 <div class="card"><div class="ph"><span class="pt">PHASE 5 · 4 tasks</span><h4>Golden fixtures</h4>
 <p>Real story exports → expected YAML. Diffed on every run. This is the agreed starting verification bar.</p></div></div>
 
-<div class="card"><div class="ph"><span class="pt">PHASE 6 · 14 tasks</span><h4>Round-trip harness</h4>
+<div class="card"><div class="ph"><span class="pt">PHASE 6 · 12 tasks</span><h4>Round-trip harness</h4>
 <p>Author OpenAPI 3.1 specs for external APIs, stub with Microcks (Testcontainers), execute the converted workflow, diff the
 observed request sequence against the Tines-run baseline.</p></div></div>
 
