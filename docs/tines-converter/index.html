@@ -35,6 +35,8 @@ td{padding:10px 12px;border-bottom:1px solid #1c2230;vertical-align:top}
 tbody tr:hover{background:#121725}
 .mono{font-family:ui-monospace,Menlo,monospace;font-size:12.6px}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+table.cmp td.ok,table.cmp td.no{font-weight:600;text-align:center;width:110px}
+table.cmp td.no{color:var(--bad)}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:13px;padding:22px;margin:0 0 18px}
 .grid{display:grid;gap:16px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
 @media(max-width:860px){.g2,.g3{grid-template-columns:1fr}h1{font-size:33px}}
@@ -522,14 +524,40 @@ emitted Liquid matches Tines' output for at least one input. Rows without tests 
 <span class="tag t-ba">unconvertible</span>. An untested &ldquo;converted&rdquo; claim is the single most
 dangerous failure mode this tool has.</p>
 
-<h3>D4 &mdash; Prism over Microcks for connector stubs</h3>
+<h3>D4 &mdash; Microcks (Testcontainers) for connector stubs, Prism as offline fallback</h3>
 <p><b>No public Tines OpenAPI spec exists</b> &mdash; verified, Tines publishes none. So we author OpenAPI 3.1 specs
-for the external APIs the fixture stories touch and drive mocks from those. <b>Prism</b> (Apache-2.0, npm, no Docker,
-validates requests against the spec) fits this repo's vitest + docker-compose CI. Microcks was rejected for MVP as
-Kubernetes-native and disproportionate. The specs are the durable asset &mdash; they port to Microcks or WireMock unchanged.</p>
+for the external APIs the fixture stories touch. <b>Those specs are the durable asset and are mock-engine agnostic.</b></p>
+
+<div class="call warn"><b>Correction.</b> An earlier draft rejected Microcks as &ldquo;Kubernetes-native and
+disproportionate.&rdquo; That was wrong. <code>@microcks/microcks-testcontainers</code> (Apache-2.0, CNCF incubating)
+boots a throwaway <code>microcks-uber</code> container from a single call &mdash; no Kubernetes, no standing server.
+Microcks is now the primary stub engine.</div>
+
+<table class="cmp">
+<thead><tr><th>Capability</th><th>Prism</th><th>Microcks</th></tr></thead>
+<tbody>
+<tr><td>Serve examples from OpenAPI</td><td class="ok">yes</td><td class="ok">yes</td></tr>
+<tr><td>Validate request against spec</td><td class="ok">yes</td><td class="ok">yes</td></tr>
+<tr><td><b>Verify a mock was invoked</b> <code>getServiceInvocationsCount</code></td><td class="no">no</td><td class="ok">yes</td></tr>
+<tr><td><b>Content-based dispatch</b> (divergent responses)</td><td class="no">limited</td><td class="ok">yes</td></tr>
+<tr><td><b>Stateful mocks</b> across a call sequence</td><td class="no">no</td><td class="ok">yes</td></tr>
+<tr><td>Contract-test a live implementation</td><td class="no">no</td><td class="ok">yes</td></tr>
+<tr><td>Boots without Docker</td><td class="ok">yes</td><td class="no">no</td></tr>
+</tbody></table>
+
+<p>Three of those map onto verification requirements Prism cannot satisfy.
+<b>(1) Invocation counting</b> is how we prove the converted workflow made the same calls as the story &mdash; with Prism
+we would assert on our own client's logs, marking our own homework. <b>(2) Content-based dispatch</b> is required to
+drive both branches of a converted <code>if</code>. <b>(3) Stateful mocks</b> are the only honest way to test a
+converted <code>explode</code> &rarr; per-item HTTP &rarr; <code>implode</code> chain where call N+1 depends on call N.</p>
+
+<p>Cost is one Docker dependency, already being paid by the in-flight
+<code>e2e-mcp-app-test-harness-with-local-docker-es</code> change. <b>Prism is retained</b> behind a two-implementation
+<code>StubEngine</code> interface so unit suites still run without Docker; its <code>invocationCount</code> throws
+<code>NotSupported</code> so a weaker guarantee fails loudly instead of passing silently.</p>
 
 <h2 id="plan"><span class="n">08</span>Implementation plan</h2>
-<p class="lead">Eight phases, 46 tasks, landing in
+<p class="lead">Eight phases, 59 tasks, landing in
 <code>elastic/example-mcp-app-security</code> on <code>feat/tines-story-converter</code> as an OpenSpec change.
 Phases 0&ndash;6 are headless and independently testable; the MCP surface comes last, on top of a proven core.</p>
 
@@ -574,7 +602,7 @@ Phases 0&ndash;6 are headless and independently testable; the MCP surface comes 
   <path d="M694,108 Q720,108 720,146 L738,146" stroke="#e7a13a" fill="none" marker-end="url(#ar3)"/>
 
   <rect x="272" y="180" width="422" height="42" rx="9" fill="#1a1526" stroke="#a78bfa" stroke-dasharray="5 4"/>
-  <text x="483" y="199" fill="#a78bfa" text-anchor="middle" font-size="11.5">Phase 6 — round-trip: execute vs Prism mocks, diff request sequence</text>
+  <text x="483" y="199" fill="#a78bfa" text-anchor="middle" font-size="11.5">Phase 6 — round-trip: execute vs Microcks mocks, diff request sequence</text>
   <text x="483" y="215" fill="#6b7690" text-anchor="middle" font-size="10.5">OpenAPI 3.1 specs authored (no public Tines spec exists)</text>
   <path d="M639,124 L639,176" stroke="#a78bfa" fill="none" marker-end="url(#ar3)"/>
  </g>
@@ -587,7 +615,7 @@ Phases 0&ndash;6 are headless and independently testable; the MCP surface comes 
 <p>zod schemas for the export envelope and all 8 agent types. Parse real story exports; fail loudly on unknown
 <code>type</code> rather than silently skipping.</p></div></div>
 
-<div class="card"><div class="ph"><span class="pt">PHASE 1 · 7 tasks</span><h4>Formula lexer + parser</h4>
+<div class="card"><div class="ph"><span class="pt">PHASE 1 · 6 tasks</span><h4>Formula lexer + parser</h4>
 <p><code>&lt;&lt;...&gt;&gt;</code> extraction, function-call AST, slug resolution with Tines' documented
 sluggification and collision rules.</p></div></div>
 
@@ -595,22 +623,22 @@ sluggification and collision rules.</p></div></div>
 <p>All 219 rows as data. Emitter is a pure lookup — no per-function branching. Unknown function ⇒ unconvertible,
 never a guess.</p></div></div>
 
-<div class="card"><div class="ph"><span class="pt">PHASE 3 · 8 tasks</span><h4>Graph → tree</h4>
+<div class="card"><div class="ph"><span class="pt">PHASE 3 · 7 tasks</span><h4>Graph → tree</h4>
 <p>Topological sort, dominator tree, join hoisting, explode-scope resolution, cycle detection. The hardest phase;
 property-based tests over generated DAGs.</p></div></div>
 
-<div class="card"><div class="ph"><span class="pt">PHASE 4 · 6 tasks</span><h4>YAML emit + fidelity report</h4>
+<div class="card"><div class="ph"><span class="pt">PHASE 4 · 8 tasks</span><h4>YAML emit + fidelity report</h4>
 <p>Inline <code># TINES-UNCONVERTIBLE:</code> comments at the exact step, plus <code>fidelity.json</code>.
 Every output validated against the live <code>WorkflowSchema</code> zod parse.</p></div></div>
 
-<div class="card"><div class="ph"><span class="pt">PHASE 5 · 5 tasks</span><h4>Golden fixtures</h4>
+<div class="card"><div class="ph"><span class="pt">PHASE 5 · 4 tasks</span><h4>Golden fixtures</h4>
 <p>Real story exports → expected YAML. Diffed on every run. This is the agreed starting verification bar.</p></div></div>
 
-<div class="card"><div class="ph"><span class="pt">PHASE 6 · 5 tasks</span><h4>Round-trip harness</h4>
-<p>Author OpenAPI 3.1 specs for external APIs, stub with Prism, execute the converted workflow, diff the
+<div class="card"><div class="ph"><span class="pt">PHASE 6 · 14 tasks</span><h4>Round-trip harness</h4>
+<p>Author OpenAPI 3.1 specs for external APIs, stub with Microcks (Testcontainers), execute the converted workflow, diff the
 observed request sequence against the Tines-run baseline.</p></div></div>
 
-<div class="card"><div class="ph"><span class="pt">PHASE 7 · 3 tasks</span><h4>MCP tool + App UI</h4>
+<div class="card"><div class="ph"><span class="pt">PHASE 7 · 8 tasks</span><h4>MCP tool + App UI</h4>
 <p><code>convert_tines_story</code> tool plus a React view rendering the fidelity report — side-by-side story
 graph and emitted workflow, gaps highlighted.</p></div></div>
 </div>
