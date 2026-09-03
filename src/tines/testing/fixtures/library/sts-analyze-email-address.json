@@ -1,0 +1,209 @@
+{
+  "schema_version": 3,
+  "name": "STS Analyze Email Address",
+  "description": "Substory to Analyze an Email Address",
+  "guid": "293b77df49ee0df675a3fcf944482871",
+  "exported_at": "2021-03-19T17:14:30Z",
+  "agents": [
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Webhook Agent",
+      "disabled": false,
+      "guid": "40715e0d33e2074b69b4401c5a04e447",
+      "options": {
+        "secret": "2ee4909bd3c7357972fd0d1567c72d63",
+        "verbs": "get,post",
+        "include_headers": "false"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check if Knowngood",
+      "disabled": false,
+      "guid": "72d8a29af8b0f119fd4886f03706209f",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "tines.io",
+            "path": "{{ .extract_domain.email_domain.first.first }}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Extract Domain",
+      "disabled": false,
+      "guid": "337437abf2f824859ac8db47d085972b",
+      "options": {
+        "mode": "extract",
+        "matchers": [
+          {
+            "path": "{{.webhook_agent.emailaddress}}",
+            "regexp": "@(.*\\.*)",
+            "to": "email_domain"
+          }
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Email Reputation",
+      "disabled": false,
+      "guid": "0082bdb4d1666df1e46aa3e04e0e7cac",
+      "options": {
+        "url": "https://emailrep.io/{{.webhook_agent.emailaddress}}",
+        "content_type": "json",
+        "method": "get",
+        "payload": {},
+        "headers": {
+          "Key": "{% credential emailrep %}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Not Knowngood",
+      "disabled": false,
+      "guid": "a77369b22f14cece33ecd9c862caf0ba",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "false",
+            "path": "{{ .check_if_knowngood.rule_matched }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Regex for CEO Fraud",
+      "disabled": false,
+      "guid": "e30bc4d119be430a22758c35899309ea",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "^[EeOo].{1,3}n.{0,5}[Hh].{1,3}n.{0,5}y|^[EeOo].{1,3}n@[Tt].{1,3}n.{1,3}s",
+            "path": "{{ .webhook_agent.emailaddress }}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "e92eb955c405d996a42c42d4d19b55a8",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "email_address": "{{.webhook_agent.emailaddress}}",
+          "ceo_fraud": "{% if trigger_if_knowngood %}false{% else %}{{.regex_for_ceo_fraud.rule_matched}}{% endif %}",
+          "suspicious_email": "{% if trigger_if_knowngood %}false{% elsif get_email_reputation.status == 500 %}error{% else %}{{.get_email_reputation.body.suspicious}}{% endif %}",
+          "email_blacklisted": "{% if trigger_if_knowngood %}false{% elsif get_email_reputation.status == 500 %}error{% else %}{{.get_email_reputation.body.details.blacklisted}}{% endif %}",
+          "email_domain_age": "{% if get_email_reputation.status == 500 %}error{% else %}{{.get_email_reputation.body.details.days_since_domain_creation}}{% endif %}",
+          "disposable_email": "{% if get_email_reputation.status == 500 %}error{% else %}{{.get_email_reputation.body.details.disposable}}{% endif %}",
+          "malicious": "{% if regex_for_ceo_fraud.rule_matched == true %}true{% elsif get_email_reputation.body.suspicious == true %}true{% elsif get_email_reputation.body.details.blacklisted == true %}true{% else %}false{% endif %}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Send To Story Agent",
+      "disabled": false,
+      "guid": "387bd2ddccbff11ba262390f1945a43f",
+      "options": {
+        "story": "{% story STS Analyze Email Address %}",
+        "payload": {
+          "emailaddress": "eoinhinchy@mailinator.com"
+        },
+        "send_payload_as_body": "false"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Knowngood",
+      "disabled": false,
+      "guid": "f40bb7b9efce995c52ac0421109f6274",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "true",
+            "path": "{{ .check_if_knowngood.rule_matched }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 2
+    },
+    {
+      "source": 1,
+      "receiver": 4
+    },
+    {
+      "source": 1,
+      "receiver": 8
+    },
+    {
+      "source": 2,
+      "receiver": 1
+    },
+    {
+      "source": 3,
+      "receiver": 6
+    },
+    {
+      "source": 4,
+      "receiver": 5
+    },
+    {
+      "source": 5,
+      "receiver": 3
+    },
+    {
+      "source": 8,
+      "receiver": 3
+    }
+  ],
+  "diagram_layout": "{\"40715e0d33e2074b69b4401c5a04e447\":[225.0,-660.0],\"72d8a29af8b0f119fd4886f03706209f\":[225.0,-510.0],\"337437abf2f824859ac8db47d085972b\":[225.0,-585.0],\"0082bdb4d1666df1e46aa3e04e0e7cac\":[225.0,-270.0],\"a77369b22f14cece33ecd9c862caf0ba\":[495.0,-435.0],\"e30bc4d119be430a22758c35899309ea\":[495.0,-345.0],\"e92eb955c405d996a42c42d4d19b55a8\":[225.0,-195.0],\"387bd2ddccbff11ba262390f1945a43f\":[465.0,-660.0],\"f40bb7b9efce995c52ac0421109f6274\":[225.0,-435.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "40715e0d33e2074b69b4401c5a04e447",
+  "exit_agent_guids": [
+    "e92eb955c405d996a42c42d4d19b55a8"
+  ],
+  "exit_agent_guid": "e92eb955c405d996a42c42d4d19b55a8",
+  "send_to_stories": [],
+  "form": {
+    "name": "STS Analyze Email Address Form",
+    "description": "",
+    "fields": [],
+    "visibility": "world",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

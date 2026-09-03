@@ -1,0 +1,422 @@
+{
+  "schema_version": 3,
+  "name": "GreyNoise Workflows",
+  "description": null,
+  "guid": "e5d9c40fef16faa145457f895406d5f3",
+  "exported_at": "2021-08-23T20:53:01Z",
+  "agents": [
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive Alerts",
+      "disabled": false,
+      "guid": "4cc8978154e274431775201f43f07b7d",
+      "options": {
+        "secret": "64334cc30b1cb7674ebe8414c4a9ed1b",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Lookup IP in GreyNoise RIOT",
+      "disabled": false,
+      "guid": "a02b3a452dd00c56e0320eecde7b319b",
+      "options": {
+        "url": "https://api.greynoise.io/v2/riot/{{ .receive_alerts.body.ip }}",
+        "content_type": "json",
+        "method": "get",
+        "payload": {},
+        "headers": {
+          "key": "{{ .CREDENTIAL.greynoise }}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Lookup IP in GreyNoise",
+      "disabled": false,
+      "guid": "aa84894f892dcc791fe566b91f75d083",
+      "options": {
+        "url": "https://api.greynoise.io/v2/noise/context/{{ .receive_alerts.body.ip }}",
+        "content_type": "json",
+        "method": "get",
+        "payload": {},
+        "headers": {
+          "key": "{{ .CREDENTIAL.greynoise }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Benign or RIOT",
+      "disabled": false,
+      "guid": "52c23826d870fc193a657d2df0729a57",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "true",
+            "path": "{{ .lookup_ip_in_greynoise_riot.body.riot }}"
+          },
+          {
+            "type": "regex",
+            "value": "benign",
+            "path": "{{ .lookup_ip_in_greynoise.body.classification }}"
+          }
+        ],
+        "must_match": "1"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Malicious or Not Found",
+      "disabled": false,
+      "guid": "1437d1ed63074ee03241da82946aa6c8",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "malicious|unknown",
+            "path": "{{ .lookup_ip_in_greynoise.body.classification }}"
+          },
+          {
+            "type": "regex",
+            "value": "false",
+            "path": "{{ .lookup_ip_in_greynoise_riot.body.riot }}"
+          },
+          {
+            "type": "regex",
+            "value": "false",
+            "path": "{{ .lookup_ip_in_greynoise.body.seen }}"
+          }
+        ],
+        "must_match": "2"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create High Priority Issue in Jira",
+      "disabled": false,
+      "guid": "2bd13fe20c20561e80003f82d53e6200",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_url }}/rest/api/2/issue",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "fields": {
+            "project": {
+              "key": "DEMO"
+            },
+            "issuetype": {
+              "name": "Task"
+            },
+            "priority": {
+              "name": "Highest"
+            },
+            "description": "{{ .receive_alerts.body.description }}",
+            "summary": "[Security Alert] {{ .receive_alerts.body.alert }}"
+          }
+        },
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username}}",
+          "{{ .CREDENTIAL.jira}}"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Analysis as Comment in Jira",
+      "disabled": false,
+      "guid": "38e9dc168be4140e6aa4b4be74a8e9fa",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_url }}/rest/api/2/issue/{{.create_high_priority_issue_in_jira.body.key }}/comment/",
+        "content_type": "json",
+        "method": "post",
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username }}",
+          "{{ .CREDENTIAL.jira }}"
+        ],
+        "payload": {
+          "body": "===GreyNoise IP Lookup===\nVerdict: {{.lookup_ip_in_greynoise.body.classification \n | default: 'None' }}\nActor: {{.lookup_ip_in_greynoise.body.actor | default: 'Unknown' }}\n\nRaw lookup\n{code}{{ .lookup_ip_in_greynoise.body | neat_json }}{code}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Low Priority Issue in Jira",
+      "disabled": false,
+      "guid": "5ed3a39732b0c65f1c91c831c042a9bd",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_url }}/rest/api/2/issue",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "fields": {
+            "project": {
+              "key": "DEMO"
+            },
+            "issuetype": {
+              "name": "Task"
+            },
+            "priority": {
+              "name": "Lowest"
+            },
+            "description": "{{ .receive_alerts.body.description }}",
+            "summary": "[Security Alert] {{ .receive_alerts.body.alert }}"
+          }
+        },
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username}}",
+          "{{ .CREDENTIAL.jira}}"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search GreyNoise For CVEs",
+      "disabled": false,
+      "guid": "c8c2e4bcbcbd0d63869defe572a1aeb5",
+      "options": {
+        "url": "https://api.greynoise.io/v2/experimental/gnql",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "query": "cve:CVE-2021-35464"
+        },
+        "headers": {
+          "key": "{{ .CREDENTIAL.greynoise }}"
+        }
+      },
+      "schedule": [
+        {
+          "cron": "0 9 * * *",
+          "timezone": "America/Chicago"
+        }
+      ],
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Update a Blocklist",
+      "disabled": false,
+      "guid": "3170de855e48de6e3800edcdcced683c",
+      "options": {
+        "url": "https://{{ .RESOURCE.tines_domain }}/api/v1/global_resources/{{ resource_id }}",
+        "content_type": "json",
+        "method": "put",
+        "payload": {
+          "name": "greynoise_blocklist",
+          "value": "{{ .search_greynoise_for_cves.body.data | where: 'classification', 'malicious' | map: 'ip' | as_object }}"
+        },
+        "headers": {
+          "x-user-email": "{{ .RESOURCE.tines_api_email }}",
+          "x-user-token": "{{ .CREDENTIAL.tines_user_token }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Serve Blocklist",
+      "disabled": false,
+      "guid": "e0ac3118e55ba9ef23f650212a8502aa",
+      "options": {
+        "secret": "4aa9a007cbd6a864c6edb457f51f8fde",
+        "verbs": "get,post",
+        "response": "{{ .RESOURCE.greynoise_blocklist | join: '\n' }}"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search GreyNoise by ASN using GNQL",
+      "disabled": false,
+      "guid": "18ee354c78fc14fee96c9a299bd4cc66",
+      "options": {
+        "url": "https://api.greynoise.io/v2/experimental/gnql",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "query": "metadata.asn:AS14061",
+          "size": "5"
+        },
+        "headers": {
+          "key": "{{ .CREDENTIAL.greynoise }}"
+        }
+      },
+      "schedule": [
+        {
+          "cron": "0 9 * * *",
+          "timezone": "America/Chicago"
+        }
+      ],
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode IPs Seen",
+      "disabled": false,
+      "guid": "e4ff7e81a8e122b4c593a4f9e473c591",
+      "options": {
+        "mode": "explode",
+        "path": "{{ .search_greynoise_by_asn_using_gnql.body.data }}",
+        "to": "individual_record"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Deduplicate IPs",
+      "disabled": false,
+      "guid": "a2bad7bb08bb1c027810ffcfa0c5c0f3",
+      "options": {
+        "mode": "deduplicate",
+        "lookback": "100",
+        "path": "{{ .explode_ips_seen.individual_record }}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Incident in Jira",
+      "disabled": false,
+      "guid": "1416dbedc22c59e5b0244e6cbb649182",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/issue",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "fields": {
+            "project": {
+              "key": "DEMO"
+            },
+            "issuetype": {
+              "name": "Task"
+            },
+            "priority": {
+              "name": "Highest"
+            },
+            "description": "Please investigate IP {{ .explode_ips_seen.individual_record.ip }} for performing internet wide scans.\n\nFirst Seen: {{ .explode_ips_seen.individual_record.first_seen }}\nLast Seen: {{ .explode_ips_seen.individual_record.last_seen }}\nClassification: {{ .explode_ips_seen.individual_record.classification }}\nCVEs Scanned: {{ .explode_ips_seen.individual_record.cve | default: 'N/A' }}\nTags: {{ .explode_ips_seen.individual_record.tags | join: ', ' | default: 'None' }}",
+            "summary": "Host {{ .explode_ips_seen.individual_record.ip }} Seen Scanning the Internet"
+          }
+        },
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username }}",
+          "{{ .CREDENTIAL.jira }}"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Analysis as Comment in Jira",
+      "disabled": false,
+      "guid": "6e63ef84b6860e2fe7742a045cbfc0ef",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_url }}/rest/api/2/issue/{{.create_high_priority_issue_in_jira.body.key }}/comment/",
+        "content_type": "json",
+        "method": "post",
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username }}",
+          "{{ .CREDENTIAL.jira }}"
+        ],
+        "payload": {
+          "body": "===GreyNoise IP Lookup===\nVerdict: {{.lookup_ip_in_greynoise.body.classification \n | default: 'None' }}\nActor: {{.lookup_ip_in_greynoise.body.actor | default: 'Unknown' }}\n\nRaw lookup:\n{code}{{ .lookup_ip_in_greynoise.body | neat_json }}{code}\n\nRIOT lookup:\n{code}{{ .lookup_ip_in_greynoise_riot.body | neat_json | default: 'N/A' }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [
+    {
+      "content": "# Receive WAF Alerts\n\nExpects a payload similar to:\n\n```\n{\n    \"ip\": \"31.169.25.38\",\n    \"alert\": \"WAF Exploit Attempt\",\n    \"description\": \"Zero day exploit detected\"\n}\n```",
+      "position": [
+        285.0,
+        -120.0
+      ],
+      "guid": "4769fa6aa8ddc2e8bf421211ed54a5ff"
+    }
+  ],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 1
+    },
+    {
+      "source": 1,
+      "receiver": 2
+    },
+    {
+      "source": 2,
+      "receiver": 3
+    },
+    {
+      "source": 2,
+      "receiver": 4
+    },
+    {
+      "source": 3,
+      "receiver": 7
+    },
+    {
+      "source": 4,
+      "receiver": 5
+    },
+    {
+      "source": 5,
+      "receiver": 6
+    },
+    {
+      "source": 7,
+      "receiver": 15
+    },
+    {
+      "source": 8,
+      "receiver": 9
+    },
+    {
+      "source": 11,
+      "receiver": 12
+    },
+    {
+      "source": 12,
+      "receiver": 13
+    },
+    {
+      "source": 13,
+      "receiver": 14
+    }
+  ],
+  "diagram_layout": "{\"4cc8978154e274431775201f43f07b7d\":[585.0,-90.0],\"a02b3a452dd00c56e0320eecde7b319b\":[585.0,-30.0],\"aa84894f892dcc791fe566b91f75d083\":[585.0,45.0],\"52c23826d870fc193a657d2df0729a57\":[495.0,120.0],\"1437d1ed63074ee03241da82946aa6c8\":[705.0,120.0],\"2bd13fe20c20561e80003f82d53e6200\":[705.0,180.0],\"38e9dc168be4140e6aa4b4be74a8e9fa\":[705.0,255.0],\"5ed3a39732b0c65f1c91c831c042a9bd\":[495.0,180.0],\"c8c2e4bcbcbd0d63869defe572a1aeb5\":[945.0,-90.0],\"3170de855e48de6e3800edcdcced683c\":[945.0,0.0],\"e0ac3118e55ba9ef23f650212a8502aa\":[1170.0,-90.0],\"18ee354c78fc14fee96c9a299bd4cc66\":[1380.0,-90.0],\"e4ff7e81a8e122b4c593a4f9e473c591\":[1380.0,-15.0],\"a2bad7bb08bb1c027810ffcfa0c5c0f3\":[1380.0,45.0],\"1416dbedc22c59e5b0244e6cbb649182\":[1380.0,105.0],\"6e63ef84b6860e2fe7742a045cbfc0ef\":[495.0,255.0]}",
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "exit_agent_guid": null,
+  "send_to_stories": [],
+  "form": {
+    "name": "GreyNoise Workflows Form",
+    "description": "",
+    "fields": [],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

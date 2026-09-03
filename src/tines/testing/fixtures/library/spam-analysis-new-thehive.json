@@ -1,0 +1,4082 @@
+{
+  "schema_version": 3,
+  "name": "Spam Analysis New - TheHive",
+  "description": "Phishing Story Checklist\n\nHere's some things to double check are set up to ensure this story works smoothly!\n\n*** Credentials ***\n\n- URLScan.io API Key named 'urlscan_io'\n\n- VirusTotal API Key named 'virustotal'\n\n- HybridAnalysis API Key named 'HybridAnalysisAPI'\n\n- emailrep.io API Key named 'emailrep'\n\n- IPQualityScore API Key named 'ipqualityscore'\n\n- Maxmind Licence Key named 'maxmind'\n\n- The Hive API Key named 'the_hive_api_key'\n\n- OAuth, JWT, or Text credential used to access the specified mailbox.\n\n\n*** Resources ***\n\n- Array Resource named 'known_good_domains' used to store domains that should not be scanned\n\n- Array Resource named 'known_good_email_domains' used to store email domains that should not be scanned\n\n- Text Resource named 'servicenowdomain' containing the domain of your ServiceNow instances (e.g. tines.service-now.com) \n\n- Text Resource named 'maxmind_account_id' containing the Maxmind Account ID",
+  "guid": "fdddd774b299d35248e8221d3e1f8621",
+  "exported_at": "2021-03-22T20:47:25Z",
+  "agents": [
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check for Attachments",
+      "disabled": false,
+      "guid": "2bed93df254d84502918b82d56e3e3c0",
+      "options": {
+        "rules": [
+          {
+            "type": "field>=value",
+            "path": "{{.read_mail.attachments.size }}",
+            "value": "1"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if No EML Attachment",
+      "disabled": false,
+      "guid": "cfc1f37ad40cea7b91c1b7fb50e8d95b",
+      "options": {
+        "rules": [
+          {
+            "type": "!regex",
+            "value": "\\.eml",
+            "path": "{% assign files = .read_mail.attachments | jsonpath: '*.filename'%}{{files}}"
+          },
+          {
+            "type": "!regex",
+            "value": "rfc822",
+            "path": "{% assign file_types = .read_mail.attachments | jsonpath: '*.content_type'%}{{file_types}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Analyze Attachment in VirusTotal",
+      "disabled": false,
+      "guid": "d2a4ea818b4dd9663ef215589b7a3712",
+      "options": {
+        "story": "{{ .STORY.martin_spam.sts_analyse_file_in_virustotal}}",
+        "payload": {
+          "hash": "{{.explode_attachments.individual_attachment.sha256}}",
+          "filename": "{{.explode_attachments.individual_attachment.filename}}",
+          "contents": "{{.explode_attachments.individual_attachment.base64encodedcontents}}",
+          "submit_if_not_found": "false"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Emails Exist",
+      "disabled": false,
+      "guid": "b5502f344efd08a6549348700f4a8cb5",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{ .check_for_emails_in_body.rule_matched }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Analyze URL",
+      "disabled": false,
+      "guid": "4dba7e08c5377d3522c2cdf3da23e45c",
+      "options": {
+        "story": "{{ .STORY.martin_spam.sts_analyze_url_in_urlscan}}",
+        "payload": {
+          "url": "{{.explode_urls.individual_url}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Analyze Attachment",
+      "disabled": false,
+      "guid": "011c9fd39d3ea0ac427db6d3d417a660",
+      "options": {
+        "story": "{{ .STORY.martin_spam.sts_analyze_file_in_hybridanalysis }}",
+        "payload": {
+          "hash": "{{.explode_attachments.individual_attachment.sha256}}",
+          "filename": "{{.explode_attachments.individual_attachment.filename}}",
+          "contents": "{{.explode_attachments.individual_attachment.base64encodedcontents}}",
+          "submit_if_not_found": "false"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Analyze URL in VirusTotal",
+      "disabled": false,
+      "guid": "c1f1cdb514b740ed68b6b8908000d667",
+      "options": {
+        "story": "{{ .STORY.martin_spam.sts_analyze_url_in_virustotal}}",
+        "payload": {
+          "url": "{{.explode_urls.individual_url}}",
+          "submit_if_not_found": "false"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Extract URLs",
+      "disabled": false,
+      "guid": "a34370f0ab05e41454a109666784bd2a",
+      "options": {
+        "mode": "extract",
+        "matchers": [
+          {
+            "path": "{{.read_mail.body}}",
+            "regexp": "[A-Za-z]+:\\/\\/[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_:%&;\\?\\#\\/.=]+",
+            "to": "urls"
+          }
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Implode URL Array",
+      "disabled": false,
+      "guid": "d5e4fbd9cf358dd628a0f03b424e2191",
+      "options": {
+        "mode": "implode",
+        "guid_path": "{{.explode_urls.guid}}",
+        "size_path": "{{.explode_urls.size}}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "29af942327b7dd37ba711e11dbbe87ee",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "all_results": "{% capture all_results %}{% for result in .implode_url_array %}\n{% if result.analyze_url.malicious == 'true' or result.analyze_url_in_virustotal.malicious == 'true'%}\ntrue\n{% else %}\nfalse\n{% endif %}\n{% endfor %}{% endcapture %}{{all_results}}",
+          "any_malicious": "{% if all_results contains 'true' %}true{% else %}false{% endif %}",
+          "total_analyzed": "{{.implode_url_array.size}}",
+          "raw": "{{.implode_url_array | as_object}}",
+          "type": "url"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if EML",
+      "disabled": false,
+      "guid": "524a5987514b927575be336a51dd520a",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": ".eml",
+            "path": "{{.explode_attachments.individual_attachment.filename}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Read Mail",
+      "disabled": false,
+      "guid": "e7e8b234ed3a87997b61620e102ca9e1",
+      "options": {
+        "mode": "message_only",
+        "payload": "{{.explode_attachments.individual_attachment.base64encodedcontents  | base64url_decode | eml_parse | as_object }}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Implode Attachments",
+      "disabled": false,
+      "guid": "f7a7d4d23ec57ad0c65368537da7b67f",
+      "options": {
+        "mode": "implode",
+        "guid_path": "{{.explode_attachments.guid }}",
+        "size_path": "{{.explode_attachments.size }}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Attachments",
+      "disabled": false,
+      "guid": "a00d97200cf48e6ea9b345067c9bf4d4",
+      "options": {
+        "mode": "explode",
+        "path": "{{.read_mail.attachments}}",
+        "to": "individual_attachment"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "aeef98bbd9debc394ef9cd11e0222bf4",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "all_results": "false",
+          "any_malicious": "false",
+          "total_analyzed": "0",
+          "type": "url"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "8ff3bd3531165a38cc6a76a191a152f8",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "all_results": "{% capture all_results %}{% for result in .implode_url_array %}\n{% if result.analyze_url.malicious == 'true' or result.analyze_url_in_virustotal.malicious == 'true'%}\ntrue\n{% else %}\nfalse\n{% endif %}\n{% endfor %}{% endcapture %}{{all_results}}",
+          "any_malicious": "{% if all_results contains 'true' %}true{% else %}false{% endif %}",
+          "total_analyzed": "{{.implode_url_array.size}}",
+          "raw": "{{.implode_attachments | as_object}}",
+          "type": "attachment"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "3789ad8c7891bfd557bd277e6a7bfca1",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "all_results": "false",
+          "any_malicious": "false",
+          "total_analyzed": "0",
+          "type": "attachment"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Attachments",
+      "disabled": false,
+      "guid": "9a3425e34a734b0b19f384134441e784",
+      "options": {
+        "mode": "explode",
+        "path": "{{.read_mail.attachments}}",
+        "to": "individual_attachment"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Attachments Found",
+      "disabled": false,
+      "guid": "341dddb9303c6f617a0f138be634513f",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{.check_for_attachments.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Prompt Response",
+      "disabled": false,
+      "guid": "b6c84df4e1abe8be88706e5387bd89d3",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": ".",
+            "path": "{{.build_thehive_content.prompt }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if No Attachments",
+      "disabled": false,
+      "guid": "e45252c702ac8d1374aa5743b808f78a",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "false",
+            "path": "{{.check_for_attachments.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Update Case",
+      "disabled": false,
+      "guid": "0464e221a5c18ce55a82f6fcab95c807",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "^$",
+            "path": "{{.build_thehive_content.prompt }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Individual Email",
+      "disabled": false,
+      "guid": "91bb734db3edca60666ce388440ed3b9",
+      "options": {
+        "url": "https://graph.microsoft.com/v1.0/users/{{.RESOURCE.o365_mail_account}}/messages/{{.explode_mail_array.individual_mail.id}}/$value",
+        "method": "get",
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.o365_graph_mail_actions}}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Analyze Headers",
+      "disabled": false,
+      "guid": "091038de9dc114b647a4c0494d7403dd",
+      "options": {
+        "story": "{{ .STORY.martin_spam.sts_analyze_headers}}",
+        "payload": {
+          "headers": "{{.read_mail.headers | as_object}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if URLs",
+      "disabled": false,
+      "guid": "24b8dc5de3d95c874d14567523a38066",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "true",
+            "path": "{{ .check_for_urls.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode URLs",
+      "disabled": false,
+      "guid": "0bb756fa648ff135efcfb7d07c0176a3",
+      "options": {
+        "mode": "explode",
+        "path": "{{.extract_urls.urls | uniq | as_object}}",
+        "to": "individual_url"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build TheHive Content",
+      "disabled": false,
+      "guid": "c8469e0bb8d3e25162d5314269304386",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "summary": "[Tines Event Link]({% story_run_link %}) \n\n[Click here to contain this device in Crowdstrike]({% prompt contain %})\n\n---- {% assign all_results = .implode_analysis | jsonpath: '*.build_results.any_malicious' %}\n*Overall Classification:* {% if all_results contains \"true\" %}*❌ MALICIOUS* {% else %}} *✅ Not Malicious* {% endif %}\n\n---\n\n### *Analysis results for this email can be found below*",
+          "urls": "{% assign url_results = .implode_analysis | where: \"build_results.type\", 'url' | map: 'build_results'%}\n\n#### *URL Analysis Results* \n{% if url_results.first.total_analyzed == 0 %}No URLs found in this mail{% else %}\n|*URL*|*URLScan Verdict*|*Analysis Date*|*VirusTotal Verdict*|*Response Actions*|\n| --- | --- | --- | --- | --- |{% for url in url_results.first.raw %}\n|{{url.explode_urls.individual_url | regex_replace: 'https?://', 'hxxps?//' | replace: '.', '[.]'}} |[{% if url.analyze_url.malicious == 'true'%}❌ Malicious{% else %}✅ Not Malicious{% endif %}]({{url.analyze_url.analysis_link | default: 'https://urlscan.io'}}) |{{url.analyze_url.analysis_date}} |[{% if url.analyze_url_in_virustotal.malicious == 'true'%}❌ Malicious{% else %}✅ Not Malicious{% endif %}]({{url.analyze_url_in_virustotal.analysis_link | default: 'https://virustotal.com'}}) |[Block Domains](https://tines.io) |{% endfor %}\n\n{% endif %}",
+          "attachments": "{% assign attachment_results = .implode_analysis | where: \"build_results.type\", 'attachment' | map: 'build_results'%}\n\n#### *Attachment Results* \n{% if attachment_results.first.total_analyzed == 0 %}No Results Found{% else %}\n|*File Name*|*Hash*|*HybridAnalysis Verdict*|*VirusTotal Verdict*|*New*|*Response Actions*|\n| --- | --- | --- | --- | --- | --- |{% for attachment in attachment_results.first.raw %}\n|{{attachment.explode_attachments.individual_attachment.filename}}|{{.attachment.explode_attachments.individual_attachment.sha256}}|[{% if attachment.analyze_attachment.malicious == 'true'%}❌ Malicious{% else %}✅ Not Malicious{% endif %}]({{attachment.analyze_attachment.analysis_link | default: 'https://hybridanalysis.com'}}) |[{% if attachment.analyze_attachment_in_virustotal.malicious == 'true'%}❌ Malicious{% else %}✅ Not Malicious{% endif %}]({{attachment.analyze_attachment_in_virustotal.analysis_link | default: 'https://virustotal.com'}}) |{{attachment.analyze_attachment.new }} |[Ban Hash](https://tines.io) |{% endfor %}\n{% endif %}",
+          "body_emails": "{% assign email_results = .implode_analysis | where: \"build_results.type\", 'email' | map: 'build_results'%}\n\n#### *Email Analysis Results*\n \n{% if email_results.build_results.total_analyzed == 0 %}No email addresses found in the mail body.{% else %}\n|*Email Address*|*Malicious*|*CEO Fraud*|*Blacklisted*|*Suspicious*|*Disposable Email*|*Domain Age*|\n| --- | --- | --- | --- | --- | --- | --- |{% for address in email_results.first.raw %}\n|{{address.explode_email_array.individual_email}} |{% if .address.analyze_email.malicious == 'true' %}❌ Malicious{% else %}✅ Not Malicious{% endif %} |{{address.analyze_email.ceo_fraud}} |{{address.analyze_email.email_blacklisted}} |{{address.analyze_email.suspicious_email}} |{{address.analyze_email.disposable_email}} |{{address.analyze_email.email_domain_age}} |{% endfor %}\n{% endif %}",
+          "sender_email": "{% assign sender_results = .implode_analysis | where: \"build_results.type\", 'sender' | map: 'build_results'%}\n\n#### *Sender Analysis Results*\n\n|*Email Address*|*Malicious*|*CEO Fraud*|*Blacklisted*|*Suspicious*|*Disposable Email*|*Domain Age*|\n| --- | --- | --- | --- | --- | --- | --- |\n|{{.sender_results.first.raw.email_address}} |{% if .sender_results.first.raw.malicious == true %}❌ Malicious{% else %}✅ Not Malicious{% endif %} |{{.sender_results.first.raw.ceo_fraud}} |{{.sender_results.first.raw.email_blacklisted}} |{{.sender_results.first.raw.suspicious_email}} |{{.sender_results.first.raw.disposable_email}} |{{.sender_results.first.raw.email_domain_age}} |",
+          "headers": "{% if analyze_headers %}#### *Header Analysis Results*\n\n|*DMARC*|*SPF*|*DKIM*|*IP*|*ASN*|*IP Location*|*Recent Spam*|*IP Reputation*|\n| --- | --- | --- | --- | --- | --- | --- | --- |\n |{{.analyze_headers.dmarc}}|{{.analyze_headers.spf}}|{{.analyze_headers.dkim}}|{{.analyze_headers.initial_ip}}|{{.analyze_headers.organization}}|{{.analyze_headers.city}},{{.analyze_headers.country}}|{{.analyze_headers.recent_spam_activity}}|{{.analyze_headers.ip_sender_reputation}}|{% endif %}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Analyze Sender",
+      "disabled": false,
+      "guid": "458c8dc800b73bc96531d91b58a3f3d5",
+      "options": {
+        "story": "{{ .STORY.martin_spam.sts_analyze_email_address }}",
+        "payload": {
+          "email": "{{.read_mail.from}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if No Emails in Body",
+      "disabled": false,
+      "guid": "52091db3755b69c96b42e10ed12aa4de",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "false",
+            "path": "{{ .check_for_emails_in_body.rule_matched }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check for Emails in Body",
+      "disabled": false,
+      "guid": "5d77762349f91d71c88eb48911f08b11",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "path": "{{.read_mail.body }}",
+            "value": "(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|\"(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21\\x23-\\x5b\\x5d-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])*\")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21-\\x5a\\x53-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])+)\\])"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "2d365a3838a16c57f44dee96409633f0",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "any_malicious": "{{.analyze_sender.malicious }}",
+          "total_analyzed": "1",
+          "type": "sender",
+          "raw": "{{.analyze_sender | as_object}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Extract Emails",
+      "disabled": false,
+      "guid": "d95c9115563ac2e32330400d5c75f9e0",
+      "options": {
+        "mode": "extract",
+        "matchers": [
+          {
+            "path": "{{.read_mail.body }}",
+            "regexp": "(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|\"(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21\\x23-\\x5b\\x5d-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])*\")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21-\\x5a\\x53-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])+)\\])",
+            "to": "emails"
+          }
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Email Array",
+      "disabled": false,
+      "guid": "8acb619cc3cf7600a74da188be4e2073",
+      "options": {
+        "mode": "explode",
+        "path": "{{.extract_emails.emails | uniq | as_object }}",
+        "to": "individual_email"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Upload Attachment to Jira",
+      "disabled": false,
+      "guid": "5cfe7881f3e53f3d55949433e53c398b",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/issue/{{.create_issue_in_jira.body.id }}/attachments",
+        "content_type": "data",
+        "method": "post",
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username }}",
+          "{{ .CREDENTIAL.jira }}"
+        ],
+        "payload": {
+          "file": {
+            "contents": "{{.analyze_url.screenshot.contents | base64_decode}}",
+            "filename": "{{.analyze_url.url | replace: '/', '_' }}"
+          }
+        },
+        "headers": {
+          "X-Atlassian-Token": "no-check"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Analyze Email",
+      "disabled": false,
+      "guid": "70a592ff0e30d482851d2f889a088176",
+      "options": {
+        "story": "{{ .STORY.martin_spam.sts_analyze_email_address }}",
+        "payload": {
+          "email": "{{.explode_email_array.individual_email}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Implode Emails",
+      "disabled": false,
+      "guid": "27a57828a78d67ba63ef3bf7f3d35380",
+      "options": {
+        "mode": "implode",
+        "guid_path": "{{.explode_email_array.guid }}",
+        "size_path": "{{.explode_email_array.size }}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "62b536a52d24ceb51aadaa0817c11880",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "all_results": "{% capture all_results %}{% for result in .implode_emails %}\n{% if result.analyze_email.malicious == 'true' %}\ntrue\n{% else %}\nfalse\n{% endif %}\n{% endfor %}{% endcapture %}{{all_results}}",
+          "any_malicious": "{% if all_results contains 'true' %}true{% else %}false{% endif %}",
+          "total_analyzed": "{{.implode_emails.size}}",
+          "raw": "{{.implode_emails | as_object}}",
+          "type": "email"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Results",
+      "disabled": false,
+      "guid": "7d1ad8a65c590ce82955957e6af02d69",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "all_results": "",
+          "any_malicious": "false",
+          "total_analyzed": "0",
+          "type": "email"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Implode Analysis",
+      "disabled": false,
+      "guid": "0cf2b7750dc335eb2ec5b498627e25e3",
+      "options": {
+        "mode": "implode",
+        "guid_path": "{{.read_mail.message_id }}",
+        "size_path": "4"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive EML File",
+      "disabled": false,
+      "guid": "e2b8265aa96af36300ec04d0754adeeb",
+      "options": {
+        "secret": "863e826237b90516bfc656a27bd29fc2",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::IMAPAgent",
+      "name": "Read Mail",
+      "disabled": false,
+      "guid": "bb9a613192a8f07bdbacb90b3a11dff1",
+      "options": {
+        "host": "{{.RESOURCE.imap_mail_server}}",
+        "username": "report-phishing@tines.xyz",
+        "password": "{{.CREDENTIAL.imap_password}}",
+        "ssl": true,
+        "folders": [
+          "INBOX"
+        ],
+        "conditions": {},
+        "emit_headers": "true",
+        "mark_as_read": "true",
+        "manual_time": "60"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if EML Attachment",
+      "disabled": false,
+      "guid": "8ab2ea5ea92b62f65bee09a2f7034108",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "\\.eml",
+            "path": "{% assign files = .read_mail.attachments | jsonpath: '*.filename'%}{{files}}"
+          },
+          {
+            "type": "regex",
+            "value": "rfc822",
+            "path": "{% assign file_types = .read_mail.attachments | jsonpath: '*.content_type'%}{{file_types}}"
+          }
+        ],
+        "must_match": "1"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Read Mail",
+      "disabled": false,
+      "guid": "83ae23fae36c3d9ee9b2b4e81b5285ab",
+      "options": {
+        "mode": "message_only",
+        "payload": "{{.receive_eml_file.body.upload_eml_file.contents | base64_decode | eml_parse | as_object}}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "o365 Get Mails",
+      "disabled": false,
+      "guid": "568e1cab951b5ae9fac929a1108fcabe",
+      "options": {
+        "url": "https://graph.microsoft.com/v1.0/users/{{.RESOURCE.o365_mail_account}}/messages?$filter=isRead ne true",
+        "method": "get",
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.o365_graph_mail_actions}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Mail Array",
+      "disabled": false,
+      "guid": "5467963d53a0b23a0249c333bc2d1975",
+      "options": {
+        "mode": "explode",
+        "path": "{{.o365_get_mails.body.value}}",
+        "to": "individual_mail"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Mark Email as Read",
+      "disabled": false,
+      "guid": "444b6d70cc11ff24748a5606ebfb893d",
+      "options": {
+        "url": "https://graph.microsoft.com/v1.0/users/{{.RESOURCE.o365_mail_account}}/messages/{{.explode_mail_array.individual_mail.id}}",
+        "method": "patch",
+        "content_type": "json",
+        "payload": {
+          "isRead": "True"
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.o365_graph_mail_actions}}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Additional Mails",
+      "disabled": false,
+      "guid": "ea941d7c1a88da8d73c317daf87898c9",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "https://",
+            "path": "{{.o365_get_mails.body.['@odata.nextLink']}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "o365 Get Mails",
+      "disabled": false,
+      "guid": "43b517efa864dfcb264984e2c7185969",
+      "options": {
+        "url": "{{.o365_get_mails.body.['@odata.nextLink']}}",
+        "method": "get",
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.o365_graph_mail_actions}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Read Mail",
+      "disabled": false,
+      "guid": "e5b13376f659b153944fc743415b1b93",
+      "options": {
+        "mode": "message_only",
+        "payload": "{{.get_individual_email.body | eml_parse | as_object}}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Add Reporter",
+      "disabled": false,
+      "guid": "a77bc8b2a09150d988a444e133c03e2f",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "reporter": "{{.read_mail.from}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Check for URLs",
+      "disabled": false,
+      "guid": "0286050cc8cdae1340b0e871a945585e",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "path": "{{.read_mail.body}}",
+            "value": "[A-Za-z]+:\\/\\/[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_:%&;\\?\\#\\/.=]+"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if No URLs",
+      "disabled": false,
+      "guid": "deb57a25a43c9b5f3f35b99b0d98d9cc",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "false",
+            "path": "{{ .check_for_urls.rule_matched}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get emails",
+      "disabled": false,
+      "guid": "106cc39d5b9c68857452edbb92a71d91",
+      "options": {
+        "url": "https://www.googleapis.com/gmail/v1/users/phishing@tines.com/messages",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "q": "in:inbox after:{{ \"now\" | date: \"%s\" | minus: 480 }}"
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.gmail_read_oauth }}"
+        }
+      },
+      "schedule": [],
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode emails",
+      "disabled": false,
+      "guid": "232f634301ea3e389da800f5e6c8f804",
+      "options": {
+        "mode": "explode",
+        "path": "{{.get_emails.body.messages}}",
+        "to": "email"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Dedupe Emails",
+      "disabled": false,
+      "guid": "4794490280a27afb25eb4be60c37961d",
+      "options": {
+        "mode": "deduplicate",
+        "lookback": "100",
+        "path": "{{.explode_emails.email.id}}{{.get_emails.message_id}}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get email by id",
+      "disabled": false,
+      "guid": "5e74e8a89cfff474981f6584de24f471",
+      "options": {
+        "url": "https://www.googleapis.com/gmail/v1/users/phishing@tines.com/messages/{{.explode_emails.email.id}}",
+        "method": "get",
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.gmail_read_oauth }}"
+        },
+        "payload": {
+          "format": "raw"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Read Mail",
+      "disabled": false,
+      "guid": "aa8cece7fd6ef2d0439b8be368b960a2",
+      "options": {
+        "mode": "message_only",
+        "payload": "{{.get_email_by_id.body.raw | base64url_decode | eml_parse | as_object }}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Case in TheHive",
+      "disabled": false,
+      "guid": "0e81e9e2a5d21be6559785f6e2ca2bfe",
+      "options": {
+        "url": "{% global_resource the hive url %}/api/case",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "title": "New Email Reported from {{.add_reporter.reporter | default: .read_mail.from}}",
+          "description": "### Summary \n\n**From:** {{.read_mail.from}} \n\n**To:** {{.read_mail.to}} \n\n**Subject:** {{.read_mail.subject}} \n\n**Date:** {{.read_mail.date}} \n\n**Body:**\n\n```\n{{.read_mail.body}}\n```\n\n### Attachments \n| Name | Size (Bytes) | SHA256 Hash | \n| --- | --- | --- |\n{% for attachment in read_mail.attachments %} | {{attachment.filename}} | {{attachment.sizeinbytes}} | `{{attachment.sha256}}` | \n{% endfor %}\n\n",
+          "severity": 2,
+          "tlp": 3,
+          "tags": [
+            "automatic",
+            "report-phishing"
+          ]
+        },
+        "headers": {
+          "Authorization": "Bearer {{ .CREDENTIAL.the_hive_api_key }}"
+        },
+        "manual_time": "300"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Update TheHive with analysis",
+      "disabled": false,
+      "guid": "0a5fdb3325b9d11c711dda5d15fa2d57",
+      "options": {
+        "url": "{{ .RESOURCE.the_hive_url }}/api/case/{{.create_case_in_thehive.body.id }}",
+        "content_type": "json",
+        "method": "patch",
+        "payload": {
+          "description": "{{.build_thehive_content.summary }}\n\n---\n\n{{.get_thehive_case.body.description}}\n\n---\n\n{{.build_thehive_content.urls }} \n\n---\n\n{{.build_thehive_content.attachments }}\n\n---\n\n{{.build_thehive_content.sender_email }}\n\n---\n\n{{.build_thehive_content.body_emails }}\n\n---\n\n{{.build_thehive_content.headers }}"
+        },
+        "headers": {
+          "Authorization": "Bearer {{ .CREDENTIAL.the_hive_api_key }}"
+        },
+        "manual_time": "300"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get TheHive Case",
+      "disabled": false,
+      "guid": "614a94b4e6d6b8669118b52e65d124f6",
+      "options": {
+        "url": "{{ .RESOURCE.the_hive_url }}/api/case/{{.create_case_in_thehive.body.id }}",
+        "content_type": "json",
+        "method": "get",
+        "headers": {
+          "Authorization": "Bearer {{ .CREDENTIAL.the_hive_api_key }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Malicious URL as Observable",
+      "disabled": false,
+      "guid": "3c326e8a635fbb91f1622d1384cf0b2d",
+      "options": {
+        "url": "{{ .RESOURCE.the_hive_url }}/api/case/{{.create_case_in_thehive.body.id }}/artifact",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "data": "{{.explode_urls.individual_url }}",
+          "dataType": "url",
+          "message": "Found in email with subject \"{{.read_mail.subject }}\" submitted by {{.add_reporter.reporter | default: .read_mail.from }}",
+          "tlp": "0",
+          "ioc": "true",
+          "status": "Ok",
+          "startDate": "{{ 'now' | date: '%s' }}"
+        },
+        "headers": {
+          "Authorization": "Bearer {{ .CREDENTIAL.the_hive_api_key }}"
+        },
+        "manual_time": "60"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Malicious URL",
+      "disabled": false,
+      "guid": "ccfda6d6e768e74e8b72ea3024a29eb6",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{.analyze_url.malicious }}"
+          },
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{.analyze_url_in_virustotal.malicious }}"
+          }
+        ],
+        "must_match": "1"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Malicious Hash as Observable",
+      "disabled": false,
+      "guid": "8337558836c5f4a08b28842688db46a1",
+      "options": {
+        "url": "{{ .RESOURCE.the_hive_url }}/api/case/{{.create_case_in_thehive.body.id }}/artifact",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "data": "{{.explode_attachments.individual_attachment.sha256 }}",
+          "dataType": "hash",
+          "message": "Found in email with subject \"{{.read_mail.subject }}\" submitted by {{.add_reporter.reporter | default: .read_mail.from }}. File name was \"{{.explode_attachments.individual_attachment.filename }}\"",
+          "tlp": "0",
+          "ioc": "true",
+          "status": "Ok",
+          "startDate": "{{ 'now' | date: '%s' }}"
+        },
+        "headers": {
+          "Authorization": "Bearer {{ .CREDENTIAL.the_hive_api_key }}"
+        },
+        "manual_time": "60"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Malicious Attachment",
+      "disabled": false,
+      "guid": "a11e1ae447ecfd43e9b27d634971db19",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{.analyze_attachment.malicious }}"
+          },
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{.analyze_attachment_in_virustotal.malicious }}"
+          }
+        ],
+        "must_match": "1"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Malicious Email Address",
+      "disabled": false,
+      "guid": "cafad92c7f5884a7dbaf40ce4d45ce4c",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "true",
+            "path": "{{.analyze_email.malicious }}"
+          }
+        ],
+        "must_match": "1"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Malicious Email Address as Observable",
+      "disabled": false,
+      "guid": "fc4996d5af4990e9d7393d8dc2654188",
+      "options": {
+        "url": "{{ .RESOURCE.the_hive_url }}/api/case/{{.create_case_in_thehive.body.id }}/artifact",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "data": "{{.explode_email_array.individual_email}}",
+          "dataType": "mail",
+          "message": "Found in email with subject \"{{.read_mail.subject }}\" submitted by {{.add_reporter.reporter | default: .read_mail.from }}.",
+          "tlp": "0",
+          "ioc": "true",
+          "status": "Ok",
+          "startDate": "{{ 'now' | date: '%s' }}"
+        },
+        "headers": {
+          "Authorization": "Bearer {{ .CREDENTIAL.the_hive_api_key }}"
+        },
+        "manual_time": "60"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [
+    {
+      "content": "Tying Everything Together\n\nThis Implode Action will wait for all previous analysis to complete, and bring everything together in one event so we can prepare the results.",
+      "position": [
+        990.0,
+        1515.0
+      ]
+    },
+    {
+      "content": "Imploding and Building Results\n\nThe Implode Action will wait until all attachments have been analyzed and results returned. It will then merge these results into one event which will be available later.\n\nBuild Results will summarise the results of attachment analysis and indicate whether any of the URLs were malicious, and how many attachments were analyzed in total.",
+      "position": [
+        240.0,
+        1275.0
+      ]
+    },
+    {
+      "content": "IMAP Action\n\nThe IMAP action will connect to a mailbox where the mailserver is configured to have IMAP enabled.\n\nEnter the mailserver, the username and the password to connect any begin reading mails.\n\nThe first time this Action is run, the mailbox state will be recorded and any future mails will be read into Tines on subsequent Action queries.",
+      "position": [
+        555.0,
+        45.0
+      ]
+    },
+    {
+      "content": "Analyzing URLs\n\nAny URLs found in the body of the email are identified and extracted.\n\nWe're then exploding the array of extracted URLs so that we can look at these URLs individually.\n\nEach URL will be analyzed by URLScan and VirusTotal. \nIf a URL is identified as malicious, it will be added to TheHive case as an observable.\n",
+      "position": [
+        2040.0,
+        1065.0
+      ]
+    },
+    {
+      "content": "EML Handling\n\nSome users or report phish buttons will forward the suspicious email as a .eml attachment.\n\nIn these cases, we want to identify these attachments and analyze this eml file including email headers.",
+      "position": [
+        1290.0,
+        330.0
+      ]
+    },
+    {
+      "content": "Presenting the Results\n\nIn the Build The Hive Content Action we are going to build The Hive formatted content that the analyst will actually review.\nThe 'assign' block in this action is looking in the event output from Implode Analysis for the relevant analysis 'type'; URL, Attachment, Email, or Sender.\nAny additions, or updates needed in The Hive Incident can be modified in the Build The Hive Content Action.\n",
+      "position": [
+        465.0,
+        1590.0
+      ]
+    },
+    {
+      "content": "Analyzing Emails\n\nIn cases where the internal users reports the email by forwarding it inline, rather than as an attachment, we will want to check the body for any email addresses found, and check the reputation of these individually.",
+      "position": [
+        -615.0,
+        975.0
+      ]
+    },
+    {
+      "content": "Imploding and Building Results\n\nThe Implode Action will wait until all email addresses have been analyzed and results returned. It will then merge these results into one event which will be available later.\n\nBuild Results will summarise the results of email address analysis and indicate whether any of the URLs were malicious, and how many email addresses were analyzed in total.",
+      "position": [
+        -615.0,
+        1290.0
+      ]
+    },
+    {
+      "content": "Imploding and Building Results\n\nThe Implode Action will wait until all URLs have been analyzed and results returned. It will then merge these results into one event which will be available later.\n\nBuild Results will summarise the results of URL analysis and indicate whether any of the URLs were malicious, and how many URLs were analyzed in total.",
+      "position": [
+        1860.0,
+        1500.0
+      ]
+    },
+    {
+      "content": "Creating Incident Ticket\n\nBefore any email content is analyzed we can create an issue in the security case management system.\nThis will contain basic mail info such as subject, body, and headers.",
+      "position": [
+        360.0,
+        705.0
+      ]
+    },
+    {
+      "content": "Analyzing Sender\n\nTo check the reputation of the sender of the suspicious email it is submitted to a Tines Sub-Story which will analyze the email address and return the results to this story.",
+      "position": [
+        1305.0,
+        1005.0
+      ]
+    },
+    {
+      "content": "Analyzing Attachments\n\nAny attachments found in the reported email will be analyzed in this flow.\n\nEach attachment will be analyzed individually in VirusTotal and HybridAnalysis. When set to 'true', the 'submit_if_not_found' field will upload the file to the scan engine if it has not been seen before. If set to 'false' or removed completely, it will not be submitted and the story will only pull back existing results.",
+      "position": [
+        240.0,
+        960.0
+      ]
+    },
+    {
+      "content": "Updating The Hive\n\nFirst we're getting The Hive ticket content. We don't want to overwrite any information added to the case by an analyst while this Story was running, so we are updating The Hive case to include:\n\n- An overall verdict on the mail\n- The initial case description including mail body and headers\n- Attachment, URL, Sender and Email analysis\n",
+      "position": [
+        570.0,
+        1920.0
+      ]
+    },
+    {
+      "content": "Parsing the Mail\n\nThe mails come through as an Array, and using the Explode Action allows us to look at these individually\n\nNext, we're marking the mail as read so we only process it once.\n'Get Individual Email' is using the Email ID from previous events to retrieve the Raw email which will include extra information like the mail headers.\nLastly, this raw email content is being parse into a regular email structure.\n\n ",
+      "position": [
+        120.0,
+        0.0
+      ]
+    },
+    {
+      "content": "Submitting by Form\n\nThis story is also able to receive eml files through the Tines Form. \nAny submitted EMLs will be received by this Webhook Action and will be processed as normal.",
+      "position": [
+        1515.0,
+        585.0
+      ]
+    },
+    {
+      "content": "Handling Prompts\n\nWe are adding a couple of Trigger Actions here to handle Prompt Responses. If there is a Prompt included in The Hive incident - for example to Contain the Device in Crowdstrike - then these Actions will route the response to the right place.",
+      "position": [
+        1185.0,
+        1665.0
+      ]
+    },
+    {
+      "content": "Reading Mails with o365\n\nThe first Action here will connect to the Microsoft Graph API and retrieve a list of all unread mails.\n\nWe're including a pagination loop here will repeat the 'Get Mail' query if there are more available.",
+      "position": [
+        -405.0,
+        -315.0
+      ]
+    },
+    {
+      "content": "Reading Mails with GSuite\n\nThe first Action here will connect to the GMail API and retrieve a list of all mails received in the past 8 minutes or so. This Action should be scheduled to run every 5 minutes or so. The overlap between the schedule time, and the lookback time will ensure a mail does not get missed.\n\nThis Action uses an OAuth Token belonging to the Mailbox we're reading. This can also be a Service Account JWT Token, if necessary.",
+      "position": [
+        1395.0,
+        -225.0
+      ]
+    },
+    {
+      "content": "Parsing the Mail\n\nThe array of email IDs is being exploded into individual events so we can handle each mail by itself.\n\nThe Dedup Action will ensure that each mail is only examined once.\n\nNext, using the original mail ID we can get the raw Base64Encoded Email Body, which we will then parse into the regular email format.\n",
+      "position": [
+        1890.0,
+        30.0
+      ]
+    }
+  ],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 18
+    },
+    {
+      "source": 0,
+      "receiver": 20
+    },
+    {
+      "source": 1,
+      "receiver": 57
+    },
+    {
+      "source": 2,
+      "receiver": 5
+    },
+    {
+      "source": 3,
+      "receiver": 31
+    },
+    {
+      "source": 4,
+      "receiver": 6
+    },
+    {
+      "source": 5,
+      "receiver": 12
+    },
+    {
+      "source": 5,
+      "receiver": 63
+    },
+    {
+      "source": 6,
+      "receiver": 8
+    },
+    {
+      "source": 6,
+      "receiver": 61
+    },
+    {
+      "source": 7,
+      "receiver": 25
+    },
+    {
+      "source": 8,
+      "receiver": 9
+    },
+    {
+      "source": 9,
+      "receiver": 38
+    },
+    {
+      "source": 10,
+      "receiver": 11
+    },
+    {
+      "source": 11,
+      "receiver": 23
+    },
+    {
+      "source": 12,
+      "receiver": 15
+    },
+    {
+      "source": 13,
+      "receiver": 10
+    },
+    {
+      "source": 14,
+      "receiver": 38
+    },
+    {
+      "source": 15,
+      "receiver": 38
+    },
+    {
+      "source": 16,
+      "receiver": 38
+    },
+    {
+      "source": 17,
+      "receiver": 2
+    },
+    {
+      "source": 18,
+      "receiver": 17
+    },
+    {
+      "source": 20,
+      "receiver": 16
+    },
+    {
+      "source": 21,
+      "receiver": 59
+    },
+    {
+      "source": 22,
+      "receiver": 48
+    },
+    {
+      "source": 23,
+      "receiver": 57
+    },
+    {
+      "source": 24,
+      "receiver": 7
+    },
+    {
+      "source": 25,
+      "receiver": 4
+    },
+    {
+      "source": 26,
+      "receiver": 19
+    },
+    {
+      "source": 26,
+      "receiver": 21
+    },
+    {
+      "source": 27,
+      "receiver": 30
+    },
+    {
+      "source": 28,
+      "receiver": 37
+    },
+    {
+      "source": 29,
+      "receiver": 3
+    },
+    {
+      "source": 29,
+      "receiver": 28
+    },
+    {
+      "source": 30,
+      "receiver": 38
+    },
+    {
+      "source": 31,
+      "receiver": 32
+    },
+    {
+      "source": 32,
+      "receiver": 34
+    },
+    {
+      "source": 34,
+      "receiver": 35
+    },
+    {
+      "source": 34,
+      "receiver": 64
+    },
+    {
+      "source": 35,
+      "receiver": 36
+    },
+    {
+      "source": 36,
+      "receiver": 38
+    },
+    {
+      "source": 37,
+      "receiver": 38
+    },
+    {
+      "source": 38,
+      "receiver": 26
+    },
+    {
+      "source": 39,
+      "receiver": 42
+    },
+    {
+      "source": 40,
+      "receiver": 1
+    },
+    {
+      "source": 40,
+      "receiver": 41
+    },
+    {
+      "source": 41,
+      "receiver": 49
+    },
+    {
+      "source": 42,
+      "receiver": 23
+    },
+    {
+      "source": 43,
+      "receiver": 44
+    },
+    {
+      "source": 43,
+      "receiver": 46
+    },
+    {
+      "source": 44,
+      "receiver": 22
+    },
+    {
+      "source": 44,
+      "receiver": 45
+    },
+    {
+      "source": 46,
+      "receiver": 47
+    },
+    {
+      "source": 47,
+      "receiver": 44
+    },
+    {
+      "source": 47,
+      "receiver": 46
+    },
+    {
+      "source": 49,
+      "receiver": 13
+    },
+    {
+      "source": 50,
+      "receiver": 24
+    },
+    {
+      "source": 50,
+      "receiver": 51
+    },
+    {
+      "source": 51,
+      "receiver": 14
+    },
+    {
+      "source": 52,
+      "receiver": 53
+    },
+    {
+      "source": 53,
+      "receiver": 54
+    },
+    {
+      "source": 54,
+      "receiver": 55
+    },
+    {
+      "source": 55,
+      "receiver": 56
+    },
+    {
+      "source": 57,
+      "receiver": 0
+    },
+    {
+      "source": 57,
+      "receiver": 27
+    },
+    {
+      "source": 57,
+      "receiver": 29
+    },
+    {
+      "source": 57,
+      "receiver": 50
+    },
+    {
+      "source": 59,
+      "receiver": 58
+    },
+    {
+      "source": 61,
+      "receiver": 60
+    },
+    {
+      "source": 63,
+      "receiver": 62
+    },
+    {
+      "source": 64,
+      "receiver": 65
+    }
+  ],
+  "diagram_layout": "{\"2bed93df254d84502918b82d56e3e3c0\":[735.0,885.0],\"cfc1f37ad40cea7b91c1b7fb50e8d95b\":[735.0,330.0],\"d2a4ea818b4dd9663ef215589b7a3712\":[825.0,1125.0],\"b5502f344efd08a6549348700f4a8cb5\":[-45.0,975.0],\"4dba7e08c5377d3522c2cdf3da23e45c\":[1800.0,1185.0],\"011c9fd39d3ea0ac427db6d3d417a660\":[825.0,1215.0],\"c1f1cdb514b740ed68b6b8908000d667\":[1800.0,1260.0],\"a34370f0ab05e41454a109666784bd2a\":[1800.0,1035.0],\"d5e4fbd9cf358dd628a0f03b424e2191\":[1800.0,1350.0],\"29af942327b7dd37ba711e11dbbe87ee\":[1800.0,1440.0],\"524a5987514b927575be336a51dd520a\":[1050.0,570.0],\"e7e8b234ed3a87997b61620e102ca9e1\":[1050.0,645.0],\"f7a7d4d23ec57ad0c65368537da7b67f\":[825.0,1305.0],\"a00d97200cf48e6ea9b345067c9bf4d4\":[1050.0,495.0],\"aeef98bbd9debc394ef9cd11e0222bf4\":[1575.0,1440.0],\"8ff3bd3531165a38cc6a76a191a152f8\":[825.0,1440.0],\"3789ad8c7891bfd557bd277e6a7bfca1\":[555.0,1440.0],\"9a3425e34a734b0b19f384134441e784\":[825.0,1050.0],\"341dddb9303c6f617a0f138be634513f\":[825.0,960.0],\"b6c84df4e1abe8be88706e5387bd89d3\":[975.0,1665.0],\"e45252c702ac8d1374aa5743b808f78a\":[555.0,960.0],\"0464e221a5c18ce55a82f6fcab95c807\":[750.0,1665.0],\"91bb734db3edca60666ce388440ed3b9\":[-105.0,120.0],\"091038de9dc114b647a4c0494d7403dd\":[1050.0,720.0],\"24b8dc5de3d95c874d14567523a38066\":[1800.0,960.0],\"0bb756fa648ff135efcfb7d07c0176a3\":[1800.0,1110.0],\"c8469e0bb8d3e25162d5314269304386\":[750.0,1590.0],\"458c8dc800b73bc96531d91b58a3f3d5\":[1275.0,885.0],\"52091db3755b69c96b42e10ed12aa4de\":[-300.0,975.0],\"5d77762349f91d71c88eb48911f08b11\":[-165.0,885.0],\"2d365a3838a16c57f44dee96409633f0\":[1275.0,1440.0],\"d95c9115563ac2e32330400d5c75f9e0\":[-45.0,1065.0],\"8acb619cc3cf7600a74da188be4e2073\":[-45.0,1140.0],\"5cfe7881f3e53f3d55949433e53c398b\":[2760.0,945.0],\"70a592ff0e30d482851d2f889a088176\":[-45.0,1215.0],\"27a57828a78d67ba63ef3bf7f3d35380\":[-45.0,1290.0],\"62b536a52d24ceb51aadaa0817c11880\":[-45.0,1440.0],\"7d1ad8a65c590ce82955957e6af02d69\":[-300.0,1440.0],\"0cf2b7750dc335eb2ec5b498627e25e3\":[750.0,1515.0],\"e2b8265aa96af36300ec04d0754adeeb\":[1290.0,585.0],\"bb9a613192a8f07bdbacb90b3a11dff1\":[930.0,255.0],\"8ab2ea5ea92b62f65bee09a2f7034108\":[1050.0,330.0],\"83ae23fae36c3d9ee9b2b4e81b5285ab\":[1290.0,645.0],\"568e1cab951b5ae9fac929a1108fcabe\":[-105.0,-195.0],\"5467963d53a0b23a0249c333bc2d1975\":[-105.0,45.0],\"444b6d70cc11ff24748a5606ebfb893d\":[-360.0,120.0],\"ea941d7c1a88da8d73c317daf87898c9\":[-345.0,-120.0],\"43b517efa864dfcb264984e2c7185969\":[-345.0,-30.0],\"e5b13376f659b153944fc743415b1b93\":[-105.0,195.0],\"a77bc8b2a09150d988a444e133c03e2f\":[1050.0,420.0],\"0286050cc8cdae1340b0e871a945585e\":[1695.0,885.0],\"deb57a25a43c9b5f3f35b99b0d98d9cc\":[1575.0,960.0],\"106cc39d5b9c68857452edbb92a71d91\":[1680.0,-120.0],\"232f634301ea3e389da800f5e6c8f804\":[1680.0,-45.0],\"4794490280a27afb25eb4be60c37961d\":[1680.0,15.0],\"5e74e8a89cfff474981f6584de24f471\":[1680.0,90.0],\"aa8cece7fd6ef2d0439b8be368b960a2\":[1680.0,165.0],\"0e81e9e2a5d21be6559785f6e2ca2bfe\":[735.0,795.0],\"0a5fdb3325b9d11c711dda5d15fa2d57\":[750.0,1815.0],\"614a94b4e6d6b8669118b52e65d124f6\":[750.0,1740.0],\"3c326e8a635fbb91f1622d1384cf0b2d\":[2070.0,1425.0],\"ccfda6d6e768e74e8b72ea3024a29eb6\":[2070.0,1350.0],\"8337558836c5f4a08b28842688db46a1\":[1050.0,1365.0],\"a11e1ae447ecfd43e9b27d634971db19\":[1050.0,1290.0],\"cafad92c7f5884a7dbaf40ce4d45ce4c\":[-255.0,1290.0],\"fc4996d5af4990e9d7393d8dc2654188\":[-255.0,1365.0]}",
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "exit_agent_guid": null,
+  "send_to_stories": [
+    {
+      "schema_version": 3,
+      "name": "StS Analyse File in VirusTotal",
+      "description": null,
+      "guid": "6db75a2af5a5cdaa0ad203a31732b521",
+      "exported_at": "2021-03-22T20:47:26Z",
+      "agents": [
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Receive Hash",
+          "disabled": false,
+          "guid": "86191dd90f6893b3b62034e90206b044",
+          "options": {
+            "secret": "29343be8e97068fb39b8e282fdb7acaa",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Analysis Results",
+          "disabled": false,
+          "guid": "7d108dd91622a32d402ea1492d6736a3",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "malicious": "{% if .search_hash_in_virustotal.body.data.attributes.last_analysis_stats.malicious > 0 or .search_hash_in_virustotal.body.data.attributes.last_analysis_stats.suspicious > 0 %}true{% else %}false{% endif %}",
+              "number_malicious": "{{.search_hash_in_virustotal.body.data.attributes.last_analysis_stats.malicious | plus: .search_hash_in_virustotal.body.data.attributes.last_analysis_stats.suspicious}}",
+              "analysis_date": "{{.search_hash_in_virustotal.body.data.attributes.last_analysis_date | date: '%Y-%m-%d %H:%M:%SZ'}}",
+              "hash": "{{.receive_hash.body.hash}}",
+              "analysis_link": "https://virustotal.com/gui/file/{{.receive_hash.body.hash}}/detection",
+              "verdicts": "{% capture results%}[{% for scan in .search_hash_in_virustotal.body.data.attributes.last_analysis_results %}{% if scan[1].category == 'malicious' or scan[1].category == 'suspicious'%} {\"Engine\": \"{{scan[0]}}\", \"Verdict\": \"{{scan[1].result}}\"},{% endif %}{% endfor %}]{% endcapture %}{{ results | replace: ',]',' ]'  | json_parse | as_object }}",
+              "scan_engine": "virustotal"
+            },
+            "manual_time": "30"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Search Hash in VirusTotal",
+          "disabled": false,
+          "guid": "d2025c77a9981a19b64cf302e26d8922",
+          "options": {
+            "url": "https://www.virustotal.com/api/v3/files/{{.receive_hash.body.hash}}",
+            "content_type": "json",
+            "method": "get",
+            "payload": {},
+            "headers": {
+              "x-apikey": "{{.CREDENTIAL.virustotal}}"
+            },
+            "retry_on_status": [
+              "429"
+            ],
+            "manual_time": "60"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "File Found",
+          "disabled": false,
+          "guid": "be07fed83a2742d7165fe9358a0c2ce4",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "200",
+                "path": "{{.search_hash_in_virustotal.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "File Not Found and Submit",
+          "disabled": false,
+          "guid": "c0ad495e482b1ac2276567528794c441",
+          "options": {
+            "rules": [
+              {
+                "type": "field!=value",
+                "value": "200",
+                "path": "{{.search_hash_in_virustotal.status}}"
+              },
+              {
+                "type": "field==value",
+                "value": "true",
+                "path": "{{.receive_hash.body.submit_if_not_found}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Submit File to VirusTotal",
+          "disabled": false,
+          "guid": "4368b2acb0b5ee293552a87b33b61ab5",
+          "options": {
+            "url": "https://www.virustotal.com/api/v3/files",
+            "content_type": "data",
+            "method": "post",
+            "payload": {
+              "file": {
+                "filename": "{{.receive_hash.body.filename}}",
+                "contents": "{{.receive_hash.body.contents | base64_decode}}"
+              }
+            },
+            "headers": {
+              "x-apikey": "{{.CREDENTIAL.virustotal}}"
+            },
+            "retry_on_status": [
+              "429"
+            ],
+            "manual_time": "60"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "File Not Found and No Submit",
+          "disabled": false,
+          "guid": "b410d5a596fc64581b01f4d98e52820c",
+          "options": {
+            "rules": [
+              {
+                "type": "field!=value",
+                "value": "200",
+                "path": "{{.search_hash_in_virustotal.status}}"
+              },
+              {
+                "type": "field!=value",
+                "value": "true",
+                "path": "{{.receive_hash.body.submit_if_not_found}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Delay Event",
+          "disabled": false,
+          "guid": "1bd855b42788f9961aae173c53707293",
+          "options": {
+            "mode": "delay",
+            "seconds": "10",
+            "expected_update_period_in_days": "2"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Search Hash in VirusTotal",
+          "disabled": false,
+          "guid": "d076b618ff6244782a9efd196662bbe4",
+          "options": {
+            "url": "https://www.virustotal.com/api/v3/analyses/{{.submit_file_to_virustotal.body.data.id}}",
+            "content_type": "json",
+            "method": "get",
+            "payload": {},
+            "headers": {
+              "x-apikey": "{{.CREDENTIAL.virustotal}}"
+            },
+            "retry_on_status": [
+              "429"
+            ],
+            "manual_time": "90"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Scan Not Complete",
+          "disabled": false,
+          "guid": "5f2e63d90f7b10d8fc134f35688e6c81",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "queued",
+                "path": "{{.search_hash_in_virustotal.body.data.attributes.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Increment Counter",
+          "disabled": false,
+          "guid": "3630b7d72373138e0ab2b6935e558a64",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "counter": "{{ .increment_counter | plus: 1}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Counter More Than 20",
+          "disabled": false,
+          "guid": "eb024b492ebf441392692ea3ed066165",
+          "options": {
+            "rules": [
+              {
+                "type": "field>value",
+                "value": "20",
+                "path": "{{.increment_counter.counter}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Counter Less Than 20",
+          "disabled": false,
+          "guid": "3e0a2cf070ea3a411e99276d996bcf27",
+          "options": {
+            "rules": [
+              {
+                "type": "field<=value",
+                "value": "20",
+                "path": "{{.increment_counter.counter}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Delay Event",
+          "disabled": false,
+          "guid": "0db66c2eae730f3db4242c703420212b",
+          "options": {
+            "mode": "delay",
+            "seconds": "10",
+            "expected_update_period_in_days": "2"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Error Results",
+          "disabled": false,
+          "guid": "4dc37b7421b6fc1354a6dc3407e5d386",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "malicious": "Error Submitting to VirusTotal",
+              "number_malicious": "N/A",
+              "analysis_date": "N/A",
+              "hash": "{{.receive_hash.body.hash}}",
+              "analysis_link": "N/A",
+              "verdicts": [],
+              "scan_engine": "virustotal"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Analysis Results",
+          "disabled": false,
+          "guid": "a45a26a0c481544e6fe20b7402793b77",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "malicious": "Unknown - File not found in VirusTotal",
+              "number_malicious": "N/A",
+              "analysis_date": "N/A",
+              "hash": "{{.receive_hash.body.hash}}",
+              "analysis_link": "N/A",
+              "verdicts": [],
+              "scan_engine": "virustotal"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Scan Complete",
+          "disabled": false,
+          "guid": "c3285fd5cfcc9ad521269435f3dc8a32",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "completed",
+                "path": "{{.search_hash_in_virustotal.body.data.attributes.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Error Scanning",
+          "disabled": false,
+          "guid": "d5fbbee37ada3bc72afbed93c4c51ad4",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "queued",
+                "path": "{{.search_hash_in_virustotal.body.data.attributes.status}}"
+              },
+              {
+                "type": "field==value",
+                "value": "completed",
+                "path": "{{.search_hash_in_virustotal.body.data.attributes.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Analysis Results",
+          "disabled": false,
+          "guid": "99dcd6d5a85bbd11b7557dc5f7a9e75a",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "malicious": "{% if .search_hash_in_virustotal.body.data.attributes.last_analysis_stats.malicious > 0 or .search_hash_on_virustotal.body.data.attributes.last_analysis_stats.suspicious > 0 %}true{% else %}false{% endif %}",
+              "number_malicious": "{{.search_hash_in_virustotal.body.data.attributes.last_analysis_stats.malicious | plus: .search_hash_on_virustotal.body.data.attributes.last_analysis_stats.suspicious}}",
+              "analysis_date": "{{.search_hash_in_virustotal.body.data.attributes.date | date: '%Y-%m-%d %H:%M:%SZ'}}",
+              "hash": "{{.receive_hash.body.hash}}",
+              "analysis_link": "https://virustotal.com/gui/file/{{.receive_hash.body.hash}}/detection",
+              "verdicts": "{% capture results%}[{% for scan in .search_hash_in_virustotal.body.data.attributes.last_analysis_results %}{% if scan[1].category == 'malicious' or scan[1].category == 'suspicious'%} {\"Engine\": \"{{scan[0]}}\", \"Verdict\": \"{{scan[1].result}}\"},{% endif %}{% endfor %}]{% endcapture %}{{ results | replace: ',]', ' ]'  | json_parse | as_object }}",
+              "scan_engine": "virustotal"
+            },
+            "manual_time": "30"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        }
+      ],
+      "diagram_notes": [
+        {
+          "content": "Checking the Hash\n\nFirst we can search for the hash in VirusTotal and see if it is has been scanned before.",
+          "position": [
+            945.0,
+            240.0
+          ]
+        },
+        {
+          "content": "File Found!\n\nIf the file is found, we can go straight to the Build Results Action to extract relevant information and return it to the parent Story.",
+          "position": [
+            1035.0,
+            780.0
+          ]
+        },
+        {
+          "content": "File Not Found\n\nIf the file has not been previously seen in VirusTotal then we can submit it, wait for the scan to complete, and then Build Results and return the analysis to the parent Story.\n\nIf this scan results in an error, then some information reflecting this will be returned.\n\nThis will only occur if the field 'submit_if_not_found' is explicitly set to 'true' in the parent Send to Story Action.",
+          "position": [
+            675.0,
+            465.0
+          ]
+        },
+        {
+          "content": "File Not Found\n\nIf the user has indicated that they do not want the file submitted to VirusTotal either by explicitly setting 'submit_if_not_found' to 'false, or by leaving out that field entirely, then we will bypass any further analysis.\n\nThe Build Analysis Results Action will contain some information indicating that the file hash was not found, and the file was not submitted.",
+          "position": [
+            -315.0,
+            495.0
+          ]
+        }
+      ],
+      "links": [
+        {
+          "source": 0,
+          "receiver": 2
+        },
+        {
+          "source": 2,
+          "receiver": 3
+        },
+        {
+          "source": 2,
+          "receiver": 4
+        },
+        {
+          "source": 2,
+          "receiver": 6
+        },
+        {
+          "source": 3,
+          "receiver": 1
+        },
+        {
+          "source": 4,
+          "receiver": 5
+        },
+        {
+          "source": 5,
+          "receiver": 7
+        },
+        {
+          "source": 6,
+          "receiver": 15
+        },
+        {
+          "source": 7,
+          "receiver": 8
+        },
+        {
+          "source": 8,
+          "receiver": 9
+        },
+        {
+          "source": 8,
+          "receiver": 16
+        },
+        {
+          "source": 8,
+          "receiver": 17
+        },
+        {
+          "source": 9,
+          "receiver": 10
+        },
+        {
+          "source": 10,
+          "receiver": 11
+        },
+        {
+          "source": 10,
+          "receiver": 12
+        },
+        {
+          "source": 11,
+          "receiver": 14
+        },
+        {
+          "source": 12,
+          "receiver": 13
+        },
+        {
+          "source": 13,
+          "receiver": 8
+        },
+        {
+          "source": 16,
+          "receiver": 18
+        },
+        {
+          "source": 17,
+          "receiver": 14
+        }
+      ],
+      "diagram_layout": "{\"86191dd90f6893b3b62034e90206b044\":[705.0,240.0],\"7d108dd91622a32d402ea1492d6736a3\":[960.0,1125.0],\"d2025c77a9981a19b64cf302e26d8922\":[705.0,315.0],\"be07fed83a2742d7165fe9358a0c2ce4\":[960.0,405.0],\"c0ad495e482b1ac2276567528794c441\":[435.0,405.0],\"4368b2acb0b5ee293552a87b33b61ab5\":[435.0,495.0],\"b410d5a596fc64581b01f4d98e52820c\":[-30.0,405.0],\"1bd855b42788f9961aae173c53707293\":[435.0,570.0],\"d076b618ff6244782a9efd196662bbe4\":[435.0,645.0],\"5f2e63d90f7b10d8fc134f35688e6c81\":[435.0,735.0],\"3630b7d72373138e0ab2b6935e558a64\":[435.0,810.0],\"eb024b492ebf441392692ea3ed066165\":[210.0,885.0],\"3e0a2cf070ea3a411e99276d996bcf27\":[435.0,885.0],\"0db66c2eae730f3db4242c703420212b\":[435.0,960.0],\"4dc37b7421b6fc1354a6dc3407e5d386\":[210.0,1125.0],\"a45a26a0c481544e6fe20b7402793b77\":[-30.0,1125.0],\"c3285fd5cfcc9ad521269435f3dc8a32\":[660.0,735.0],\"d5fbbee37ada3bc72afbed93c4c51ad4\":[195.0,735.0],\"99dcd6d5a85bbd11b7557dc5f7a9e75a\":[660.0,1125.0]}",
+      "send_to_story_enabled": true,
+      "entry_agent_guid": "86191dd90f6893b3b62034e90206b044",
+      "exit_agent_guids": [
+        "7d108dd91622a32d402ea1492d6736a3",
+        "4dc37b7421b6fc1354a6dc3407e5d386",
+        "99dcd6d5a85bbd11b7557dc5f7a9e75a",
+        "a45a26a0c481544e6fe20b7402793b77"
+      ],
+      "exit_agent_guid": "7d108dd91622a32d402ea1492d6736a3",
+      "form": {
+        "name": "New story for martin@tines.io Form",
+        "description": "",
+        "fields": [],
+        "visibility": "tenant",
+        "agent_guid": null,
+        "success_message": "Thank you for your submission"
+      }
+    },
+    {
+      "schema_version": 3,
+      "name": "StS Analyze URL in URLScan",
+      "description": null,
+      "guid": "9441ea9dc1d0e04b5910ca833a3fc349",
+      "exported_at": "2021-03-22T20:47:26Z",
+      "agents": [
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Receive URL",
+          "disabled": false,
+          "guid": "decd85716df0957f009d66d2b338e00b",
+          "options": {
+            "secret": "ce513d1970c54a94fffb36e061b73db4",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::SendToStoryAgent",
+          "name": "Run Story",
+          "disabled": false,
+          "guid": "b88c4b279104c33b6803d36af0bef7d7",
+          "options": {
+            "story": "{{ .STORY.martin_spam.sts_analyze_url_in_urlscan}}",
+            "payload": {
+              "url": "https://lugg2go.com.br/redirect/redirect.php"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Extract Domain from URL",
+          "disabled": false,
+          "guid": "f04e2b5cab01fecf3005f1e48aa5d702",
+          "options": {
+            "mode": "extract",
+            "matchers": [
+              {
+                "path": "{{.receive_url.body.url}}",
+                "regexp": "^(?:https?:\\/\\/)?(?:[^@\\n]+@)?(?:www\\.)?([^:\\/\\n?]+)",
+                "to": "domain"
+              }
+            ]
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Check if Domain is Known Good",
+          "disabled": false,
+          "guid": "89b21a70db2e99d5d8b5fafed2048017",
+          "options": {
+            "rules": [
+              {
+                "type": "in",
+                "value": "{{.extract_domain_from_url.domain.first.first}}",
+                "path": "{{.RESOURCE.known_good_domains | as_object}}"
+              }
+            ],
+            "emit_no_match": "true"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Domain Known Good",
+          "disabled": false,
+          "guid": "c6c2f2db18fbbc9fd9a64ae915bbf9c1",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "true",
+                "path": "{{.check_if_domain_is_known_good.rule_matched}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Domain Not Known Good",
+          "disabled": false,
+          "guid": "4a2a6048bbc1703f1a5b3e0be8906598",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "false",
+                "path": "{{.check_if_domain_is_known_good.rule_matched}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Whitelisted Results",
+          "disabled": false,
+          "guid": "442f15d31f3fbfce7319b497364f6b29",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "url": "{{.receive_url.body.url}}",
+              "malicious": "Whitelisted",
+              "analysis_link": "",
+              "analysis_date": "Whitelisted",
+              "scan_engine": "URLScan",
+              "page_screenshot": "N/A"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Scan Results",
+          "disabled": false,
+          "guid": "dab9e615e1c696f10405aa3382ab4e6b",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "url": "{{.receive_url.body.url}}",
+              "malicious": "{% if .retrieve_urlscan_result.body.verdicts.overall.malicious == false %}false{% else %}{{.retrieve_urlscan_result.body.verdicts.overall.malicious | default: 'error submitting' }}{% endif %}",
+              "analysis_link": "{{.retrieve_urlscan_result.body.task.reportURL }}",
+              "analysis_date": "{{.retrieve_urlscan_result.body.task.time | default: 'N/A'}}",
+              "scan_engine": "URLScan",
+              "brands": "{{.retrieve_urlscan_result.body.verdicts.overall.brands | default: 'None identified' | as_object}}",
+              "tags": "{{.retrieve_urlscan_result.body.verdicts.overall.tags | default: 'None identified' | s_object}}",
+              "screenshot": {
+                "url": "{{.retrieve_urlscan_result.body.task.screenshotURL | default: 'N/A'}}",
+                "contents": "{{.download_screenshot.body.base64encodedcontents}}"
+              }
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Submit URL Privately",
+          "disabled": false,
+          "guid": "4cb83e1de77dbf992ea009b9085d69d9",
+          "options": {
+            "url": "https://urlscan.io/api/v1/scan/",
+            "content_type": "json",
+            "method": "post",
+            "payload": {
+              "url": "{{.receive_url.body.url}}",
+              "public": "off"
+            },
+            "headers": {
+              "API-Key": "{{ .CREDENTIAL.urlscan_io }}"
+            },
+            "log_error_on_status": [],
+            "retry_on_status": [
+              "429"
+            ],
+            "manual_time": "30"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Delay Event",
+          "disabled": false,
+          "guid": "0b9df1fef8c7fe7fc112123d1a2b52d1",
+          "options": {
+            "mode": "delay",
+            "seconds": 60
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Retrieve URLScan Result",
+          "disabled": false,
+          "guid": "2222468db314e513bf57398de4bfca5b",
+          "options": {
+            "url": "https://urlscan.io/api/v1/result/{{.submit_url_privately.body.uuid}}/",
+            "method": "get",
+            "headers": {
+              "API-Key": "{{ .CREDENTIAL.urlscan_io }}"
+            },
+            "log_error_on_status": [],
+            "retry_on_status": [
+              "400",
+              "429"
+            ],
+            "manual_time": "90"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Download Screenshot",
+          "disabled": false,
+          "guid": "deebabf9211685c9ebf5a719a1b38b68",
+          "options": {
+            "url": "{{.retrieve_urlscan_result.body.task.screenshotURL}}",
+            "content_type": "json",
+            "method": "get",
+            "log_error_on_status": [],
+            "retry_on_status": [
+              "400",
+              "429"
+            ],
+            "manual_time": "30"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Successful Submit",
+          "disabled": false,
+          "guid": "3efff72697915c4dda203b68a1e40c14",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "200",
+                "path": "{{.submit_url_privately.status }}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Failed Submit",
+          "disabled": false,
+          "guid": "bd0d64d3ec6489e706265f7aa692b9f9",
+          "options": {
+            "rules": [
+              {
+                "type": "field!=value",
+                "value": "200",
+                "path": "{{.submit_url_privately.status }}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Error Results",
+          "disabled": false,
+          "guid": "b412297f514f95c17bcdc35cc6b5d590",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "url": "{{.receive_url.body.url}}",
+              "malicious": "Error",
+              "analysis_link": "",
+              "analysis_date": "Error Submitting URL",
+              "scan_engine": "URLScan",
+              "page_screenshot": "N/A"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        }
+      ],
+      "diagram_notes": [
+        {
+          "content": "Known Good Domains\n\nThere are some domains that that will not need to be submitted. These will be the company domain, such as 'tines.io', or other known good domains that frequently seen.\n\nThese domains can be stored in a Resource called 'known_good_email_domains'. This story will extract the domain from an email address, check if it is found in that Resource. If it is found, no check will be performed on that domain.\n",
+          "position": [
+            960.0,
+            165.0
+          ]
+        },
+        {
+          "content": "Domain is Known Good\n\nIf the domain is known good, then all analysis will be bypassed.\nResults indicating this will be returned.",
+          "position": [
+            1530.0,
+            465.0
+          ]
+        },
+        {
+          "content": "Submitting the URL Privately\n\nBy default, the URL will be submitted privately to URLScan. This means it will not show up in public searches - it will only be shown in your account.\n\nPrivate submissions are limited on the free URLScan plan. This can be disabled setting 'public' to be on.\nAlternatively additional URLScan plans are available to increase the amount of private submissions.\n\nIf URLScan returns a HTTP 429 (Too Many Requests) code, Tines will enter a retry sequence and will attempt the submission several more times.\n",
+          "position": [
+            405.0,
+            285.0
+          ]
+        },
+        {
+          "content": "Error Submitting\n\nURLScan will respond with an error if the domain cannot be resolved, or if the domain owner has requested that their domain not be scanned (Like Facebook, or Linkedin).\n\nResults indicating this will be returned.",
+          "position": [
+            180.0,
+            945.0
+          ]
+        },
+        {
+          "content": "Getting the Results\n\nAfter submitting the URL, URLScan will provide a unique ID. We can use this to check on the status of the scan, and retrieve the results.\n\nThese results may include screenshots of the scanned URL. These will also be downloaded and made available to the parent story with the results of the scan.",
+          "position": [
+            930.0,
+            765.0
+          ]
+        }
+      ],
+      "links": [
+        {
+          "source": 0,
+          "receiver": 2
+        },
+        {
+          "source": 2,
+          "receiver": 3
+        },
+        {
+          "source": 3,
+          "receiver": 4
+        },
+        {
+          "source": 3,
+          "receiver": 5
+        },
+        {
+          "source": 4,
+          "receiver": 6
+        },
+        {
+          "source": 5,
+          "receiver": 8
+        },
+        {
+          "source": 8,
+          "receiver": 12
+        },
+        {
+          "source": 8,
+          "receiver": 13
+        },
+        {
+          "source": 9,
+          "receiver": 10
+        },
+        {
+          "source": 10,
+          "receiver": 11
+        },
+        {
+          "source": 11,
+          "receiver": 7
+        },
+        {
+          "source": 12,
+          "receiver": 9
+        },
+        {
+          "source": 13,
+          "receiver": 14
+        }
+      ],
+      "diagram_layout": "{\"decd85716df0957f009d66d2b338e00b\":[705.0,210.0],\"b88c4b279104c33b6803d36af0bef7d7\":[435.0,210.0],\"f04e2b5cab01fecf3005f1e48aa5d702\":[705.0,285.0],\"89b21a70db2e99d5d8b5fafed2048017\":[705.0,375.0],\"c6c2f2db18fbbc9fd9a64ae915bbf9c1\":[1290.0,465.0],\"4a2a6048bbc1703f1a5b3e0be8906598\":[705.0,465.0],\"442f15d31f3fbfce7319b497364f6b29\":[1290.0,915.0],\"dab9e615e1c696f10405aa3382ab4e6b\":[705.0,930.0],\"4cb83e1de77dbf992ea009b9085d69d9\":[705.0,540.0],\"0b9df1fef8c7fe7fc112123d1a2b52d1\":[705.0,690.0],\"2222468db314e513bf57398de4bfca5b\":[705.0,765.0],\"deebabf9211685c9ebf5a719a1b38b68\":[705.0,855.0],\"3efff72697915c4dda203b68a1e40c14\":[705.0,615.0],\"bd0d64d3ec6489e706265f7aa692b9f9\":[465.0,615.0],\"b412297f514f95c17bcdc35cc6b5d590\":[465.0,930.0]}",
+      "send_to_story_enabled": true,
+      "entry_agent_guid": "decd85716df0957f009d66d2b338e00b",
+      "exit_agent_guids": [
+        "442f15d31f3fbfce7319b497364f6b29",
+        "dab9e615e1c696f10405aa3382ab4e6b",
+        "b412297f514f95c17bcdc35cc6b5d590"
+      ],
+      "exit_agent_guid": "442f15d31f3fbfce7319b497364f6b29",
+      "form": {
+        "name": "New story for martin@tines.io Form",
+        "description": "",
+        "fields": [],
+        "visibility": "tenant",
+        "agent_guid": null,
+        "success_message": "Thank you for your submission"
+      }
+    },
+    {
+      "schema_version": 3,
+      "name": "StS Analyze File in HybridAnalysis",
+      "description": null,
+      "guid": "8f836809e44a86d10bbd1ef940de9602",
+      "exported_at": "2021-03-22T20:47:26Z",
+      "agents": [
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Receive File",
+          "disabled": false,
+          "guid": "c2e2d73a7d9831197d958af218a76de8",
+          "options": {
+            "secret": "d827be97a2736b53cb5732e639cfaae3",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Analysis Results",
+          "disabled": false,
+          "guid": "7ee486552b22c5472ce5342b1cfe2bbe",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "new": "false",
+              "analysis_date": "{{.search_for_hash_in_hybrid_analysis.body.last.analysis_start_time }}",
+              "malicious": "{% if .search_for_hash_in_hybrid_analysis.body.last.verdict == 'malicious' or .search_for_hash_in_hybrid_analysis.body.last.verdict == 'suspicious' %}true{% else %}false{% endif %}",
+              "engine": "HybridAnalysis",
+              "file_name": "{{.receive_file.body.filename }}",
+              "analysis_link": "https://www.hybrid-analysis.com/sample/{{.search_for_hash_in_hybrid_analysis.body.last.sha256 }}",
+              "tags": "{{.search_for_hash_in_hybrid_analysis.body.last.tags | as_object }}",
+              "hash": "{{.search_for_hash_in_hybrid_analysis.body.last.sha256 }}"
+            },
+            "manual_time": "30"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Search for Hash in Hybrid Analysis",
+          "disabled": false,
+          "guid": "da454179ebbfcb28ce80981de7fa6bdd",
+          "options": {
+            "url": "https://www.hybrid-analysis.com/api/v2/search/hash",
+            "content_type": "form",
+            "method": "post",
+            "payload": {
+              "hash": "{{.receive_file.body.hash}}"
+            },
+            "headers": {
+              "api-key": "{{.CREDENTIAL.hybridanalysisapi }}",
+              "user-agent": "Falcon Sandbox"
+            },
+            "log_error_on_status": [],
+            "retry_on_status": [
+              "429"
+            ],
+            "manual_time": "90"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "File Found",
+          "disabled": false,
+          "guid": "285ad7d11f140fa6a3e8cedd3adf6be3",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "200",
+                "path": "{{.search_for_hash_in_hybrid_analysis.status }}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "File Not Found and Submit",
+          "disabled": false,
+          "guid": "d9ac746cc8df17502b7533b70462763c",
+          "options": {
+            "rules": [
+              {
+                "type": "field!=value",
+                "value": "200",
+                "path": "{{.search_for_hash_in_hybrid_analysis.status }}"
+              },
+              {
+                "type": "field==value",
+                "value": "true",
+                "path": "{{.receive_file.body.submit_if_not_found }}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "File Not Found and No Submit",
+          "disabled": false,
+          "guid": "deaa6ca820c3e608789813f9dab11d00",
+          "options": {
+            "rules": [
+              {
+                "type": "field!=value",
+                "value": "200",
+                "path": "{{.search_for_hash_in_hybrid_analysis.status }}"
+              },
+              {
+                "type": "field!=value",
+                "value": "true",
+                "path": "{{.receive_file.body.submit_if_not_found }}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::SendToStoryAgent",
+          "name": "Send to Story Agent",
+          "disabled": false,
+          "guid": "79dbcedef33ab5f43e22c4edf51b50ca",
+          "options": {
+            "story": "{{ .STORY.martin_spam.sts_analyze_file_in_hybridanalysis }}",
+            "payload": {
+              "hash": "968c2a4c27674e4ab68f07da47437386c4ec2bd3df76afadea10e3753ff011f9"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Analysis Results",
+          "disabled": false,
+          "guid": "964e5232fcc4c373677b9af3da285c0d",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "new": "true",
+              "analysis_date": "N/A",
+              "malicious": "Unknown - File not found, and not submitted",
+              "engine": "HybridAnalysis",
+              "file_name": "{{.receive_file.body.filename}}",
+              "analysis_link": "N/A",
+              "tags": "N/A",
+              "hash": "{{.receive_file.body.hash}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Upload File to Hybrid Analysis",
+          "disabled": false,
+          "guid": "0e003f3696fba7f8c98a63b0ac6124d7",
+          "options": {
+            "url": "https://www.hybrid-analysis.com/api/v2/submit/file",
+            "content_type": "data",
+            "method": "post",
+            "payload": {
+              "file": {
+                "contents": "{{.receive_file.body.contents | base64_decode}}",
+                "filename": "{{.receive_file.body.filename}}"
+              },
+              "environment_id": "100",
+              "allow_community_access": "false"
+            },
+            "headers": {
+              "api-key": "{{.CREDENTIAL.hybridanalysisapi }}"
+            },
+            "log_error_on_status": [],
+            "retry_on_status": [
+              "429"
+            ],
+            "manual_time": "60"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Check Scan Status",
+          "disabled": false,
+          "guid": "b73c413f573227febb81f933dd0b40b1",
+          "options": {
+            "url": "https://www.hybrid-analysis.com/api/v2/report/{{.upload_file_to_hybrid_analysis.body.job_id}}/state",
+            "method": "get",
+            "headers": {
+              "api-key": "{{.CREDENTIAL.hybridanalysisapi }}"
+            },
+            "log_error_on_status": [],
+            "retry_on_status": [
+              "429"
+            ],
+            "manual_time": "120"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Error",
+          "disabled": false,
+          "guid": "672709fce20d049fd792f9ce89c42114",
+          "options": {
+            "rules": [
+              {
+                "type": "regex",
+                "value": "Error",
+                "path": "{{.check_scan_status.body.state}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Complete",
+          "disabled": false,
+          "guid": "9ba79c5cdd9375073656afb1856ba97e",
+          "options": {
+            "rules": [
+              {
+                "type": "regex",
+                "value": "success",
+                "path": "{{.check_scan_status.body.state}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if IN Queue",
+          "disabled": false,
+          "guid": "18d689ad29be8e1584aebddfa1ce60a1",
+          "options": {
+            "rules": [
+              {
+                "type": "regex",
+                "value": "in_queue|in_progress",
+                "path": "{{.check_scan_status.body.state}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Increment Counter",
+          "disabled": false,
+          "guid": "16ad8893414d8766dca6750b9594d7ae",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "counter": "{{.increment_counter.counter | plus: 1}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Counter Less Than 20",
+          "disabled": false,
+          "guid": "67a1a327506f4c58a0b0ad4d6fbd3d58",
+          "options": {
+            "rules": [
+              {
+                "type": "field<value",
+                "value": "20",
+                "path": "{{.increment_counter.counter}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Delay Event",
+          "disabled": false,
+          "guid": "a467a7359673cbdef748927ad79716e3",
+          "options": {
+            "mode": "delay",
+            "seconds": "60"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Counter More Than 20",
+          "disabled": false,
+          "guid": "19010aafcf5622b984d3ed3176119256",
+          "options": {
+            "rules": [
+              {
+                "type": "field>=value",
+                "value": "20",
+                "path": "{{.increment_counter.counter}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Error Results",
+          "disabled": false,
+          "guid": "0102254649ab781c017608b266538b93",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "new": "true",
+              "analysis_date": "N/A",
+              "malicious": "Error submitting file for analysis",
+              "engine": "HybridAnalysis",
+              "file_name": "{{.receive_file.body.filename}}",
+              "analysis_link": "N/A",
+              "tags": "N/A",
+              "hash": "{{.receive_file.body.hash}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Analysis Results",
+          "disabled": false,
+          "guid": "0c3edb2890131b796419b8f82e102357",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "new": "true",
+              "analysis_date": "{{.retrieve_scan_result.body.analysis_start_time}}",
+              "malicious": "{% if .retrieve_scan_result.body.verdict == 'malicious' or .retrieve_scan_result.body.verdict == 'suspicious' %}true{% else %}false{% endif %}",
+              "engine": "HybridAnalysis",
+              "file_name": "{{.receive_file.body.filename }}",
+              "analysis_link": "https://www.hybrid-analysis.com/sample/{{.retrieve_scan_result.body.sha256 }}",
+              "tags": "{{.retrieve_scan_result.body.tags | as_object }}",
+              "hash": "{{.retrieve_scan_result.body.sha256 }}"
+            },
+            "manual_time": "30"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Retrieve Scan Result",
+          "disabled": false,
+          "guid": "a4e5b817a0d22886110b24d6e2242211",
+          "options": {
+            "url": "https://www.hybrid-analysis.com/api/v2/report/{{.upload_file_to_hybrid_analysis.body.job_id}}/summary",
+            "method": "get",
+            "headers": {
+              "api-key": "{{.CREDENTIAL.hybridanalysisapi }}"
+            },
+            "log_error_on_status": [],
+            "retry_on_status": [
+              "429"
+            ],
+            "manual_time": "180"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        }
+      ],
+      "diagram_notes": [
+        {
+          "content": "Checking the Hash\n\nFirst we can search for the hash in HybridAnalysis and see if it is has been scanned before.",
+          "position": [
+            855.0,
+            135.0
+          ]
+        },
+        {
+          "content": "File Not Found\n\nIf the file has not been previously seen in HybridAnalysis then we can submit it, wait for the scan to complete, and then Build Analysis Results and return the analysis to the parent Story.\n\nIf this scan results in an error (or does not return in 20 mins), then some information reflecting this will be returned.\n\nThis will only occur if the field 'submit_if_not_found' is explicitly set to 'true' in the parent Send to Story Action.",
+          "position": [
+            375.0,
+            360.0
+          ]
+        },
+        {
+          "content": "File Found!\n\nIf the file is found, we can go straight to the Build Analysis Results Action to extract relevant information and return it to the parent Story.",
+          "position": [
+            1200.0,
+            675.0
+          ]
+        },
+        {
+          "content": "File Not Found\n\nIf the user has indicated that they do not want the file submitted to HybridAnalysis either by explicitly setting 'submit_if_not_found' to 'false, or by leaving out that field entirely, then we will bypass any further analysis.\n\nThe Build Analysis Results Action will contain some information indicating that the file hash was not found, and the file was not submitted.",
+          "position": [
+            -165.0,
+            435.0
+          ]
+        }
+      ],
+      "links": [
+        {
+          "source": 0,
+          "receiver": 2
+        },
+        {
+          "source": 2,
+          "receiver": 3
+        },
+        {
+          "source": 2,
+          "receiver": 4
+        },
+        {
+          "source": 2,
+          "receiver": 5
+        },
+        {
+          "source": 3,
+          "receiver": 1
+        },
+        {
+          "source": 4,
+          "receiver": 8
+        },
+        {
+          "source": 5,
+          "receiver": 7
+        },
+        {
+          "source": 8,
+          "receiver": 9
+        },
+        {
+          "source": 9,
+          "receiver": 12
+        },
+        {
+          "source": 9,
+          "receiver": 10
+        },
+        {
+          "source": 9,
+          "receiver": 11
+        },
+        {
+          "source": 11,
+          "receiver": 19
+        },
+        {
+          "source": 12,
+          "receiver": 13
+        },
+        {
+          "source": 13,
+          "receiver": 14
+        },
+        {
+          "source": 13,
+          "receiver": 16
+        },
+        {
+          "source": 14,
+          "receiver": 15
+        },
+        {
+          "source": 15,
+          "receiver": 9
+        },
+        {
+          "source": 16,
+          "receiver": 17
+        },
+        {
+          "source": 19,
+          "receiver": 18
+        }
+      ],
+      "diagram_layout": "{\"c2e2d73a7d9831197d958af218a76de8\":[660.0,195.0],\"7ee486552b22c5472ce5342b1cfe2bbe\":[105.0,975.0],\"da454179ebbfcb28ce80981de7fa6bdd\":[660.0,270.0],\"285ad7d11f140fa6a3e8cedd3adf6be3\":[105.0,360.0],\"d9ac746cc8df17502b7533b70462763c\":[660.0,405.0],\"deaa6ca820c3e608789813f9dab11d00\":[1155.0,360.0],\"79dbcedef33ab5f43e22c4edf51b50ca\":[210.0,240.0],\"964e5232fcc4c373677b9af3da285c0d\":[1155.0,975.0],\"0e003f3696fba7f8c98a63b0ac6124d7\":[660.0,495.0],\"b73c413f573227febb81f933dd0b40b1\":[660.0,585.0],\"672709fce20d049fd792f9ce89c42114\":[915.0,660.0],\"9ba79c5cdd9375073656afb1856ba97e\":[450.0,660.0],\"18d689ad29be8e1584aebddfa1ce60a1\":[660.0,660.0],\"16ad8893414d8766dca6750b9594d7ae\":[660.0,735.0],\"67a1a327506f4c58a0b0ad4d6fbd3d58\":[660.0,810.0],\"a467a7359673cbdef748927ad79716e3\":[660.0,885.0],\"19010aafcf5622b984d3ed3176119256\":[900.0,810.0],\"0102254649ab781c017608b266538b93\":[900.0,975.0],\"0c3edb2890131b796419b8f82e102357\":[450.0,975.0],\"a4e5b817a0d22886110b24d6e2242211\":[450.0,810.0]}",
+      "send_to_story_enabled": true,
+      "entry_agent_guid": "c2e2d73a7d9831197d958af218a76de8",
+      "exit_agent_guids": [
+        "7ee486552b22c5472ce5342b1cfe2bbe",
+        "964e5232fcc4c373677b9af3da285c0d",
+        "0102254649ab781c017608b266538b93",
+        "0c3edb2890131b796419b8f82e102357"
+      ],
+      "exit_agent_guid": "7ee486552b22c5472ce5342b1cfe2bbe",
+      "form": {
+        "name": "New story for martin@tines.io Form",
+        "description": "",
+        "fields": [],
+        "visibility": "tenant",
+        "agent_guid": null,
+        "success_message": "Thank you for your submission"
+      }
+    },
+    {
+      "schema_version": 3,
+      "name": "StS Analyze URL in Virustotal",
+      "description": null,
+      "guid": "125d0b6ddb1a833bfac7c248a26baa5b",
+      "exported_at": "2021-03-22T20:47:26Z",
+      "agents": [
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Receive URL",
+          "disabled": false,
+          "guid": "63889a87760ac2fe4c2e430c83bd4eb1",
+          "options": {
+            "secret": "b663dd6b2fc71231053c1edc700931a2",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Check if Domain is Known Good",
+          "disabled": false,
+          "guid": "1d9885027f373dbc3eb1665c9bc80365",
+          "options": {
+            "rules": [
+              {
+                "type": "in",
+                "value": "{{.extract_domain_from_url.domain.first.first}}",
+                "path": "{{.RESOURCE.known_good_domains | as_object}}"
+              }
+            ],
+            "emit_no_match": "true"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Extract Domain from URL",
+          "disabled": false,
+          "guid": "55a98123315f2aa496ec623fcf0d1b7d",
+          "options": {
+            "mode": "extract",
+            "matchers": [
+              {
+                "path": "{{.receive_url.body.url}}",
+                "regexp": "^(?:https?:\\/\\/)?(?:[^@\\n]+@)?(?:www\\.)?([^:\\/\\n?]+)",
+                "to": "domain"
+              }
+            ]
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Domain Whitelisted",
+          "disabled": false,
+          "guid": "5534827485acfdbacc36a0d8f8a72021",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "true",
+                "path": "{{.check_if_domain_is_known_good.rule_matched}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Domain Not Whitelisted",
+          "disabled": false,
+          "guid": "8c23b1839173f6cd5bf2d8b6d0394a19",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "false",
+                "path": "{{.check_if_domain_is_known_good.rule_matched}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Known Good Results",
+          "disabled": false,
+          "guid": "312287e0824118af14a1b341dabea220",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "url": "{{.receive_url.body.url}}",
+              "malicious": "KnownGood",
+              "analysis_link": "N/A",
+              "analysis_date": "N/A",
+              "scan_engine": "VirusTotal"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Scan Results",
+          "disabled": false,
+          "guid": "2abfa57809e7162808131a9d29e9188c",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "url": "{{.receive_url.body.url}}",
+              "malicious": "{% if .search_for_url_in_virustotal.body.data.attributes.last_analysis_stats.malicious >= 1 or .search_for_url_in_virustotal.body.data.attributes.last_analysis_stats.suspicious >= 1 %}true{% else %}false{% endif %}",
+              "analysis_link": "https://www.virustotal.com/gui/url/{{.search_for_url_in_virustotal.body.data.id}}/detection",
+              "analysis_date": "{{.search_for_url_in_virustotal.body.data.attributes.last_analysis_date | date: '%Y-%m-%d %H:%M:%S'}}",
+              "scan_engine": "VirusTotal"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Search for URL in VirusTotal",
+          "disabled": false,
+          "guid": "13ace46c9759b6c5652cb47a26493c9d",
+          "options": {
+            "url": "https://www.virustotal.com/api/v3/urls/{{.receive_url.body.url | base64_encode | replace: '='}}",
+            "content_type": "json",
+            "method": "get",
+            "headers": {
+              "x-apikey": "{{ .CREDENTIAL.virustotal }}"
+            },
+            "retry_on_status": [
+              "429"
+            ],
+            "log_error_on_status": [
+              "401-403",
+              "405-429",
+              "500-504"
+            ],
+            "manual_time": "30"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::SendToStoryAgent",
+          "name": "Run Story",
+          "disabled": false,
+          "guid": "2d0c7d40dcf7d778269e1380b18945ab",
+          "options": {
+            "story": "{{ .STORY.martin_spam.sts_analyze_url_in_virustotal}}",
+            "payload": {
+              "url": "https://lugg2go.com.br/redirect/redirect.php",
+              "submit_if_not_found": "true"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Not Found and Submit",
+          "disabled": false,
+          "guid": "c18368e5f45a25764ffb72c83e576fe8",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "NotFoundError",
+                "path": "{{.search_for_url_in_virustotal.body.error.code}}"
+              },
+              {
+                "type": "field==value",
+                "value": "true",
+                "path": "{{.receive_url.body.submit_if_not_found}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Submit URL to Virustotal",
+          "disabled": false,
+          "guid": "39459cbab380d20f60fe87e4184d2302",
+          "options": {
+            "url": "https://www.virustotal.com/api/v3/urls",
+            "content_type": "form",
+            "method": "post",
+            "payload": {
+              "url": "{{.receive_url.body.url}}"
+            },
+            "headers": {
+              "x-apikey": "{{.CREDENTIAL.virustotal}}"
+            },
+            "retry_on_status": [
+              "429"
+            ],
+            "log_error_on_status": [
+              "401-403",
+              "405-429",
+              "500-504"
+            ],
+            "manual_time": "30"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Scan Queued or API Limit",
+          "disabled": false,
+          "guid": "7728632404c0b9284a95941331cf5ecd",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "queued",
+                "path": "{{.check_scan_results.body.data.attributes.status}}"
+              },
+              {
+                "type": "field==value",
+                "value": "429",
+                "path": "{{.check_scan_results.status}}"
+              }
+            ],
+            "must_match": "1"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Delay Event",
+          "disabled": false,
+          "guid": "dfdd65dd4be753aa6e5ad06ab21de5f6",
+          "options": {
+            "mode": "delay",
+            "seconds": 15,
+            "expected_update_period_in_days": "2"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Check Scan Results",
+          "disabled": false,
+          "guid": "438d223819eedbaa374a1343e05335d3",
+          "options": {
+            "url": "https://www.virustotal.com/api/v3/analyses/{{.submit_url_to_virustotal.body.data.id}}",
+            "content_type": "json",
+            "method": "get",
+            "payload": {},
+            "headers": {
+              "x-apikey": "{{.CREDENTIAL.virustotal}}"
+            },
+            "retry_on_status": [
+              "429"
+            ],
+            "log_error_on_status": [
+              "401-403",
+              "405-429",
+              "500-504"
+            ],
+            "manual_time": "90"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Scan Finished",
+          "disabled": false,
+          "guid": "f99d0790aed591182cd04dd3934d82c1",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "completed",
+                "path": "{{.check_scan_results.body.data.attributes.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Found",
+          "disabled": false,
+          "guid": "bbe8ab649b8fa72cd6201b06ed14fc51",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "200",
+                "path": "{{.search_for_url_in_virustotal.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Not Found and No Submit",
+          "disabled": false,
+          "guid": "a8d0367e9577417eb25a75ddea98ea2a",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "NotFoundError",
+                "path": "{{.search_for_url_in_virustotal.body.error.code}}"
+              },
+              {
+                "type": "field!=value",
+                "value": "true",
+                "path": "{{.receive_url.body.submit_if_not_found}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Scan Results",
+          "disabled": false,
+          "guid": "d4837a8b5b3ed0013f565b6d83f8dff4",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "url": "{{.receive_url.body.url}}",
+              "malicious": "Unknown - URL not found in VT, and not submitted",
+              "analysis_link": "N/A",
+              "analysis_date": "N/A",
+              "scan_engine": "VirusTotal"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Scan Results",
+          "disabled": false,
+          "guid": "c316da21f12da48e55e7bd4450676369",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "url": "{{.receive_url.body.url}}",
+              "malicious": "{% if .check_scan_results.body.data.attributes.stats.malicious >= 1 or .check_scan_results.body.data.attributes.stats.suspicious >= 1 %}true{% else %}false{% endif %}",
+              "analysis_link": "https://www.virustotal.com/gui/url/{{.receive_url.body.url | sha256 }}/detection",
+              "analysis_date": "{{.check_scan_results.body.data.attributes.date | date: '%Y-%m-%d %H:%M:%S'}}",
+              "scan_engine": "VirusTotal"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Error Submitting to VT",
+          "disabled": false,
+          "guid": "202792cfc122a624bd539102cfec8c4c",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "400",
+                "path": "{{.submit_url_to_virustotal.status}}"
+              },
+              {
+                "type": "field==value",
+                "value": "400",
+                "path": "{{.search_for_url_in_virustotal.status}}"
+              }
+            ],
+            "must_match": "1"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Error Results",
+          "disabled": false,
+          "guid": "635cd0ff2176d960ab85006c96064d72",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "url": "{{.receive_url.body.url}}",
+              "malicious": "Error - Problem submitting URL",
+              "analysis_link": "N/A",
+              "analysis_date": "N/A",
+              "scan_engine": "VirusTotal"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        }
+      ],
+      "diagram_notes": [
+        {
+          "content": "Domain is Known Good\n\nIf the domain is known good, then all analysis will be bypassed.\nResults indicating this will be returned.",
+          "position": [
+            1125.0,
+            600.0
+          ]
+        },
+        {
+          "content": "Known Good Domains\n\nThere are some domains that that will not need to be submitted. These will be the company domain, such as 'tines.io', or other known good domains that frequently seen.\n\nThese domains can be stored in a Resource called 'known_good_email_domains'. This story will extract the domain from an email address, check if it is found in that Resource. If it is found, no check will be performed on that domain.\n",
+          "position": [
+            960.0,
+            195.0
+          ]
+        },
+        {
+          "content": "URL Not Found\n\nIf the user has indicated that they do not want the url to be submitted to VirusTotal either by explicitly setting 'submit_if_not_found' to 'false, or by leaving out that field entirely, then we will bypass any further analysis.\n\nThe Build Analysis Results Action will contain some information indicating that the url was not found, and it was not submitted.",
+          "position": [
+            -480.0,
+            630.0
+          ]
+        },
+        {
+          "content": "URL Not Found\n\nIf the url has not been previously seen in VirusTotal then we can submit it, wait for the scan to complete, and then Build Results and return the analysis to the parent Story.\n\nIf this scan results in an error, then some information reflecting this will be returned.\n\nThis will only occur if the field 'submit_if_not_found' is explicitly set to 'true' in the parent Send to Story Action.",
+          "position": [
+            135.0,
+            360.0
+          ]
+        }
+      ],
+      "links": [
+        {
+          "source": 0,
+          "receiver": 2
+        },
+        {
+          "source": 1,
+          "receiver": 3
+        },
+        {
+          "source": 1,
+          "receiver": 4
+        },
+        {
+          "source": 2,
+          "receiver": 1
+        },
+        {
+          "source": 3,
+          "receiver": 5
+        },
+        {
+          "source": 4,
+          "receiver": 7
+        },
+        {
+          "source": 7,
+          "receiver": 9
+        },
+        {
+          "source": 7,
+          "receiver": 15
+        },
+        {
+          "source": 7,
+          "receiver": 16
+        },
+        {
+          "source": 9,
+          "receiver": 10
+        },
+        {
+          "source": 10,
+          "receiver": 13
+        },
+        {
+          "source": 11,
+          "receiver": 12
+        },
+        {
+          "source": 12,
+          "receiver": 13
+        },
+        {
+          "source": 13,
+          "receiver": 11
+        },
+        {
+          "source": 13,
+          "receiver": 14
+        },
+        {
+          "source": 13,
+          "receiver": 19
+        },
+        {
+          "source": 14,
+          "receiver": 18
+        },
+        {
+          "source": 15,
+          "receiver": 6
+        },
+        {
+          "source": 15,
+          "receiver": 19
+        },
+        {
+          "source": 16,
+          "receiver": 17
+        },
+        {
+          "source": 19,
+          "receiver": 20
+        }
+      ],
+      "diagram_layout": "{\"63889a87760ac2fe4c2e430c83bd4eb1\":[701.0,214.0],\"1d9885027f373dbc3eb1665c9bc80365\":[705.0,375.0],\"55a98123315f2aa496ec623fcf0d1b7d\":[705.0,285.0],\"5534827485acfdbacc36a0d8f8a72021\":[1050.0,465.0],\"8c23b1839173f6cd5bf2d8b6d0394a19\":[705.0,465.0],\"312287e0824118af14a1b341dabea220\":[1050.0,1035.0],\"2abfa57809e7162808131a9d29e9188c\":[705.0,1035.0],\"13ace46c9759b6c5652cb47a26493c9d\":[705.0,540.0],\"2d0c7d40dcf7d778269e1380b18945ab\":[480.0,210.0],\"c18368e5f45a25764ffb72c83e576fe8\":[270.0,630.0],\"39459cbab380d20f60fe87e4184d2302\":[270.0,705.0],\"7728632404c0b9284a95941331cf5ecd\":[270.0,855.0],\"dfdd65dd4be753aa6e5ad06ab21de5f6\":[270.0,945.0],\"438d223819eedbaa374a1343e05335d3\":[270.0,780.0],\"f99d0790aed591182cd04dd3934d82c1\":[45.0,855.0],\"bbe8ab649b8fa72cd6201b06ed14fc51\":[705.0,630.0],\"a8d0367e9577417eb25a75ddea98ea2a\":[-165.0,630.0],\"d4837a8b5b3ed0013f565b6d83f8dff4\":[-165.0,1035.0],\"c316da21f12da48e55e7bd4450676369\":[45.0,1035.0],\"202792cfc122a624bd539102cfec8c4c\":[495.0,855.0],\"635cd0ff2176d960ab85006c96064d72\":[495.0,1035.0]}",
+      "send_to_story_enabled": true,
+      "entry_agent_guid": "63889a87760ac2fe4c2e430c83bd4eb1",
+      "exit_agent_guids": [
+        "635cd0ff2176d960ab85006c96064d72",
+        "c316da21f12da48e55e7bd4450676369",
+        "2abfa57809e7162808131a9d29e9188c",
+        "d4837a8b5b3ed0013f565b6d83f8dff4",
+        "312287e0824118af14a1b341dabea220"
+      ],
+      "exit_agent_guid": "635cd0ff2176d960ab85006c96064d72",
+      "form": {
+        "name": "New story for martin@tines.io Form",
+        "description": "",
+        "fields": [],
+        "visibility": "tenant",
+        "agent_guid": null,
+        "success_message": "Thank you for your submission"
+      }
+    },
+    {
+      "schema_version": 3,
+      "name": "StS Analyze Headers",
+      "description": null,
+      "guid": "b6311255d53c60221fa387dd2e85ce6c",
+      "exported_at": "2021-03-22T20:47:26Z",
+      "agents": [
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Search IP Rep in IP Quality Score",
+          "disabled": false,
+          "guid": "613d570aec511a23356ac8c74cdbe602",
+          "options": {
+            "url": "https://ipqualityscore.com/api/json/ip/{{.CREDENTIAL.ipqualityscore}}/{{.extract_ips_from_headers.ips.last}}?strictness=1&allow_public_access_points=true&lighter_penalties=true",
+            "content_type": "json",
+            "method": "get",
+            "headers": {},
+            "log_error_on_status": [],
+            "manual_time": "90"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Results",
+          "disabled": false,
+          "guid": "4115fbd8ef04d197125e4856ebc56b97",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "spf": "{{.extract_mail_auth.spf}}",
+              "dkim": "{{.extract_mail_auth.dkim}}",
+              "dmarc": "{{.extract_mail_auth.dmarc}}",
+              "initial_ip": "{{.extract_ips_from_headers.ips.last | default: 'not found'}}",
+              "organization": "{{.lookup_ip_in_maxmind.body.traits.organization | default: 'Unknown'}}",
+              "country": "{{.lookup_ip_in_maxmind.body.country.names.en | default: 'Unknown'}}",
+              "city": "{{.lookup_ip_in_maxmind.body.city.names.en | default: 'Unknown'}}",
+              "recent_spam_activity": "{% if .search_ip_rep_in_ip_quality_score.body.fraud_score >= 85 %}Identified spam in the past 24-48 hours{% elsif .search_ip_rep_in_ip_quality_score.body.fraud_score >= 75 %}Identified spam in the past month{% else %}Not associated with recent spam activity{% endif %}",
+              "ip_sender_reputation": "{% assign score = .search_ip_rep_in_ip_quality_score.body.fraud_score %}{% if score >=85 %}Bad{% elsif score >= 75 %}Poor{% elsif score >= 50 %}Suspicious{% elsif score >=11 %}OK{% elsif score <=10%}Good{% else %}unknown{% endif %}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "IPs Not Found",
+          "disabled": false,
+          "guid": "1c1bce1535a46d600e6004607ca6458c",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "false",
+                "path": "{{.check_for_ips_in_headers.rule_matched}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Auth Results Found",
+          "disabled": false,
+          "guid": "06da1202cefa6d6b817b0e34cec2246c",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "true",
+                "path": "{{.check_for_authentication_results.rule_matched}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Check for IPs in Headers",
+          "disabled": false,
+          "guid": "78a80491af1da6028b91112f6d505317",
+          "options": {
+            "rules": [
+              {
+                "type": "regex",
+                "value": "\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b",
+                "path": "{{.receive_headers.body.headers.Received}}"
+              }
+            ],
+            "emit_no_match": "true"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Auth Results Not Found",
+          "disabled": false,
+          "guid": "42e70c12082c5e69279f4feca8337ab3",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "false",
+                "path": "{{.check_for_authentication_results.rule_matched}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Receive Headers",
+          "disabled": false,
+          "guid": "9ebfd8b40da08f3916120eee9d1136d4",
+          "options": {
+            "secret": "4d4f904958cab3df7b5d5e7862fb3905",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "IPs Found",
+          "disabled": false,
+          "guid": "c4497136febae542b83c4b4c1cd50e3a",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "true",
+                "path": "{{.check_for_ips_in_headers.rule_matched}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Check for Authentication Results",
+          "disabled": false,
+          "guid": "9a8421bdd0d72fb93c98a0b8bc97fd61",
+          "options": {
+            "rules": [
+              {
+                "type": "regex",
+                "value": ".",
+                "path": "{{.receive_headers.body.headers.Authentication-Results}}"
+              }
+            ],
+            "emit_no_match": "true"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Extract IPs from Headers",
+          "disabled": false,
+          "guid": "a81fa3530e1ab028c1967f88f4a16932",
+          "options": {
+            "mode": "extract",
+            "matchers": [
+              {
+                "path": "{{.receive_headers.body.headers.Received | regex_replace: '(127\\.)|(10\\.)|(172\\.1[6-9]\\.)|(172\\.2[0-9]\\.)|(172\\.3[0-1]\\.)|(192\\.168\\.)', ''}}.",
+                "regexp": "(?<=\\[|\\(|\\s)\\d{1,3}(?:\\.\\d{1,3}){3}(?=\\]|\\)|\\s)",
+                "to": "ips"
+              }
+            ]
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Monitor for API Failure",
+          "disabled": false,
+          "guid": "9a7c349877521a7fe370530b459cb6eb",
+          "options": {
+            "rules": [
+              {
+                "type": "!regex",
+                "value": "200",
+                "path": "{{.search_ip_rep_in_ip_quality_score.status}}"
+              },
+              {
+                "type": "!regex",
+                "value": "200",
+                "path": "{{.lookup_ip_in_maxmind.status}}"
+              }
+            ],
+            "must_match": "1"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Lookup IP in MaxMind",
+          "disabled": false,
+          "guid": "6901a90999b93a046b040ac430e5e62b",
+          "options": {
+            "url": "https://geoip.maxmind.com/geoip/v2.1/city/{{.extract_ips_from_headers.ips.last}}?pretty",
+            "content_type": "json",
+            "method": "get",
+            "payload": {},
+            "basic_auth": [
+              "{{.RESOURCE.maxmind_account_id}}",
+              "{{.CREDENTIAL.maxmind_license_key}}"
+            ],
+            "log_error_on_status": [],
+            "manual_time": "90"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Extract Mail Auth",
+          "disabled": false,
+          "guid": "7c1cdb4081b3c4a6b351c1f89bb77d03",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "spf": "{% if receive_headers.body.headers.Authentication-Results contains 'spf=pass' %}pass{% elsif receive_headers.body.headers.Authenticaion-Results contains 'spf=fail' receive_headers.body.headers.Authenticaion-Results contains 'spf=softfail' %}fail{% elsif receive_headers.body.headers.Authenticaion-Results contains 'spf=neutral' %}neutral{% else %}unknown{% endif %}",
+              "dkim": "{% if receive_headers.body.headers.Authentication-Results contains 'dkim=pass' %}pass{% elsif receive_headers.body.headers.Authenticaion-Results contains 'dkim=fail' %}fail{% elsif receive_headers.body.headers.Authenticaion-Results contains 'dkim=temperror' %}error{% else %}unknown{% endif %}",
+              "dmarc": "{% if receive_headers.body.headers.Authentication-Results contains 'dmarc=pass' %}pass{% elsif receive_headers.body.headers.Authenticaion-Results contains 'dmarc=fail' %}fail{% else %}unknown{% endif %}"
+            },
+            "manual_time": "60"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Extract Mail Auth",
+          "disabled": false,
+          "guid": "969c3a2e086dac08dcc53bd604ca0b56",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "spf": "{% if receive_headers.body.headers.received-spf contains 'Fail' or receive_headers.body.headers.received-spf contains 'fail' %}fail{% elsif receive_headers.body.headers.received-spf contains 'pass' %}pass{% elsif receive_headers.body.headers.received-spf %}found{% else %}not_found{% endif %}",
+              "dkim": "{% if receive_headers.body.headers.DKIM-Signature %}found{% else %}not_found{% endif %}",
+              "dmarc": "{% if receive_headers.body.headers.dmarc contains 'pass' or receive_headers.body.headers.dmarc contains 'Pass' %}pass{% elsif receive_headers.body.headers.dmarc contains 'fail' or receive_headers.body.headers.dmarc contains 'Fail' %}fail{% elsif receive_headers.body.headers.dmarc %}found{% else %}not_found{% endif %}"
+            },
+            "manual_time": "60"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        }
+      ],
+      "diagram_notes": [
+        {
+          "content": "Identify Originating IP\n\nChecking to see if there are any IPs found in the mail headers.\n\nIf there are, the earliest identified IP will be extracted and analysed for reputation and location.\n\nIf no IPs are found, these checks will be skipped.",
+          "position": [
+            195.0,
+            75.0
+          ]
+        },
+        {
+          "content": "Identifying Spoofing\n\nIf an 'Authentication-Results' fields is identified, some regexes and checks will be run on this field to attempt to identify DMARC, SPF, and DKIM results.\n\nIf no 'Authentication-Results' is found, some attempts are made to look for these fields in the mail headers, and give some insight into whether the mail is failing any of these checks.\n\nThis is a best effort check as mail header format is not fully consistent or standard across providers.",
+          "position": [
+            960.0,
+            450.0
+          ]
+        },
+        {
+          "content": "Summarising Results\n\nThe Build Results Action will summarise and construct the results of this story and format them.\n\nThese fields will be returned to the parent Story.",
+          "position": [
+            435.0,
+            795.0
+          ]
+        }
+      ],
+      "links": [
+        {
+          "source": 0,
+          "receiver": 11
+        },
+        {
+          "source": 2,
+          "receiver": 8
+        },
+        {
+          "source": 3,
+          "receiver": 12
+        },
+        {
+          "source": 4,
+          "receiver": 2
+        },
+        {
+          "source": 4,
+          "receiver": 7
+        },
+        {
+          "source": 5,
+          "receiver": 13
+        },
+        {
+          "source": 6,
+          "receiver": 4
+        },
+        {
+          "source": 7,
+          "receiver": 9
+        },
+        {
+          "source": 8,
+          "receiver": 3
+        },
+        {
+          "source": 8,
+          "receiver": 5
+        },
+        {
+          "source": 9,
+          "receiver": 0
+        },
+        {
+          "source": 11,
+          "receiver": 8
+        },
+        {
+          "source": 11,
+          "receiver": 10
+        },
+        {
+          "source": 12,
+          "receiver": 1
+        },
+        {
+          "source": 13,
+          "receiver": 1
+        }
+      ],
+      "diagram_layout": "{\"613d570aec511a23356ac8c74cdbe602\":[510.0,360.0],\"4115fbd8ef04d197125e4856ebc56b97\":[735.0,780.0],\"1c1bce1535a46d600e6004607ca6458c\":[735.0,195.0],\"06da1202cefa6d6b817b0e34cec2246c\":[735.0,615.0],\"78a80491af1da6028b91112f6d505317\":[735.0,105.0],\"42e70c12082c5e69279f4feca8337ab3\":[525.0,615.0],\"9ebfd8b40da08f3916120eee9d1136d4\":[735.0,15.0],\"c4497136febae542b83c4b4c1cd50e3a\":[510.0,195.0],\"9a8421bdd0d72fb93c98a0b8bc97fd61\":[735.0,525.0],\"a81fa3530e1ab028c1967f88f4a16932\":[510.0,270.0],\"9a7c349877521a7fe370530b459cb6eb\":[285.0,525.0],\"6901a90999b93a046b040ac430e5e62b\":[510.0,450.0],\"7c1cdb4081b3c4a6b351c1f89bb77d03\":[735.0,705.0],\"969c3a2e086dac08dcc53bd604ca0b56\":[525.0,705.0]}",
+      "send_to_story_enabled": true,
+      "entry_agent_guid": "9ebfd8b40da08f3916120eee9d1136d4",
+      "exit_agent_guids": [
+        "4115fbd8ef04d197125e4856ebc56b97"
+      ],
+      "exit_agent_guid": "4115fbd8ef04d197125e4856ebc56b97",
+      "form": {
+        "name": "New story for martin@tines.io Form",
+        "description": "",
+        "fields": [],
+        "visibility": "tenant",
+        "agent_guid": null,
+        "success_message": "Thank you for your submission"
+      }
+    },
+    {
+      "schema_version": 3,
+      "name": "StS Analyze Email Address",
+      "description": null,
+      "guid": "4bb575ae1bd21922dbb3d009458d9a9c",
+      "exported_at": "2021-03-22T20:47:26Z",
+      "agents": [
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Receive Email Address",
+          "disabled": false,
+          "guid": "bf742e7671bc125d863df931e053ebe9",
+          "options": {
+            "secret": "3526aa64b84757ba6c600ae35ae57b96",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Analysis Results",
+          "disabled": false,
+          "guid": "dd8f637c31b4d743c3f7b9e3368a2711",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "email_address": "{{.receive_email_address.body.email }}",
+              "ceo_fraud": "{{.regex_for_ceo_fraud.rule_matched}}",
+              "suspicious_email": "{{.get_email_reputation.body.suspicious}}",
+              "email_blacklisted": "{{.get_email_reputation.body.details.blacklisted }}",
+              "email_domain_age": "{{.get_email_reputation.body.details.days_since_domain_creation | default: 'unable to identify domain age'}}",
+              "disposable_email": "{{.get_email_reputation.body.details.disposable}}",
+              "malicious": "{% if .regex_for_ceo_fraud.rule_matched == true or .get_email_reputation.body.suspicious == true or .get_email_reputation.body.details.blacklisted == true%}true{% else %}false{% endif %}"
+            },
+            "manual_time": "30"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Extract Domain",
+          "disabled": false,
+          "guid": "6da2692402fdd9fde0d576912b7bdb63",
+          "options": {
+            "mode": "extract",
+            "matchers": [
+              {
+                "path": "{{.receive_email_address.body.email }}",
+                "regexp": "@(.*\\.*)",
+                "to": "email_domain"
+              }
+            ]
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Check if Knowngood",
+          "disabled": false,
+          "guid": "d805e74e5bb5f4282ef57119fcb4dd4e",
+          "options": {
+            "rules": [
+              {
+                "type": "in",
+                "value": "{{.extract_domain.email_domain.first.first }}",
+                "path": "{{.RESOURCE.known_good_email_domains | as_object}}"
+              }
+            ],
+            "emit_no_match": "true"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Knowngood",
+          "disabled": false,
+          "guid": "f7f67870867e46b6c92b9b652c86140e",
+          "options": {
+            "rules": [
+              {
+                "type": "regex",
+                "value": "true",
+                "path": "{{ .check_if_knowngood.rule_matched }}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Not Knowngood",
+          "disabled": false,
+          "guid": "e8d514112af17c6ae3f132bcf6fc81e4",
+          "options": {
+            "rules": [
+              {
+                "type": "regex",
+                "value": "false",
+                "path": "{{ .check_if_knowngood.rule_matched }}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Regex for CEO Fraud",
+          "disabled": false,
+          "guid": "30dab6c51fb5b9d51e68617f94f35bb3",
+          "options": {
+            "rules": [
+              {
+                "type": "regex",
+                "value": "^[EeOo].{1,3}n.{0,5}[Hh].{1,3}n.{0,5}y",
+                "path": "{{.receive_email_address.body.email }}"
+              }
+            ],
+            "emit_no_match": "true",
+            "manual_time": "30"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::SendToStoryAgent",
+          "name": "Send to Story Agent",
+          "disabled": false,
+          "guid": "7c5a2d7ec8af7f2f6022bd7a375111d8",
+          "options": {
+            "story": "{{ .STORY.martin_spam.sts_analyze_email_address }}",
+            "payload": {
+              "email": "martin@tines.io"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Known Good Results",
+          "disabled": false,
+          "guid": "ca287af10a8d4c94ead1fadf35cfbeee",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "email_address": "{{.receive_email_address.body.email }}",
+              "ceo_fraud": "N/A",
+              "suspicious_email": "N/A",
+              "email_blacklisted": "N/A",
+              "email_domain_age": "N/A",
+              "disposable_email": "N/A",
+              "malicious": "Known Good Domain - Not Scanned"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Get Email Reputation",
+          "disabled": false,
+          "guid": "47487c022c736392de06c76c16e27219",
+          "options": {
+            "url": "https://emailrep.io/{{.receive_email_address.body.email }}",
+            "content_type": "json",
+            "method": "get",
+            "payload": {},
+            "headers": {
+              "Key": "{% credential emailrep %}"
+            },
+            "log_error_on_status": [],
+            "manual_time": "300"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        }
+      ],
+      "diagram_notes": [
+        {
+          "content": "Known Good Domains\n\nThere are some domains that that will not need to be submitted. These will be the company domain, such as 'tines.io', or other known good domains that frequently seen.\n\nThese domains can be stored in a Resource called 'known_good_email_domains'. This story will extract the domain from an email address, check if it is found in that Resource. If it is found, no check will be performed on that domain.\n",
+          "position": [
+            900.0,
+            165.0
+          ]
+        },
+        {
+          "content": "Analysing the Address\n\nA regex pattern can be applied against the email address to identify if a scammer is attempting to impersonate the CEO or other executive. Multiple patterns can be separated by | characters to chain together regexes representing executive names.\n\nAfter that, the email domain will be submitted to a service like emailrep.io. This will provide information such as domain age, if it is found on any blacklists, and if it should be considered suspicious.\n",
+          "position": [
+            900.0,
+            480.0
+          ]
+        },
+        {
+          "content": "Summarising Results\n\nAfter analysis is complete, the results can be prepared and returned to the parent Story.\n\nIf the domain is not known good, the results from the CEO Fraud check, and the domain reputation check are summarisied.\n\nIf the domain is known to be good, then results will be returned reflecting that.",
+          "position": [
+            540.0,
+            855.0
+          ]
+        }
+      ],
+      "links": [
+        {
+          "source": 0,
+          "receiver": 2
+        },
+        {
+          "source": 2,
+          "receiver": 3
+        },
+        {
+          "source": 3,
+          "receiver": 4
+        },
+        {
+          "source": 3,
+          "receiver": 5
+        },
+        {
+          "source": 4,
+          "receiver": 8
+        },
+        {
+          "source": 5,
+          "receiver": 6
+        },
+        {
+          "source": 6,
+          "receiver": 9
+        },
+        {
+          "source": 9,
+          "receiver": 1
+        }
+      ],
+      "diagram_layout": "{\"bf742e7671bc125d863df931e053ebe9\":[660.0,195.0],\"dd8f637c31b4d743c3f7b9e3368a2711\":[660.0,735.0],\"6da2692402fdd9fde0d576912b7bdb63\":[660.0,270.0],\"d805e74e5bb5f4282ef57119fcb4dd4e\":[660.0,345.0],\"f7f67870867e46b6c92b9b652c86140e\":[405.0,420.0],\"e8d514112af17c6ae3f132bcf6fc81e4\":[660.0,420.0],\"30dab6c51fb5b9d51e68617f94f35bb3\":[660.0,510.0],\"7c5a2d7ec8af7f2f6022bd7a375111d8\":[405.0,195.0],\"ca287af10a8d4c94ead1fadf35cfbeee\":[405.0,735.0],\"47487c022c736392de06c76c16e27219\":[660.0,585.0]}",
+      "send_to_story_enabled": true,
+      "entry_agent_guid": "bf742e7671bc125d863df931e053ebe9",
+      "exit_agent_guids": [
+        "dd8f637c31b4d743c3f7b9e3368a2711",
+        "ca287af10a8d4c94ead1fadf35cfbeee"
+      ],
+      "exit_agent_guid": "dd8f637c31b4d743c3f7b9e3368a2711",
+      "form": {
+        "name": "New story for martin@tines.io Form",
+        "description": "",
+        "fields": [],
+        "visibility": "tenant",
+        "agent_guid": null,
+        "success_message": "Thank you for your submission"
+      }
+    }
+  ],
+  "form": {
+    "name": "Upload EML File for Analysis",
+    "description": "",
+    "fields": [
+      {
+        "name": "Reported By",
+        "description": "",
+        "required": true,
+        "type": "SHORT_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 1073741824,
+        "max_characters": null
+      },
+      {
+        "name": "Upload EML File",
+        "description": "Upload your potentiall malicious eml file for analysis here",
+        "required": true,
+        "type": "FILE_UPLOAD",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 0,
+        "max_characters": null
+      }
+    ],
+    "visibility": "world",
+    "agent_guid": "e2b8265aa96af36300ec04d0754adeeb",
+    "success_message": "Thank you for your submission"
+  }
+}

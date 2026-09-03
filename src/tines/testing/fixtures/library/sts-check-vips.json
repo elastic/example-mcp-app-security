@@ -1,0 +1,152 @@
+{
+  "schema_version": 3,
+  "name": "STS Check VIPs",
+  "description": " Trigger in array and in global resource",
+  "guid": "24644bba988ba518579e464c0ca019cf",
+  "exported_at": "2021-03-19T15:21:25Z",
+  "agents": [
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Return Results",
+      "disabled": false,
+      "guid": "23cc7c9eb456341f8f2cf35050f1fa4f",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "is_vip": "{{.trigger_if_any_vips.rule_matched}}",
+          "true": "{{.implode_an_array | where: 'vip_check.rule_matched', true | jsonpath: '*.individual_recipient' | as_object }}",
+          "false": "{{.implode_an_array | where: 'vip_check.rule_matched', false | jsonpath: '*.individual_recipient' | as_object }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "VIP Check",
+      "disabled": false,
+      "guid": "a1f8940fbe7ce82695439b5d7d768626",
+      "options": {
+        "rules": [
+          {
+            "type": "in",
+            "value": "{{.RESOURCE.vip_list | as_object}}",
+            "path": "{{.explode_recipients.individual_recipient | downcase }}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Implode an Array",
+      "disabled": false,
+      "guid": "139cf9930958bb5dea28bca2cbf9d9b3",
+      "options": {
+        "mode": "implode",
+        "guid_path": "{{.explode_recipients.guid}}",
+        "size_path": "{{.explode_recipients.size}}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if any VIPs",
+      "disabled": false,
+      "guid": "ae0aef6840d6cb191460ccbc12a59188",
+      "options": {
+        "rules": [
+          {
+            "type": "in",
+            "value": true,
+            "path": "{{.implode_an_array | jsonpath: '*.rule_matched' | as_object }}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Get Email Address",
+      "disabled": false,
+      "guid": "ad222756ec62ef797b074c418e80bca4",
+      "options": {
+        "secret": "615b31c7845b62f92d312134fd1fd2c5",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Recipients",
+      "disabled": false,
+      "guid": "5a0f26e71f4f34b70dcf63bb959fc9c2",
+      "options": {
+        "mode": "explode",
+        "path": "{{.get_email_address.body.email}}",
+        "to": "individual_recipient"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Send to Story Agent",
+      "disabled": false,
+      "guid": "0451475bd8311a0b570dd6317801a5f0",
+      "options": {
+        "story": "{% story STS Check VIPs %}",
+        "payload": {
+          "email": [
+            "thomas@tines.io",
+            "eoin@tines.io"
+          ]
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 1,
+      "receiver": 2
+    },
+    {
+      "source": 2,
+      "receiver": 3
+    },
+    {
+      "source": 3,
+      "receiver": 0
+    },
+    {
+      "source": 4,
+      "receiver": 5
+    },
+    {
+      "source": 5,
+      "receiver": 1
+    }
+  ],
+  "diagram_layout": "{\"23cc7c9eb456341f8f2cf35050f1fa4f\":[615.0,615.0],\"a1f8940fbe7ce82695439b5d7d768626\":[615.0,330.0],\"139cf9930958bb5dea28bca2cbf9d9b3\":[615.0,435.0],\"ae0aef6840d6cb191460ccbc12a59188\":[615.0,525.0],\"ad222756ec62ef797b074c418e80bca4\":[615.0,150.0],\"5a0f26e71f4f34b70dcf63bb959fc9c2\":[615.0,240.0],\"0451475bd8311a0b570dd6317801a5f0\":[330.0,150.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "ad222756ec62ef797b074c418e80bca4",
+  "exit_agent_guids": [
+    "23cc7c9eb456341f8f2cf35050f1fa4f"
+  ],
+  "exit_agent_guid": "23cc7c9eb456341f8f2cf35050f1fa4f",
+  "send_to_stories": [],
+  "form": {
+    "name": "New story for thomas@tines.io Form",
+    "description": "",
+    "fields": [],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

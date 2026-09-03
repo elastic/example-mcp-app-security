@@ -1,0 +1,264 @@
+{
+  "schema_version": 3,
+  "name": "Jira Correlation",
+  "description": null,
+  "guid": "83048db42c1ee0a5cc9067656723fa8b",
+  "exported_at": "2021-08-24T21:24:16Z",
+  "agents": [
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search For Related Issues For Last Day in Jira",
+      "disabled": false,
+      "guid": "1600eb753da97d4b7cb8e146b9fc8fc7",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/search",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "jql": "project = Demo AND createdDate >= -1 AND summary ~ \"{{ .receive_alert.body.alert }}\" AND description ~ \"{{ .receive_alert.body.hostname }}\""
+        },
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username }}",
+          "{{ .CREDENTIAL.jira }}"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive Alert",
+      "disabled": false,
+      "guid": "d3c59c1b676050f0abf4588251e4b0ae",
+      "options": {
+        "secret": "794f21b19d20fef92156e123e8f73d70",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create Issue in Jira",
+      "disabled": false,
+      "guid": "1bb120de2ebcc8e13fa4a651a9e97f3f",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/issue",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "fields": {
+            "project": {
+              "key": "DEMO"
+            },
+            "issuetype": {
+              "name": "Task"
+            },
+            "assignee": {
+              "name": "thomas"
+            },
+            "priority": {
+              "name": "Lowest"
+            },
+            "description": "Host: {{ .receive_alert.body.hostname }}",
+            "summary": "{{ .receive_alert.body.alert }}"
+          }
+        },
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username }}",
+          "{{ .CREDENTIAL.jira }}"
+        ]
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "More Than 5 Related",
+      "disabled": false,
+      "guid": "0657f96d801cef0c239f22a96be526d6",
+      "options": {
+        "rules": [
+          {
+            "type": "field>=value",
+            "value": "5",
+            "path": "{{ .search_for_related_issues_for_last_day_in_jira.body.issues | size }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Return Results",
+      "disabled": false,
+      "guid": "3c779fd0c11ab772d87d33ce3d0683ea",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "case": "{{ .create_issue_in_jira.body.key }}",
+          "parent_case": "{{ .search_for_related_issues_for_last_day_in_jira.body.issues.last.key | default: 'None' }}",
+          "related_case_count": "{{ .search_for_related_issues_for_last_day_in_jira.body.issues | size | default: 0 }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Raise Priority of Original Issue in Jira",
+      "disabled": false,
+      "guid": "876d95b0960db6fccfbc8442b1afa29b",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/issue/{{ .search_for_related_issues_for_last_day_in_jira.body.issues.last.key }}",
+        "content_type": "json",
+        "method": "put",
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username }}",
+          "{{ .CREDENTIAL.jira }}"
+        ],
+        "payload": {
+          "fields": {
+            "priority": {
+              "name": "Highest"
+            }
+          }
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Create Alert and Case",
+      "disabled": false,
+      "guid": "67e7c8bfabdea65b393c5f168dd6a3fa",
+      "options": {
+        "story": "{{ .STORY.jira_correlation }}",
+        "payload": {
+          "alert": "Phishing Email",
+          "hostname": "mail-server-01"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Less Than 5 Related",
+      "disabled": false,
+      "guid": "1d5c5ee8ee6c901c136a02fef8204107",
+      "options": {
+        "rules": [
+          {
+            "type": "field<value",
+            "value": "5",
+            "path": "{{ .search_for_related_issues_for_last_day_in_jira.body.issues | size }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Return Results",
+      "disabled": false,
+      "guid": "7251b1bf066c0aaca30816c835481450",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "case": "{{ .create_issue_in_jira.body.key }}",
+          "parent_case": "{{ .search_for_related_issues_for_last_day_in_jira.body.issues.last.key | default: 'None' }}",
+          "related_case_count": "{{ .search_for_related_issues_for_last_day_in_jira.body.issues | size | default: 0 }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Related Issue in Jira",
+      "disabled": false,
+      "guid": "28d73b37d7e40f700c2861d18d5cad48",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/issue/{{ .create_issue_in_jira.body.key }}",
+        "content_type": "json",
+        "method": "put",
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username }}",
+          "{{ .CREDENTIAL.jira }}"
+        ],
+        "payload": {
+          "update": {
+            "issuelinks": [
+              {
+                "add": {
+                  "type": {
+                    "name": "Relates",
+                    "inward": "relates to",
+                    "outward": "relates"
+                  },
+                  "outwardIssue": {
+                    "key": "{{ .search_for_related_issues_for_last_day_in_jira.body.issues.last.key }}"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 9
+    },
+    {
+      "source": 1,
+      "receiver": 2
+    },
+    {
+      "source": 2,
+      "receiver": 0
+    },
+    {
+      "source": 3,
+      "receiver": 5
+    },
+    {
+      "source": 5,
+      "receiver": 4
+    },
+    {
+      "source": 7,
+      "receiver": 8
+    },
+    {
+      "source": 9,
+      "receiver": 3
+    },
+    {
+      "source": 9,
+      "receiver": 7
+    }
+  ],
+  "diagram_layout": "{\"1600eb753da97d4b7cb8e146b9fc8fc7\":[240.0,330.0],\"d3c59c1b676050f0abf4588251e4b0ae\":[240.0,180.0],\"1bb120de2ebcc8e13fa4a651a9e97f3f\":[240.0,255.0],\"0657f96d801cef0c239f22a96be526d6\":[345.0,525.0],\"3c779fd0c11ab772d87d33ce3d0683ea\":[345.0,690.0],\"876d95b0960db6fccfbc8442b1afa29b\":[345.0,600.0],\"67e7c8bfabdea65b393c5f168dd6a3fa\":[0.0,180.0],\"1d5c5ee8ee6c901c136a02fef8204107\":[150.0,525.0],\"7251b1bf066c0aaca30816c835481450\":[150.0,690.0],\"28d73b37d7e40f700c2861d18d5cad48\":[240.0,435.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "d3c59c1b676050f0abf4588251e4b0ae",
+  "exit_agent_guids": [
+    "3c779fd0c11ab772d87d33ce3d0683ea"
+  ],
+  "exit_agent_guid": "3c779fd0c11ab772d87d33ce3d0683ea",
+  "send_to_stories": [],
+  "form": {
+    "name": "Jira Correlation Form",
+    "description": "",
+    "fields": [],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

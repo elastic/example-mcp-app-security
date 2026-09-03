@@ -1,0 +1,129 @@
+{
+  "sourceRepository": "tines/stories (public)",
+  "sourceRevision": "master (downloaded 2026-09-03)",
+  "sourceScope": "official Tines blog/product/use-case story exports; deduped by story guid",
+  "confidentiality": "PUBLIC",
+  "redaction": {
+    "required": false,
+    "note": "public library content; secret scan clean (credential references only)"
+  },
+  "stories": [
+    {
+      "file": "jira-correlation.json",
+      "sourcePath": "ts_alert_budget.json",
+      "schemaVersion": 3,
+      "storyName": "Jira Correlation",
+      "agents": 10,
+      "links": 8,
+      "embeddedStories": 0
+    },
+    {
+      "file": "sts-analyze-email-address.json",
+      "sourcePath": "ts_analyze_email_address.json",
+      "schemaVersion": 3,
+      "storyName": "STS Analyze Email Address",
+      "agents": 9,
+      "links": 8,
+      "embeddedStories": 0
+    },
+    {
+      "file": "greynoise-workflows.json",
+      "sourcePath": "ts_blog_cut_through_the_noise_using_greynoise_with_tines_export.json",
+      "schemaVersion": 3,
+      "storyName": "GreyNoise Workflows",
+      "agents": 16,
+      "links": 12,
+      "embeddedStories": 0
+    },
+    {
+      "file": "slack-chat-with-prompts.json",
+      "sourcePath": "ts_chatops.json",
+      "schemaVersion": 3,
+      "storyName": "Slack Chat With Prompts",
+      "agents": 15,
+      "links": 11,
+      "embeddedStories": 0
+    },
+    {
+      "file": "sts-check-vips.json",
+      "sourcePath": "ts_check_vips.json",
+      "schemaVersion": 3,
+      "storyName": "STS Check VIPs",
+      "agents": 7,
+      "links": 5,
+      "embeddedStories": 0
+    },
+    {
+      "file": "crowdstrike-response.json",
+      "sourcePath": "ts_crowdstrike_response.json",
+      "schemaVersion": 3,
+      "storyName": "CrowdStrike Response",
+      "agents": 18,
+      "links": 16,
+      "embeddedStories": 2
+    },
+    {
+      "file": "sts-domain-analysis.json",
+      "sourcePath": "ts_domain_analysis.json",
+      "schemaVersion": 3,
+      "storyName": "StS Domain Analysis",
+      "agents": 12,
+      "links": 11,
+      "embeddedStories": 0
+    },
+    {
+      "file": "okta-user-lookup.json",
+      "sourcePath": "ts_okta_enrichment.json",
+      "schemaVersion": 3,
+      "storyName": "Okta User Lookup",
+      "agents": 6,
+      "links": 4,
+      "embeddedStories": 0
+    },
+    {
+      "file": "slack-interactive-bot-example.json",
+      "sourcePath": "ts_slack_bot.json",
+      "schemaVersion": 3,
+      "storyName": "Slack Interactive Bot Example",
+      "agents": 24,
+      "links": 22,
+      "embeddedStories": 0
+    },
+    {
+      "file": "spam-analysis-new-jira.json",
+      "sourcePath": "ts_spam_jira.json",
+      "schemaVersion": 3,
+      "storyName": "Spam Analysis New - Jira",
+      "agents": 60,
+      "links": 66,
+      "embeddedStories": 6
+    },
+    {
+      "file": "spam-analysis-new-servicenow.json",
+      "sourcePath": "ts_spam_servicenow.json",
+      "schemaVersion": 3,
+      "storyName": "Spam Analysis New - ServiceNow",
+      "agents": 59,
+      "links": 65,
+      "embeddedStories": 6
+    },
+    {
+      "file": "spam-analysis-new-thehive.json",
+      "sourcePath": "ts_spam_thehive.json",
+      "schemaVersion": 3,
+      "storyName": "Spam Analysis New - TheHive",
+      "agents": 66,
+      "links": 71,
+      "embeddedStories": 6
+    },
+    {
+      "file": "sts-analyze-ip-address.json",
+      "sourcePath": "ts_use-cases_enrichment_sts-analyze-ip-address_export_export.json",
+      "schemaVersion": 3,
+      "storyName": "STS Analyze IP Address",
+      "agents": 14,
+      "links": 12,
+      "embeddedStories": 1
+    }
+  ]
+}

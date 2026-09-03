@@ -565,7 +565,7 @@ pure functions over JSON needing no HTTP, so the containerised suite starts at P
 <b>loudly</b> rather than degrading to a weaker green.</p>
 
 <h2 id="plan"><span class="n">08</span>Implementation plan</h2>
-<p class="lead">Eight phases, 72 tasks, landing in
+<p class="lead">Eight phases, 75 tasks, landing in
 <code>elastic/example-mcp-app-security</code> on <code>feat/tines-story-converter</code> as an OpenSpec change.
 Phases 0&ndash;6 are headless and independently testable; the MCP surface comes last, on top of a proven core.</p>
 
@@ -812,8 +812,7 @@ that is a finding about scope, not a defect to tune away.</p>
 
 <h3>Open questions</h3>
 <ul class="tight">
- <li>Do we pursue the Liquid filter extension PR (regex, hashing, csv/xml) in parallel, or wait for converter data
- showing which gaps actually bite in real stories? <b>Recommendation: wait &mdash; let the fidelity reports prioritise it.</b></li>
+ <li><b>Liquid filter extension PR &mdash; resolved:</b> wait. Fidelity reports from real conversions prioritise which filters actually bite; the matrix records per-function demand so the extension lands with evidence.</li>
 </ul>
 
 <footer>

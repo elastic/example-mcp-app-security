@@ -1,0 +1,134 @@
+{
+  "schema_version": 3,
+  "name": "Okta User Lookup",
+  "description": null,
+  "guid": "f33e2b7c74be6eac993eead7d8fd345f",
+  "exported_at": "2021-08-24T21:56:18Z",
+  "agents": [
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive STS",
+      "disabled": false,
+      "guid": "d45eafdabdd6469c1d25897d33da6bff",
+      "options": {
+        "secret": "b6a3caff306753f68a2170f000853eb6",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Compare Countries",
+      "disabled": false,
+      "guid": "0c82c9aee2b3bbb65b6197ff2ddfb9d6",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "{{ .lookup_country.body.nativeName }}",
+            "path": "{{ .receive_sts.body.country}}"
+          }
+        ],
+        "emit_no_match": "true"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Lookup Country",
+      "disabled": false,
+      "guid": "c21f6215e774be7966957159db48a296",
+      "options": {
+        "url": "https://restcountries.eu/rest/v2/alpha/{{.search_user_profile_by_email_address_in_okta.body.first.profile.countryCode}}",
+        "content_type": "json",
+        "method": "get",
+        "headers": {}
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search User Profile by Email Address in Okta",
+      "disabled": false,
+      "guid": "fa63eabbe2012370c6736a706b04accd",
+      "options": {
+        "url": "https://{{ .RESOURCE.okta_tenant}}/api/v1/users/",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "search": "profile.email eq \"{{.receive_sts.body.email}}\""
+        },
+        "headers": {
+          "Authorization": "SSWS {{ .CREDENTIAL.okta }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Lookup User",
+      "disabled": false,
+      "guid": "ae48f4e0a63340edbaca63950eb91c35",
+      "options": {
+        "story": "{{ .STORY.okta_user_lookup }}",
+        "payload": {
+          "email": "alice@example.com",
+          "country": "Russia"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Return Data",
+      "disabled": false,
+      "guid": "e116772580292868ceaadf5c1ccc5477",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "suspicious_location": "{% if .compare_countries.rule_matched == false %}true{% else %}false{% endif%}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 3
+    },
+    {
+      "source": 1,
+      "receiver": 5
+    },
+    {
+      "source": 2,
+      "receiver": 1
+    },
+    {
+      "source": 3,
+      "receiver": 2
+    }
+  ],
+  "diagram_layout": "{\"d45eafdabdd6469c1d25897d33da6bff\":[60.0,-120.0],\"0c82c9aee2b3bbb65b6197ff2ddfb9d6\":[60.0,165.0],\"c21f6215e774be7966957159db48a296\":[60.0,75.0],\"fa63eabbe2012370c6736a706b04accd\":[60.0,-30.0],\"ae48f4e0a63340edbaca63950eb91c35\":[-165.0,-120.0],\"e116772580292868ceaadf5c1ccc5477\":[60.0,255.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "d45eafdabdd6469c1d25897d33da6bff",
+  "exit_agent_guids": [
+    "e116772580292868ceaadf5c1ccc5477"
+  ],
+  "exit_agent_guid": "e116772580292868ceaadf5c1ccc5477",
+  "send_to_stories": [],
+  "form": {
+    "name": "New story for user Form",
+    "description": "",
+    "fields": [],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

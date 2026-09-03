@@ -1,0 +1,344 @@
+{
+  "schema_version": 3,
+  "name": "Slack Chat With Prompts",
+  "description": null,
+  "guid": "b20cfddb87c3694e594ec67b170aa90e",
+  "exported_at": "2021-08-24T21:34:36Z",
+  "agents": [
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive STS",
+      "disabled": false,
+      "guid": "6ca7e9a1b00e5d32e00f64d76379ce4d",
+      "options": {
+        "secret": "b6a3caff306753f68a2170f000853eb6",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Catch Prompt",
+      "disabled": false,
+      "guid": "6814a8e07634992667a8758cf3ef743f",
+      "options": {
+        "rules": [
+          {
+            "type": "!regex",
+            "value": "^$",
+            "path": "{{.send_slack_message_by_dm.prompt.status}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Send Slack Message By DM",
+      "disabled": false,
+      "guid": "3d26317238cf4d3465078f6a10a27f98",
+      "options": {
+        "url": "https://slack.com/api/chat.postMessage",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "channel": "{{.search_slack_users_by_email.body.user.id}}",
+          "attachments": [
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "fields": "{{ .format_slack_message.message | as_object }}"
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "{{ .receive_sts.body.positive_button }}"
+                      },
+                      "style": "primary",
+                      "url": "{% prompt positive %}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "{{ .receive_sts.body.negative_button }}"
+                      },
+                      "style": "danger",
+                      "url": "{% prompt negative %}"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "text": "Hello from your friendly security team! 👨‍💻 \n\nWe're checking in on an alert we received:"
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.slack }}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search Slack Users By Email",
+      "disabled": false,
+      "guid": "5d8c51be6ee48e68e8cc37c0f1c7e554",
+      "options": {
+        "url": "https://slack.com/api/users.lookupByEmail",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "email": "{{.receive_sts.body.email}}"
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.slack }}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Delay Event",
+      "disabled": false,
+      "guid": "8e07d6693fd6fbc36e8631ff5277de47",
+      "options": {
+        "mode": "delay",
+        "seconds": "3600"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "If Response",
+      "disabled": false,
+      "guid": "104d030fae88bc47be5924ba73eb3432",
+      "options": {
+        "rules": [
+          {
+            "type": "!regex",
+            "value": "^$",
+            "path": "{{ .send_slack_message_by_dm.prompt.status }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Deduplicate Events",
+      "disabled": false,
+      "guid": "167dc70f7e7a5c8e4323246bb8fb5d51",
+      "options": {
+        "mode": "deduplicate",
+        "period": "3700",
+        "path": "{% story_run_guid %}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "No Response",
+      "disabled": false,
+      "guid": "f8ec22842c568528f49cd4513b55efdb",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "^$",
+            "path": "{{ .send_slack_message_by_dm.prompt.status }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Format Return",
+      "disabled": false,
+      "guid": "303336b7e680a1d846a9b80f7bd332bb",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "result": "{{ .send_slack_message_by_dm.prompt.status }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Format Return",
+      "disabled": false,
+      "guid": "781adec51fd826a8390fc6808acd8424",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "result": "no_response"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Send Chat Prompt",
+      "disabled": false,
+      "guid": "3ed4f9bbd8f92ee12026b016d314e5e5",
+      "options": {
+        "story": "{{ .STORY.slack_chat_with_promps }}",
+        "payload": {
+          "email": "alice@example.com",
+          "message_blocks": [
+            "*Alert*: \nSuspicious Login Detected",
+            "*Location*: \nRome",
+            "*Source*: \n Okta",
+            "*Description*:\nAt 12:30 PM UTC, we were alerted to suspicious login activity from Rome."
+          ],
+          "positive_button": "I recognize this",
+          "negative_button": "I don't recognize this"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Format Slack Message",
+      "disabled": false,
+      "guid": "8d268e5b3e6124b600de1de2f44b1599",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "message": "[{% for i in receive_sts.body.message_blocks %}{\"type\": \"mrkdwn\", \"text\": \"{{ i }}\"}{% if forloop.last == false %},{% endif %}{% endfor %}]"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Send to Story Action",
+      "disabled": false,
+      "guid": "87e9c88cdc176cd8191c8f620c9e05e6",
+      "options": {
+        "story": "{{ .STORY.slack_chat_with_promps }}",
+        "payload": {
+          "key": "value",
+          "something": "the event contained {{ .somekey }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Webhook Action",
+      "disabled": false,
+      "guid": "aa0ff46b95f9e7807fbe2f46829b610a",
+      "options": {
+        "secret": "4280c0aa291086da8aefd8d9d2a4da71",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Event Transform Action",
+      "disabled": false,
+      "guid": "a90d80c0360225ef04cca769e1b5d178",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "message": "This is an automatically generated message from Tines"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [
+    {
+      "content": "# Simple Slack Crowdsourcing\n\nA simple Send to Story that can be the basis to crowdsource responses from any general alert. It focuses on creating an array of messages that will become Slack 'blocks' and will request a user's input in a `positive`/`negative` fashion giving them an hour to response before returning with `no_response`.\n\nThis Story can be expanded to also escalate to another individual like a person's manager.",
+      "position": [
+        60.0,
+        -750.0
+      ],
+      "guid": "afaf4dfe26f39f6ac9eb48443c17e803"
+    }
+  ],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 3
+    },
+    {
+      "source": 1,
+      "receiver": 6
+    },
+    {
+      "source": 2,
+      "receiver": 1
+    },
+    {
+      "source": 2,
+      "receiver": 4
+    },
+    {
+      "source": 3,
+      "receiver": 11
+    },
+    {
+      "source": 4,
+      "receiver": 6
+    },
+    {
+      "source": 5,
+      "receiver": 8
+    },
+    {
+      "source": 6,
+      "receiver": 5
+    },
+    {
+      "source": 6,
+      "receiver": 7
+    },
+    {
+      "source": 7,
+      "receiver": 9
+    },
+    {
+      "source": 11,
+      "receiver": 2
+    }
+  ],
+  "diagram_layout": "{\"6ca7e9a1b00e5d32e00f64d76379ce4d\":[360.0,-795.0],\"6814a8e07634992667a8758cf3ef743f\":[480.0,-465.0],\"3d26317238cf4d3465078f6a10a27f98\":[360.0,-555.0],\"5d8c51be6ee48e68e8cc37c0f1c7e554\":[360.0,-720.0],\"8e07d6693fd6fbc36e8631ff5277de47\":[255.0,-465.0],\"104d030fae88bc47be5924ba73eb3432\":[255.0,-315.0],\"167dc70f7e7a5c8e4323246bb8fb5d51\":[360.0,-390.0],\"f8ec22842c568528f49cd4513b55efdb\":[465.0,-315.0],\"303336b7e680a1d846a9b80f7bd332bb\":[255.0,-240.0],\"781adec51fd826a8390fc6808acd8424\":[465.0,-240.0],\"3ed4f9bbd8f92ee12026b016d314e5e5\":[135.0,-825.0],\"8d268e5b3e6124b600de1de2f44b1599\":[360.0,-630.0],\"87e9c88cdc176cd8191c8f620c9e05e6\":[1065.0,-615.0],\"aa0ff46b95f9e7807fbe2f46829b610a\":[1296.0,-728.0],\"a90d80c0360225ef04cca769e1b5d178\":[1322.0,-618.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "6ca7e9a1b00e5d32e00f64d76379ce4d",
+  "exit_agent_guids": [
+    "781adec51fd826a8390fc6808acd8424",
+    "303336b7e680a1d846a9b80f7bd332bb"
+  ],
+  "exit_agent_guid": "781adec51fd826a8390fc6808acd8424",
+  "send_to_stories": [],
+  "form": {
+    "name": "New story for user Form",
+    "description": "",
+    "fields": [],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

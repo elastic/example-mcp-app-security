@@ -1,0 +1,1026 @@
+{
+  "schema_version": 3,
+  "name": "CrowdStrike Response",
+  "description": "Story to alert on, and respond to CrowdStrike alerts and events.\n\nBy default, this story will send an email containing details of each alert. The recipient can initiate response actions, such as containing the device in Crowdstrike, by clicking links in the email body.\n\nTemplate formatting for Jira and The Hive incidents can be found in the 'Build Detection' agent. These can be used to quickly configure alert creation in either of those platforms.",
+  "guid": "04ab0bea0b48ebc3fe21b8f0cd8bf64d",
+  "exported_at": "2021-03-19T15:27:05Z",
+  "agents": [
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Extract Chrome Extensions Prompt",
+      "disabled": false,
+      "guid": "177b08035c73b18cbb5baaa8c4ae0c91",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "chrome",
+            "path": "{{.send_security_email.prompt.status}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Individual Detections",
+      "disabled": false,
+      "guid": "bad52510d285593a0123dcfd68e516db",
+      "options": {
+        "mode": "explode",
+        "path": "{{.get_detection_details.body.resources}}",
+        "to": "individual_detection"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Contain Device",
+      "disabled": false,
+      "guid": "6394b669589b536eceb53c0b8c0a0516",
+      "options": {
+        "story": "{% story Crowdstrike - Contain Device %}",
+        "payload": {
+          "host_id": "{{.explode_individual_detections.individual_detection.device.device_id}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search for Host Group Members in Crowdstrike Falcon",
+      "disabled": true,
+      "guid": "384a5cf20490e3b9911da55672a67621",
+      "options": {
+        "url": "https://api.crowdstrike.com/intel/combined/actors/v1",
+        "content_type": "json",
+        "method": "get",
+        "payload": {},
+        "headers": {
+          "Authorization": "Bearer {% credential crowdstrike-oauth2 %}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode Crowdstrike Behaviors",
+      "disabled": false,
+      "guid": "05f15e81ed4e6e0d6c381ceeef5f4040",
+      "options": {
+        "mode": "explode",
+        "path": "{{.explode_individual_detections.individual_detection.behaviors}}",
+        "to": "individual_behavior"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Overwatch",
+      "disabled": false,
+      "guid": "0eba4cf8b13179c080cc1ef0179b18a3",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "Falcon Overwatch",
+            "path": "{{.explode_individual_detections.individual_detection.behaviors[0].tactic}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Detection Details",
+      "disabled": false,
+      "guid": "dd0b73bca6111711c5330963926cf492",
+      "options": {
+        "url": "https://api.{{.RESOURCE.crowdstrike_domain}}/detects/entities/summaries/GET/v1",
+        "content_type": "json",
+        "method": "post",
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.crowdstrike}}"
+        },
+        "payload": {
+          "ids": "{{.get_detections_in_crowdstrike_falcon.body.resources | as_object}}"
+        },
+        "manual_time": "60",
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Extract Chrome Extensions",
+      "disabled": false,
+      "guid": "3e8849bdf67716ceedc2c71fe68f6387",
+      "options": {
+        "story": "{% story Crowdstrike - Run RTR Command %}",
+        "payload": {
+          "command": "runscript -CloudFile=\"tines_extract_chrome_extensions_from_endpoint\" -CommandLine=\"C:\"",
+          "device_id": "{{.explode_crowdstrike_behaviors.individual_behavior.device_id}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Deduplicate Events",
+      "disabled": false,
+      "guid": "6ad77b4253c6f046ba785b7ed68cd1e4",
+      "options": {
+        "mode": "deduplicate",
+        "lookback": "100",
+        "path": "{{.explode_individual_detections.individual_detection.detection_id}}{{.send_security_email.prompt.status}}"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Detections in Crowdstrike Falcon",
+      "disabled": false,
+      "guid": "9446e3445051aeb260f957398c94d3a9",
+      "options": {
+        "url": "https://api.{{.RESOURCE.crowdstrike_domain}}/detects/queries/detects/v1",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "limit": "10",
+          "sort": "first_behavior|desc",
+          "filter": "status:'new'"
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.crowdstrike}}"
+        },
+        "manual_time": "90",
+        "log_error_on_status": []
+      },
+      "schedule": [],
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EmailAgent",
+      "name": "Send Security Email",
+      "disabled": false,
+      "guid": "ad5e4a6176ff45a1c53ad740fff3e953",
+      "options": {
+        "recipients": [
+          "main@mail.com"
+        ],
+        "subject": "Crowdstrike Alert",
+        "body": "<style type=\"text/css\">\n\tbody {\n\t\tmargin: 0;\n\t\tpadding: 0;\n\t}\n\n\ttable{\n\tborder-collapse:collapse;\n\tborder:1px solid #FF0000;\n\t}\n\n\ttable td{\n\tborder:1px solid #FF0000;\n\t}\n\ttr {\n\t\tvertical-align: top;\n\t\tborder-collapse: collapse;\n\t\tborder:1px solid #FF0000;\n\t}\n\n\t* {\n\t\tline-height: inherit;\n\t}\n\n\ta[x-apple-data-detectors=true] {\n\t\tcolor: inherit !important;\n\t\ttext-decoration: none !important;\n\t}\n</style>\n<style id=\"media-query\" type=\"text/css\">\n\t@media (max-width: 500px) {\n\n\t\t.block-grid,\n\t\t.col {\n\t\t\tmin-width: 320px !important;\n\t\t\tmax-width: 100% !important;\n\t\t\tdisplay: block !important;\n\t\t}\n\n\t\t.block-grid {\n\t\t\twidth: 100% !important;\n\t\t}\n\n\t\t.col {\n\t\t\twidth: 100% !important;\n\t\t}\n\n\t\t.col>div {\n\t\t\tmargin: 0 auto;\n\t\t}\n\n\t\timg.fullwidth,\n\t\timg.fullwidthOnMobile {\n\t\t\tmax-width: 100% !important;\n\t\t}\n\n\t\t.no-stack .col {\n\t\t\tmin-width: 0 !important;\n\t\t\tdisplay: table-cell !important;\n\t\t}\n\n\t\t.no-stack.two-up .col {\n\t\t\twidth: 50% !important;\n\t\t}\n\n\t\t.no-stack .col.num4 {\n\t\t\twidth: 33% !important;\n\t\t}\n\n\t\t.no-stack .col.num8 {\n\t\t\twidth: 66% !important;\n\t\t}\n\n\t\t.no-stack .col.num4 {\n\t\t\twidth: 33% !important;\n\t\t}\n\n\t\t.no-stack .col.num3 {\n\t\t\twidth: 25% !important;\n\t\t}\n\n\t\t.no-stack .col.num6 {\n\t\t\twidth: 50% !important;\n\t\t}\n\n\t\t.no-stack .col.num9 {\n\t\t\twidth: 75% !important;\n\t\t}\n\n\t\t.video-block {\n\t\t\tmax-width: none !important;\n\t\t}\n\n\t\t.mobile_hide {\n\t\t\tmin-height: 0px;\n\t\t\tmax-height: 0px;\n\t\t\tmax-width: 0px;\n\t\t\tdisplay: none;\n\t\t\toverflow: hidden;\n\t\t\tfont-size: 0px;\n\t\t}\n\n\t\t.desktop_hide {\n\t\t\tdisplay: block !important;\n\t\t\tmax-height: none !important;\n\t\t}\n\t}\n</style>\n<!--[if IE]><div class=\"ie-browser\"><![endif]-->\n<table bgcolor=\"#FFFFFF\" cellpadding=\"0\" cellspacing=\"0\" class=\"nl-container\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; min-width: 320px; Margin: 0 auto; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background-color: #FFFFFF; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top;\" valign=\"top\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"background-color:#FFFFFF\"><![endif]-->\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid three-up no-stack\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"160\" style=\";width:160px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:60px; padding-bottom:0px;\"><![endif]-->\n<div class=\"col num4\" style=\"max-width: 320px; min-width: 160px; display: table-cell; vertical-align: top; width: 160px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:60px; padding-bottom:0px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<div></div>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td><td align=\"center\" width=\"160\" style=\";width:160px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:60px; padding-bottom:0px;\"><![endif]-->\n<div class=\"col num4\" style=\"max-width: 320px; min-width: 160px; display: table-cell; vertical-align: top; width: 160px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:60px; padding-bottom:0px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<div align=\"center\" class=\"img-container center fixedwidth\" style=\"padding-right: 0px;padding-left: 0px;\">\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr style=\"line-height:0px\"><td style=\"padding-right: 0px;padding-left: 0px;\" align=\"center\"><![endif]-->\n<div style=\"font-size:1px;line-height:40px\"> </div><a href=\"https://www.tines.io/\" style=\"outline:none\" tabindex=\"-1\" target=\"_blank\"><img align=\"center\" alt=\"Tines logo\" border=\"0\" class=\"center fixedwidth\" src=\"https://mail.phish.ly/report-images/tines-logo2x.png\" style=\"text-decoration: none; -ms-interpolation-mode: bicubic; height: auto; border: 0; width: 100%; max-width: 80px; display: block; margin: auto;\" title=\"Tines logo\" width=\"80\"/></a>\n<!--[if mso]></td></tr></table><![endif]-->\n</div>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td><td align=\"center\" width=\"160\" style=\";width:160px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:60px; padding-bottom:0px;\"><![endif]-->\n<div class=\"col num4\" style=\"max-width: 320px; min-width: 160px; display: table-cell; vertical-align: top; width: 160px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:60px; padding-bottom:0px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<div></div>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#9aa2a6;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:1.2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 1.2; font-size: 12px; color: #9aa2a6; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 14px;\">\n<p style=\"font-size: 14px; line-height: 1.2; word-break: break-word; text-align: center; mso-line-height-alt: 17px; margin: 0;\">Brought to you by <a href=\"https://www.tines.io/\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Tines</a> and <a href=\"https://crowdstrike.com\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Crowdstrike</a></p>\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" height=\"1\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; height: 1px; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td height=\"1\" style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 60px; padding-left: 60px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#021721;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 2; font-size: 15px; color: #021721; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 24px;\">\n<p style=\"line-height: 2; word-break: break-word; mso-line-height-alt: NaNpx; margin: 0;\"><strong><span style=\"font-size: 15px; color: #9aa2a6;\">Alert Overview</span></strong><br/><span style=\"font-size: 15px;\"><strong>Priority:</strong> {{.explode_individual_detections.individual_detection.max_severity_displayname}}</span><br/><span style=\"font-size: 15px;\"><strong>Confidence:</strong> {{.explode_individual_detections.individual_detection.max_confidence}}</span><br/><span style=\"font-size: 15px;\"><strong>Hostname:</strong> {{.explode_individual_detections.individual_detection.device.hostname}}</span><br/><span style=\"font-size: 15px;\"><strong>OS:</strong> {{.explode_individual_detections.individual_detection.device.platform_name}}</span><br/><span style=\"font-size: 15px;\"><strong>Device Type:</strong> {{.explode_individual_detections.individual_detection.device.product_type_desc}}</span><br/><span style=\"font-size: 15px;\"><strong>External IP:</strong> {{.explode_individual_detections.individual_detection.device.external_ip}}</span><br/><span style=\"font-size: 15px;\"><strong>Internal IP:</strong> {{.explode_individual_detections.individual_detection.device.local_ip}}</span><br/><span style=\"font-size: 15px;\"><strong>Local Time:</strong> {{.explode_individual_detections.individual_detection.device.agent_local_time}}</span><br/><span style=\"font-size: 15px;\"><strong>Crowdstrike ID:</strong> <a href=\"https://falcon.us-2.crowdstrike.com/hosts/hosts/host/{{.explode_individual_detections.individual_detection.device.device_id}}\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">{{.explode_individual_detections.individual_detection.device.device_id}}</a></span><br/></p><br><br>\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 60px; padding-left: 60px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#021721;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:4;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 2; font-size: 15px; color: #021721; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 24px;\">\n<p style=\"line-height: 2; word-break: break-word; mso-line-height-alt: NaNpx; margin: 0;\"><strong><span style=\"font-size: 15px; color: #9aa2a6;\">Alert Overview</span></strong><br/>{% for behavior in .explode_individual_detections.individual_detection.behaviors %}\n<strong>Behavior {{forloop.index}} of {{forloop.length}}</strong>\n<table border='1' style='border-collapse:collapse; border: 1px solid #F2F2F2;'>\n<tr><td VALIGN=TOP><b>Severity:</b></td><td>{{.behavior.severity}}</td></tr>\n<tr><td VALIGN=TOP><b>Link to Behavior:</b></td><td>https://falcon.{{.RESOURCE.crowdstrike_domain}}/activity/detections/detail/{{behavior.control_graph_id | replace: 'ctg:', '' | replace: ':', '/'}} </td></tr>\n<tr><td VALIGN=TOP><b>Process Name:</b></td><td>{{.behavior.filename | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>User:</b></td><td>{{.behavior.user_name}} </td></tr>\n<tr><td VALIGN=TOP><b>Process Hash:</b></td><td>{{.behavior.sha256}} </td></tr>\n<tr><td VALIGN=TOP><b>Command Line:</b></td><td>{{.behavior.cmdline | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>Scenario / Technique:</b></td><td>{{.behavior.scenario | default: 'N/A'}} - {{.behavior.tactic | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>IOC Value:</b></td><td>{{.behavior.ioc_value | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>IOC Source:</b></td><td>{{.behavior.ioc_source | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>IOC Description:</b></td><td>{{.behavior.ioc_description | default: 'N/A'}} </td></tr>\n</table><br><br>\n{% endfor %}\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 60px; padding-left: 60px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#021721;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 2; font-size: 15px; color: #021721; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 24px;\">\n<p style=\"line-height: 2; word-break: break-word; mso-line-height-alt: NaNpx; margin: 0;\"><strong><span style=\"font-size: 15px; color: #9aa2a6;\">Response Actions</span></strong><br/><span style=\"font-size: 15px;\"><strong><strong><a href=\"{% prompt contain %}\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Contain this device in Crowdstrike</a></p></strong></span></strong></span><span style=\"font-size: 15px;\"><strong><strong><a href=\"{% prompt chrome %}\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Analyze Chrome Extensions</a></p></strong></span></strong></span><br/><br/><br/><br/></p><br><br>\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<div align=\"center\" class=\"img-container center autowidth\" style=\"padding-right: 0px;padding-left: 0px;\">\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr style=\"line-height:0px\"><td style=\"padding-right: 0px;padding-left: 0px;\" align=\"center\"><![endif]--><a href=\"https://www.tines.io/customers\"><img align=\"center\" alt=\"logos\" border=\"0\" class=\"center autowidth\" src=\"https://mail.phish.ly/report-images/img-logos2x.png\" style=\"text-decoration: none; -ms-interpolation-mode: bicubic; height: auto; border: 0; width: 100%; max-width: 480px; display: block;\" title=\"Customer Logos\" width=\"480\"/></a>\n<!--[if mso]></td></tr></table><![endif]-->\n</div>\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top: 0px; padding-bottom: 24px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#9aa2a6;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:1.2;padding-top:0px;padding-right:0px;padding-bottom:24px;padding-left:0px;\">\n<div style=\"line-height: 1.2; font-size: 12px; color: #9aa2a6; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 14px;\">\n<p style=\"font-size: 14px; line-height: 1.2; word-break: break-word; text-align: center; mso-line-height-alt: 17px; margin: 0;\"><strong>Trusted by the world’s leading security teams</strong></p>\n</div>\n</div>\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#9aa2a6;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:1.2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 1.2; font-size: 12px; color: #9aa2a6; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 14px;\">\n<p style=\"font-size: 14px; line-height: 1.2; word-break: break-word; text-align: center; mso-line-height-alt: 17px; margin: 0;\">Have questions about Tines? <a href=\"https://tines-community.slack.com\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Join our Slack community</a></p>\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<!--[if mso]></td></tr></table><![endif]-->\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if (IE)]></div><![endif]-->\n"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Update Detection to In Progress",
+      "disabled": false,
+      "guid": "86254e08511b2be00a58b2d584a00d54",
+      "options": {
+        "url": "https://api.{{.RESOURCE.crowdstrike_domain}}/detects/entities/detects/v2",
+        "content_type": "json",
+        "method": "patch",
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.crowdstrike}}"
+        },
+        "payload": {
+          "ids": "{{.get_detections_in_crowdstrike_falcon.body.resources | as_object}}",
+          "status": "in_progress"
+        },
+        "manual_time": "60",
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Parse Extensions",
+      "disabled": false,
+      "guid": "8f0ce119dedf19ae702eecb69623155a",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "extensions": "{{.extract_chrome_extensions.result.stdout | as_object}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Build Detection",
+      "disabled": false,
+      "guid": "730f659bbd5e0b75a16b7fbec41167f5",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "jira_body": "h2. Alert Overview:\n\n||*Priority*|{{.explode_individual_detections.individual_detection.max_severity_displayname}} |\n||*Confidence*|{{.explode_individual_detections.individual_detection.max_confidence}} |\n||*Hostname*|{{.explode_individual_detections.individual_detection.device.hostname}} |\n||*OS*|{{.explode_individual_detections.individual_detection.device.platform_name}} |\n||*Device Type*|{{.explode_individual_detections.individual_detection.device.product_type_desc}} |\n||*Local Time*|{{.explode_individual_detections.individual_detection.device.agent_local_time}} |\n||*External IP*|{{.explode_individual_detections.individual_detection.device.external_ip}} |\n||*Internal IP*|{{.explode_individual_detections.individual_detection.device.local_ip}} |\n||*Crowdstrike ID*|https://falcon.us-2.crowdstrike.com/hosts/hosts/host/{{.explode_individual_detections.individual_detection.device.device_id}} |\n\nh2. Alert Behaviors\n{% for behavior in .explode_individual_detections.individual_detection.behaviors %}\n*Behavior {{forloop.index}} of {{forloop.length}}*\n\n||*Severity*|{{.behavior.severity}} |\n||*Link to Behavior*|https://falcon.crowdstrike.com/activity/detections/detail/{{behavior.control_graph_id | replace: 'ctg:', '' | replace: ':', '/'}} |\n||*Process Name*|{{.behavior.filename | default: 'N/A'}} |\n||*User*|{{.behavior.user_name}} |\n||*Process Hash*|{{.behavior.sha256}} |\n||*Command Line*|{{.behavior.cmdline | default: 'N/A'}} |\n||*Scenario / Technique*|{{.behavior.scenario | default: 'N/A'}} - {{.behavior.tactic | default: 'N/A'}} |\n||*IOC Value*|{{.behavior.ioc_value | default: 'N/A'}} |\n||*IOC Source*|{{.behavior.ioc_source | default: 'N/A'}} |\n||*IOC Description*|{{.behavior.ioc_description | default: 'N/A'}} |\n\n{% endfor %}",
+          "html_body": "<style type=\"text/css\">\n\tbody {\n\t\tmargin: 0;\n\t\tpadding: 0;\n\t}\n\n\ttable{\n\tborder-collapse:collapse;\n\tborder:1px solid #FF0000;\n\t}\n\n\ttable td{\n\tborder:1px solid #FF0000;\n\t}\n\ttr {\n\t\tvertical-align: top;\n\t\tborder-collapse: collapse;\n\t\tborder:1px solid #FF0000;\n\t}\n\n\t* {\n\t\tline-height: inherit;\n\t}\n\n\ta[x-apple-data-detectors=true] {\n\t\tcolor: inherit !important;\n\t\ttext-decoration: none !important;\n\t}\n</style>\n<style id=\"media-query\" type=\"text/css\">\n\t@media (max-width: 500px) {\n\n\t\t.block-grid,\n\t\t.col {\n\t\t\tmin-width: 320px !important;\n\t\t\tmax-width: 100% !important;\n\t\t\tdisplay: block !important;\n\t\t}\n\n\t\t.block-grid {\n\t\t\twidth: 100% !important;\n\t\t}\n\n\t\t.col {\n\t\t\twidth: 100% !important;\n\t\t}\n\n\t\t.col>div {\n\t\t\tmargin: 0 auto;\n\t\t}\n\n\t\timg.fullwidth,\n\t\timg.fullwidthOnMobile {\n\t\t\tmax-width: 100% !important;\n\t\t}\n\n\t\t.no-stack .col {\n\t\t\tmin-width: 0 !important;\n\t\t\tdisplay: table-cell !important;\n\t\t}\n\n\t\t.no-stack.two-up .col {\n\t\t\twidth: 50% !important;\n\t\t}\n\n\t\t.no-stack .col.num4 {\n\t\t\twidth: 33% !important;\n\t\t}\n\n\t\t.no-stack .col.num8 {\n\t\t\twidth: 66% !important;\n\t\t}\n\n\t\t.no-stack .col.num4 {\n\t\t\twidth: 33% !important;\n\t\t}\n\n\t\t.no-stack .col.num3 {\n\t\t\twidth: 25% !important;\n\t\t}\n\n\t\t.no-stack .col.num6 {\n\t\t\twidth: 50% !important;\n\t\t}\n\n\t\t.no-stack .col.num9 {\n\t\t\twidth: 75% !important;\n\t\t}\n\n\t\t.video-block {\n\t\t\tmax-width: none !important;\n\t\t}\n\n\t\t.mobile_hide {\n\t\t\tmin-height: 0px;\n\t\t\tmax-height: 0px;\n\t\t\tmax-width: 0px;\n\t\t\tdisplay: none;\n\t\t\toverflow: hidden;\n\t\t\tfont-size: 0px;\n\t\t}\n\n\t\t.desktop_hide {\n\t\t\tdisplay: block !important;\n\t\t\tmax-height: none !important;\n\t\t}\n\t}\n</style>\n<!--[if IE]><div class=\"ie-browser\"><![endif]-->\n<table bgcolor=\"#FFFFFF\" cellpadding=\"0\" cellspacing=\"0\" class=\"nl-container\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; min-width: 320px; Margin: 0 auto; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background-color: #FFFFFF; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top;\" valign=\"top\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"background-color:#FFFFFF\"><![endif]-->\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid three-up no-stack\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"160\" style=\";width:160px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:60px; padding-bottom:0px;\"><![endif]-->\n<div class=\"col num4\" style=\"max-width: 320px; min-width: 160px; display: table-cell; vertical-align: top; width: 160px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:60px; padding-bottom:0px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<div></div>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td><td align=\"center\" width=\"160\" style=\";width:160px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:60px; padding-bottom:0px;\"><![endif]-->\n<div class=\"col num4\" style=\"max-width: 320px; min-width: 160px; display: table-cell; vertical-align: top; width: 160px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:60px; padding-bottom:0px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<div align=\"center\" class=\"img-container center fixedwidth\" style=\"padding-right: 0px;padding-left: 0px;\">\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr style=\"line-height:0px\"><td style=\"padding-right: 0px;padding-left: 0px;\" align=\"center\"><![endif]-->\n<div style=\"font-size:1px;line-height:40px\"> </div><a href=\"https://www.tines.io/\" style=\"outline:none\" tabindex=\"-1\" target=\"_blank\"><img align=\"center\" alt=\"Tines logo\" border=\"0\" class=\"center fixedwidth\" src=\"https://mail.phish.ly/report-images/tines-logo2x.png\" style=\"text-decoration: none; -ms-interpolation-mode: bicubic; height: auto; border: 0; width: 100%; max-width: 80px; display: block; margin: auto;\" title=\"Tines logo\" width=\"80\"/></a>\n<!--[if mso]></td></tr></table><![endif]-->\n</div>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td><td align=\"center\" width=\"160\" style=\";width:160px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:60px; padding-bottom:0px;\"><![endif]-->\n<div class=\"col num4\" style=\"max-width: 320px; min-width: 160px; display: table-cell; vertical-align: top; width: 160px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:60px; padding-bottom:0px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<div></div>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#9aa2a6;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:1.2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 1.2; font-size: 12px; color: #9aa2a6; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 14px;\">\n<p style=\"font-size: 14px; line-height: 1.2; word-break: break-word; text-align: center; mso-line-height-alt: 17px; margin: 0;\">Brought to you by <a href=\"https://www.tines.io/\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Tines</a> and <a href=\"https://crowdstrike.com\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Crowdstrike</a></p>\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" height=\"1\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; height: 1px; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td height=\"1\" style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 60px; padding-left: 60px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#021721;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 2; font-size: 15px; color: #021721; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 24px;\">\n<p style=\"line-height: 2; word-break: break-word; mso-line-height-alt: NaNpx; margin: 0;\"><strong><span style=\"font-size: 15px; color: #9aa2a6;\">Alert Overview</span></strong><br/><span style=\"font-size: 15px;\"><strong>Priority:</strong> {{.explode_individual_detections.individual_detection.max_severity_displayname}}</span><br/><span style=\"font-size: 15px;\"><strong>Confidence:</strong> {{.explode_individual_detections.individual_detection.max_confidence}}</span><br/><span style=\"font-size: 15px;\"><strong>Hostname:</strong> {{.explode_individual_detections.individual_detection.device.hostname}}</span><br/><span style=\"font-size: 15px;\"><strong>OS:</strong> {{.explode_individual_detections.individual_detection.device.platform_name}}</span><br/><span style=\"font-size: 15px;\"><strong>Device Type:</strong> {{.explode_individual_detections.individual_detection.device.product_type_desc}}</span><br/><span style=\"font-size: 15px;\"><strong>External IP:</strong> {{.explode_individual_detections.individual_detection.device.external_ip}}</span><br/><span style=\"font-size: 15px;\"><strong>Internal IP:</strong> {{.explode_individual_detections.individual_detection.device.local_ip}}</span><br/><span style=\"font-size: 15px;\"><strong>Local Time:</strong> {{.explode_individual_detections.individual_detection.device.agent_local_time}}</span><br/><span style=\"font-size: 15px;\"><strong>Crowdstrike ID:</strong> <a href=\"https://falcon.us-2.crowdstrike.com/hosts/hosts/host/{{.explode_individual_detections.individual_detection.device.device_id}}\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">{{.explode_individual_detections.individual_detection.device.device_id}}</a></span><br/></p><br><br>\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<div style=\"background-color:transparent;\">\n<div class=\"block-grid\" style=\"Margin: 0 auto; min-width: 320px; max-width: 480px; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; background-color: transparent;\">\n<div style=\"border-collapse: collapse;display: table;width: 100%;background-color:transparent;\">\n<!--[if (mso)|(IE)]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:transparent;\"><tr><td align=\"center\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:480px\"><tr class=\"layout-full-width\" style=\"background-color:transparent\"><![endif]-->\n<!--[if (mso)|(IE)]><td align=\"center\" width=\"480\" style=\";width:480px; border-top: 0px solid transparent; border-left: 0px solid transparent; border-bottom: 0px solid transparent; border-right: 0px solid transparent;\" valign=\"top\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top:5px; padding-bottom:5px;\"><![endif]-->\n<div class=\"col num12\" style=\"min-width: 320px; max-width: 480px; display: table-cell; vertical-align: top; width: 480px;\">\n<div style=\"width:100% !important;\">\n<!--[if (!mso)&(!IE)]><!-->\n<div style=\"border-top:0px solid transparent; border-left:0px solid transparent; border-bottom:0px solid transparent; border-right:0px solid transparent; padding-top:5px; padding-bottom:5px; padding-right: 0px; padding-left: 0px;\">\n<!--<![endif]-->\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 60px; padding-left: 60px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#021721;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:4;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 2; font-size: 15px; color: #021721; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 24px;\">\n<p style=\"line-height: 2; word-break: break-word; mso-line-height-alt: NaNpx; margin: 0;\"><strong><span style=\"font-size: 15px; color: #9aa2a6;\">Alert Overview</span></strong><br/>{% for behavior in .explode_individual_detections.individual_detection.behaviors %}\n<strong>Behavior {{forloop.index}} of {{forloop.length}}</strong>\n<table border='1' style='border-collapse:collapse; border: 1px solid #F2F2F2;'>\n<tr><td VALIGN=TOP><b>Severity:</b></td><td>{{.behavior.severity}}</td></tr>\n<tr><td VALIGN=TOP><b>Link to Behavior:</b></td><td>https://falcon.crowdstrike.com/activity/detections/detail/{{behavior.control_graph_id | replace: 'ctg:', '' | replace: ':', '/'}} </td></tr>\n<tr><td VALIGN=TOP><b>Process Name:</b></td><td>{{.behavior.filename | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>User:</b></td><td>{{.behavior.user_name}} </td></tr>\n<tr><td VALIGN=TOP><b>Process Hash:</b></td><td>{{.behavior.sha256}} </td></tr>\n<tr><td VALIGN=TOP><b>Command Line:</b></td><td>{{.behavior.cmdline | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>Scenario / Technique:</b></td><td>{{.behavior.scenario | default: 'N/A'}} - {{.behavior.tactic | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>IOC Value:</b></td><td>{{.behavior.ioc_value | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>IOC Source:</b></td><td>{{.behavior.ioc_source | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>IOC Description:</b></td><td>{{.behavior.ioc_description | default: 'N/A'}} </td></tr>\n</table><br><br>\n{% endfor %}\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 60px; padding-left: 60px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#021721;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 2; font-size: 15px; color: #021721; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 24px;\">\n<p style=\"line-height: 2; word-break: break-word; mso-line-height-alt: NaNpx; margin: 0;\"><strong><span style=\"font-size: 15px; color: #9aa2a6;\">Response Actions</span></strong><br/><span style=\"font-size: 15px;\"><strong><strong><a href=\"{% prompt contain %}}\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Contain this device in Crowdstrike</a></p></strong></span></strong></span><span style=\"font-size: 15px;\"><strong><strong><a href=\"{% prompt chrome %}\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Analyze Chrome Extensions</a></p></strong></span></strong></span><br/><br/><br/><br/></p><br><br>\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<div align=\"center\" class=\"img-container center autowidth\" style=\"padding-right: 0px;padding-left: 0px;\">\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr style=\"line-height:0px\"><td style=\"padding-right: 0px;padding-left: 0px;\" align=\"center\"><![endif]--><a href=\"https://www.tines.io/customers\"><img align=\"center\" alt=\"logos\" border=\"0\" class=\"center autowidth\" src=\"https://mail.phish.ly/report-images/img-logos2x.png\" style=\"text-decoration: none; -ms-interpolation-mode: bicubic; height: auto; border: 0; width: 100%; max-width: 480px; display: block;\" title=\"Customer Logos\" width=\"480\"/></a>\n<!--[if mso]></td></tr></table><![endif]-->\n</div>\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top: 0px; padding-bottom: 24px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#9aa2a6;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:1.2;padding-top:0px;padding-right:0px;padding-bottom:24px;padding-left:0px;\">\n<div style=\"line-height: 1.2; font-size: 12px; color: #9aa2a6; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 14px;\">\n<p style=\"font-size: 14px; line-height: 1.2; word-break: break-word; text-align: center; mso-line-height-alt: 17px; margin: 0;\"><strong>Trusted by the world’s leading security teams</strong></p>\n</div>\n</div>\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<div style=\"color:#9aa2a6;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:1.2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 1.2; font-size: 12px; color: #9aa2a6; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 14px;\">\n<p style=\"font-size: 14px; line-height: 1.2; word-break: break-word; text-align: center; mso-line-height-alt: 17px; margin: 0;\">Have questions about Tines? <a href=\"https://tines-community.slack.com\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Join our Slack community</a></p>\n</div>\n</div>\n<!--[if mso]></td></tr></table><![endif]-->\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td class=\"divider_inner\" style=\"word-break: break-word; vertical-align: top; min-width: 100%; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; padding-top: 32px; padding-right: 60px; padding-bottom: 32px; padding-left: 60px;\" valign=\"top\">\n<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"divider_content\" role=\"presentation\" style=\"table-layout: fixed; vertical-align: top; border-spacing: 0; border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-top: 1px solid #F2F2F2; width: 100%;\" valign=\"top\" width=\"100%\">\n<tbody>\n<tr style=\"vertical-align: top;\" valign=\"top\">\n<td style=\"word-break: break-word; vertical-align: top; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%;\" valign=\"top\"><span></span></td>\n</tr>\n</tbody>\n</table>\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if mso]><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"padding-right: 0px; padding-left: 0px; padding-top: 0px; padding-bottom: 0px; font-family: Arial, sans-serif\"><![endif]-->\n<!--[if mso]></td></tr></table><![endif]-->\n<!--[if (!mso)&(!IE)]><!-->\n</div>\n<!--<![endif]-->\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n<!--[if (mso)|(IE)]></td></tr></table></td></tr></table><![endif]-->\n</div>\n</div>\n</div>\n<!--[if (mso)|(IE)]></td></tr></table><![endif]-->\n</td>\n</tr>\n</tbody>\n</table>\n<!--[if (IE)]></div><![endif]-->\n",
+          "the_hive_body": "|Alert Overview||\n| ------------- |:-----| \n|**Priority**|{{.explode_individual_detections.individual_detection.max_severity_displayname}} |\n|**Confidence**|{{.explode_individual_detections.individual_detection.max_confidence}} |\n|**Hostname**|{{.explode_individual_detections.individual_detection.device.hostname}} |\n|**OS**|{{.explode_individual_detections.individual_detection.device.platform_name}} |\n|**Device Type**|{{.explode_individual_detections.individual_detection.device.product_type_desc}} |\n|**Local Time**|{{.explode_individual_detections.individual_detection.device.agent_local_time}} |\n|**External IP**|{{.explode_individual_detections.individual_detection.device.external_ip}} |\n|**Internal IP**|{{.explode_individual_detections.individual_detection.device.local_ip}} |\n|**Crowdstrike ID**|[{{.explode_individual_detections.individual_detection.device.device_id}}](https://falcon.us-2.crowdstrike.com/hosts/hosts/host/{{.explode_individual_detections.individual_detection.device.device_id}}) |\n\n\n###Alert Behaviors\n{% for behavior in .explode_individual_detections.individual_detection.behaviors %}\n*Behavior {{forloop.index}} of {{forloop.length}}*\n\n|*Behavior {{forloop.index}} of {{forloop.length}}*||\n| ------------- |:-----| \n|**Severity**|{{.behavior.severity}} |\n|**Link to Behavior**|[Crowdstrike](https://falcon.crowdstrike.com/activity/detections/detail/{{behavior.control_graph_id | replace: 'ctg:', '' | replace: ':', '/'}}) |\n|**Process Name**|{{.behavior.filename | default: 'N/A'}} |\n|**User**|{{.behavior.user_name}} |\n|**Process Hash**|{{.behavior.sha256}} |\n|**Command Line**|{{.behavior.cmdline | default: 'N/A'}} |\n|**Scenario / Technique**|{{.behavior.scenario | default: 'N/A'}} - {{.behavior.tactic | default: 'N/A'}} |\n|**IOC Value**|{{.behavior.ioc_value | default: 'N/A'}} |\n|**IOC Source**|{{.behavior.ioc_source | default: 'N/A'}} |\n|**IOC Description**|{{.behavior.ioc_description | default: 'N/A'}} |\n\n{% endfor %}\n",
+          "servicenow_body": "<div style=\"color:#021721;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 2; font-size: 15px; color: #021721; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 24px;\">\n<p style=\"line-height: 2; word-break: break-word; mso-line-height-alt: NaNpx; margin: 0;\"><strong><span style=\"font-size: 15px; color: #9aa2a6;\">Alert Overview</span></strong><br/><span style=\"font-size: 15px;\"><strong>Priority:</strong> {{.explode_individual_detections.individual_detection.max_severity_displayname}}</span><br/><span style=\"font-size: 15px;\"><strong>Confidence:</strong> {{.explode_individual_detections.individual_detection.max_confidence}}</span><br/><span style=\"font-size: 15px;\"><strong>Hostname:</strong> {{.explode_individual_detections.individual_detection.device.hostname}}</span><br/><span style=\"font-size: 15px;\"><strong>OS:</strong> {{.explode_individual_detections.individual_detection.device.platform_name}}</span><br/><span style=\"font-size: 15px;\"><strong>Device Type:</strong> {{.explode_individual_detections.individual_detection.device.product_type_desc}}</span><br/><span style=\"font-size: 15px;\"><strong>External IP:</strong> {{.explode_individual_detections.individual_detection.device.external_ip}}</span><br/><span style=\"font-size: 15px;\"><strong>Internal IP:</strong> {{.explode_individual_detections.individual_detection.device.local_ip}}</span><br/><span style=\"font-size: 15px;\"><strong>Local Time:</strong> {{.explode_individual_detections.individual_detection.device.agent_local_time}}</span><br/><span style=\"font-size: 15px;\"><strong>Crowdstrike ID:</strong> <a href=\"https://falcon.us-2.crowdstrike.com/hosts/hosts/host/{{.explode_individual_detections.individual_detection.device.device_id}}\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">{{.explode_individual_detections.individual_detection.device.device_id}}</a></span><br/></p><br><br>\n</div>\n</div><br><br><br>\n\n\n<div style=\"color:#021721;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:4;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 2; font-size: 15px; color: #021721; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 24px;\">\n<p style=\"line-height: 2; word-break: break-word; mso-line-height-alt: NaNpx; margin: 0;\"><strong><span style=\"font-size: 15px; color: #9aa2a6;\">Alert Overview</span></strong><br/>{% for behavior in .explode_individual_detections.individual_detection.behaviors %}\n<strong>Behavior {{forloop.index}} of {{forloop.length}}</strong>\n<table border='1' style='border-collapse:collapse; border: 1px solid #F2F2F2;'>\n<tr><td VALIGN=TOP><b>Severity:</b></td><td>{{.behavior.severity}}</td></tr>\n<tr><td VALIGN=TOP><b>Link to Behavior:</b></td><td>https://falcon.{{.RESOURCE.crowdstrike_domain}}/activity/detections/detail/{{behavior.control_graph_id | replace: 'ctg:', '' | replace: ':', '/'}} </td></tr>\n<tr><td VALIGN=TOP><b>Process Name:</b></td><td>{{.behavior.filename | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>User:</b></td><td>{{.behavior.user_name}} </td></tr>\n<tr><td VALIGN=TOP><b>Process Hash:</b></td><td>{{.behavior.sha256}} </td></tr>\n<tr><td VALIGN=TOP><b>Command Line:</b></td><td>{{.behavior.cmdline | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>Scenario / Technique:</b></td><td>{{.behavior.scenario | default: 'N/A'}} - {{.behavior.tactic | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>IOC Value:</b></td><td>{{.behavior.ioc_value | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>IOC Source:</b></td><td>{{.behavior.ioc_source | default: 'N/A'}} </td></tr>\n<tr><td VALIGN=TOP><b>IOC Description:</b></td><td>{{.behavior.ioc_description | default: 'N/A'}} </td></tr>\n</table><br><br>\n{% endfor %}\n</div>\n</div><br><br><br>\n\n\n<div style=\"color:#021721;font-family:Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif;line-height:2;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;\">\n<div style=\"line-height: 2; font-size: 15px; color: #021721; font-family: Open Sans, Helvetica Neue, Helvetica, Arial, sans-serif; mso-line-height-alt: 24px;\">\n<p style=\"line-height: 2; word-break: break-word; mso-line-height-alt: NaNpx; margin: 0;\"><strong><span style=\"font-size: 15px; color: #9aa2a6;\">Response Actions</span></strong><br/><span style=\"font-size: 15px;\"><strong><strong><a href=\"{% prompt contain %}\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Contain this device in Crowdstrike</a></p></strong></span></strong></span><span style=\"font-size: 15px;\"><strong><strong><a href=\"{% prompt chrome %}\" rel=\"noopener\" style=\"text-decoration: underline; color: #3ab4f1;\" target=\"_blank\">Analyze Chrome Extensions</a></p></strong></span></strong></span><br/><br/><br/><br/></p><br><br>\n</div>\n</div>"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Catch Prompt Response",
+      "disabled": false,
+      "guid": "2ca29d02b94c26decdbf95672883f2bd",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": ".",
+            "path": "{{.send_security_email.prompt.status}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "Contain Device",
+      "disabled": false,
+      "guid": "ae829c694fcbccf324aa3d447c60ea0b",
+      "options": {
+        "story": "{% story Crowdstrike - Contain Device %}",
+        "payload": {
+          "host_id": "{{.explode_crowdstrike_behaviors.individual_behavior.device_id}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Contain Device Prompt",
+      "disabled": false,
+      "guid": "7f3a5ff53f563b4efff6586432e5fdf7",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "contain",
+            "path": "{{.send_security_email.prompt.status}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create New Issue Types in Jira",
+      "disabled": false,
+      "guid": "ad1f6713d2e6387f56c2e728b7164b8d",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/issuetype",
+        "content_type": "json",
+        "method": "post",
+        "basic_auth": [
+          "{{ .RESOURCE.jira_username }}",
+          "{{ .CREDENTIAL.jira }}"
+        ],
+        "payload": {
+          "name": "$New_Issue_Type",
+          "description": "New crowdstrike alert",
+          "type": "standard"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 7
+    },
+    {
+      "source": 1,
+      "receiver": 17
+    },
+    {
+      "source": 1,
+      "receiver": 13
+    },
+    {
+      "source": 1,
+      "receiver": 5
+    },
+    {
+      "source": 4,
+      "receiver": 8
+    },
+    {
+      "source": 5,
+      "receiver": 2
+    },
+    {
+      "source": 6,
+      "receiver": 1
+    },
+    {
+      "source": 7,
+      "receiver": 12
+    },
+    {
+      "source": 8,
+      "receiver": 0
+    },
+    {
+      "source": 8,
+      "receiver": 16
+    },
+    {
+      "source": 9,
+      "receiver": 6
+    },
+    {
+      "source": 9,
+      "receiver": 11
+    },
+    {
+      "source": 10,
+      "receiver": 14
+    },
+    {
+      "source": 13,
+      "receiver": 10
+    },
+    {
+      "source": 14,
+      "receiver": 4
+    },
+    {
+      "source": 16,
+      "receiver": 15
+    }
+  ],
+  "diagram_layout": "{\"177b08035c73b18cbb5baaa8c4ae0c91\":[600.0,-915.0],\"bad52510d285593a0123dcfd68e516db\":[600.0,-1410.0],\"6394b669589b536eceb53c0b8c0a0516\":[840.0,-1245.0],\"384a5cf20490e3b9911da55672a67621\":[2280.0,-1515.0],\"05f15e81ed4e6e0d6c381ceeef5f4040\":[600.0,-1080.0],\"0eba4cf8b13179c080cc1ef0179b18a3\":[840.0,-1320.0],\"dd0b73bca6111711c5330963926cf492\":[600.0,-1485.0],\"3e8849bdf67716ceedc2c71fe68f6387\":[600.0,-825.0],\"6ad77b4253c6f046ba785b7ed68cd1e4\":[600.0,-990.0],\"9446e3445051aeb260f957398c94d3a9\":[600.0,-1575.0],\"ad5e4a6176ff45a1c53ad740fff3e953\":[600.0,-1245.0],\"86254e08511b2be00a58b2d584a00d54\":[840.0,-1485.0],\"8f0ce119dedf19ae702eecb69623155a\":[600.0,-735.0],\"730f659bbd5e0b75a16b7fbec41167f5\":[600.0,-1320.0],\"2ca29d02b94c26decdbf95672883f2bd\":[600.0,-1170.0],\"ae829c694fcbccf324aa3d447c60ea0b\":[360.0,-825.0],\"7f3a5ff53f563b4efff6586432e5fdf7\":[360.0,-915.0],\"ad1f6713d2e6387f56c2e728b7164b8d\":[330.0,-1320.0]}",
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "exit_agent_guid": null,
+  "send_to_stories": [
+    {
+      "schema_version": 3,
+      "name": "Crowdstrike - Contain Device",
+      "description": "Receives a Crowdstrike Host ID, and attempts to contain that device on the network.\nIf configured with a Slack webhook, a notification will be sent to a Slack channel.\n\nTo configure a Slack webhook, create a 'Resource' called slack_webhook_url containing the webhook URL for a Slack channel.",
+      "guid": "51d46f2b35e44b0cc220497efb467e8a",
+      "exported_at": "2021-03-19T15:27:06Z",
+      "agents": [
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Prompt Response",
+          "disabled": false,
+          "guid": "a5b3655742a621101a57d17a35526666",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "remove_containment",
+                "path": "{{.post_message_to_a_slack_channel.prompt.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Receive Host Details",
+          "disabled": false,
+          "guid": "20e05ddb91d7d6eaddf8f95755effbee",
+          "options": {
+            "secret": "4eb0108d09a0df52c26b1f5a0d8dde91",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Results",
+          "disabled": false,
+          "guid": "26919b97adf1488453e76360a97c3dd1",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "containment_successful": "{% if .contain_device.status == 202 %}true{% else %}false{% endif %}",
+              "time_contained": "{{ 'now' | date: '%Y-%m-%dT%H:%M:%S%z' }}",
+              "errors": "{{.contain_device.body.errors | as_object}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::SendToStoryAgent",
+          "name": "Send to Story Agent",
+          "disabled": false,
+          "guid": "7cafa95ebee6bb8ba029460a4381ccb1",
+          "options": {
+            "story": "{% story Crowdstrike - Contain Device %}",
+            "payload": {
+              "host_id": "cc0904730de3470eb5570c5f648f6716"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Contain Device",
+          "disabled": false,
+          "guid": "8541d42f31acf76508ce6f497593fd1f",
+          "options": {
+            "url": "https://api.{{.RESOURCE.crowdstrike_domain}}/devices/entities/devices-actions/v2?action_name=contain",
+            "content_type": "json",
+            "method": "post",
+            "payload": {
+              "action_parameters": [
+                {
+                  "name": "",
+                  "value": ""
+                }
+              ],
+              "ids": [
+                "{{.receive_host_details.body.host_id}}"
+              ]
+            },
+            "headers": {
+              "Authorization": "Bearer {{.CREDENTIAL.crowdstrike}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::SendToStoryAgent",
+          "name": "Remove Containment",
+          "disabled": false,
+          "guid": "a82ec4207321fc0877498e402b09ef59",
+          "options": {
+            "story": "{% story Crowdstrike - Lift Device Containment %}",
+            "payload": {
+              "host_id": "{{.receive_host_details.body.host_id}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Post Message to a Slack Channel",
+          "disabled": false,
+          "guid": "fbeccc1bb93f80737c61c91248f460dc",
+          "options": {
+            "url": "{{.RESOURCE.slack_webhook_url}}",
+            "content_type": "json",
+            "method": "post",
+            "payload": {
+              "text": "A machine has been contained in Crowdstrike Falcon\n*Host ID:* {{.receive_host_details.body.host_id}}\n*Time:* {{.build_results.time_contained}}\n\nClick <{% prompt remove_containment %}|here> to lift the network isolation on this machine."
+            },
+            "headers": {}
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Post Message to a Slack Channel",
+          "disabled": false,
+          "guid": "289235a3aa809ca1824fc34840ea35d8",
+          "options": {
+            "url": "{{.RESOURCE.slack_webhook_url}}",
+            "content_type": "json",
+            "method": "post",
+            "payload": {
+              "text": "An attempt to contain a machine in Crowdstrike Falcon has *failed*\n*Host ID:* {{.receive_host_details.body.host_id}}\n*Time:* {{.build_results.time_contained}}\n*Error:* {{.contain_device.body.errors.first}}"
+            },
+            "headers": {}
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Containment Unsuccessful",
+          "disabled": false,
+          "guid": "ebec2356e4425422cebffc9f01dd0172",
+          "options": {
+            "rules": [
+              {
+                "type": "field!=value",
+                "value": "202",
+                "path": "{{.contain_device.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Containment Successful",
+          "disabled": false,
+          "guid": "82e35413ee785190832b4a116d2e8ee6",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "202",
+                "path": "{{.contain_device.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        }
+      ],
+      "diagram_notes": [],
+      "links": [
+        {
+          "source": 0,
+          "receiver": 5
+        },
+        {
+          "source": 1,
+          "receiver": 4
+        },
+        {
+          "source": 2,
+          "receiver": 8
+        },
+        {
+          "source": 2,
+          "receiver": 9
+        },
+        {
+          "source": 4,
+          "receiver": 2
+        },
+        {
+          "source": 6,
+          "receiver": 0
+        },
+        {
+          "source": 8,
+          "receiver": 7
+        },
+        {
+          "source": 9,
+          "receiver": 6
+        }
+      ],
+      "diagram_layout": "{\"a5b3655742a621101a57d17a35526666\":[-195.0,480.0],\"20e05ddb91d7d6eaddf8f95755effbee\":[30.0,75.0],\"26919b97adf1488453e76360a97c3dd1\":[30.0,225.0],\"7cafa95ebee6bb8ba029460a4381ccb1\":[-195.0,75.0],\"8541d42f31acf76508ce6f497593fd1f\":[30.0,150.0],\"a82ec4207321fc0877498e402b09ef59\":[-195.0,570.0],\"fbeccc1bb93f80737c61c91248f460dc\":[-195.0,390.0],\"289235a3aa809ca1824fc34840ea35d8\":[30.0,390.0],\"ebec2356e4425422cebffc9f01dd0172\":[30.0,300.0],\"82e35413ee785190832b4a116d2e8ee6\":[-195.0,300.0]}",
+      "send_to_story_enabled": true,
+      "entry_agent_guid": "20e05ddb91d7d6eaddf8f95755effbee",
+      "exit_agent_guids": [
+        "26919b97adf1488453e76360a97c3dd1"
+      ],
+      "exit_agent_guid": "26919b97adf1488453e76360a97c3dd1",
+      "form": {
+        "name": "New story martin+crowdstrike@tines.io Form",
+        "description": "",
+        "fields": [],
+        "visibility": "tenant",
+        "agent_guid": null,
+        "success_message": "Thank you for your submission"
+      }
+    },
+    {
+      "schema_version": 3,
+      "name": "Crowdstrike - Run RTR Command",
+      "description": "This story will run a given Crowdstrike RtR command against a provided Host ID.\n\nAll default RtR scripts can be used, e.g.:\nls\nmemdump\nshutdown\n\nAdditionally, custom RtR scripts uploaded into the Crowdstrike tenant can be executed as:\nrunscript -CloudFile=\"scriptName\" -CommandLine=\"\"",
+      "guid": "71b1986778d355c7af77e9c1cf38bf69",
+      "exported_at": "2021-03-19T15:27:06Z",
+      "agents": [
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Receive Command",
+          "disabled": false,
+          "guid": "65952bca9d77826fee79659e0535f5a2",
+          "options": {
+            "secret": "49858c543d856826b8b5f695dbbdff06",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::SendToStoryAgent",
+          "name": "Send to Story Agent",
+          "disabled": false,
+          "guid": "d89ab90adfccd54eefe4c911a0e30d5b",
+          "options": {
+            "story": "{% story Crowdstrike - Run RTR Command %}",
+            "payload": {
+              "command": "runscript -CloudFile=\"extract-scheduled-tasks.ps1\" -CommandLine=\"\"",
+              "device_id": "50b29185696d4ea1aa465e4609b9b751"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Execute RTR Command",
+          "disabled": false,
+          "guid": "d77b041cdf637537811111a551c3b92c",
+          "options": {
+            "url": "https://api.{{.RESOURCE.crowdstrike_domain}}/real-time-response/entities/active-responder-command/v1",
+            "content_type": "json",
+            "method": "post",
+            "payload": {
+              "base_command": "{% assign base = .receive_command.body.command | split: \" \" %}{{base[0]}}",
+              "command_string": "{{.receive_command.body.command}}",
+              "session_id": "{{.start_an_rtr_session_in_crowdstrike_falcon.body.resources.first.session_id}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{.CREDENTIAL.crowdstrike}}"
+            },
+            "retry_on_status": [
+              "429"
+            ]
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Delay 5 Seconds",
+          "disabled": false,
+          "guid": "e1d4077823e250751f7bcfe575df0c53",
+          "options": {
+            "mode": "delay",
+            "seconds": 5
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Increment Counter",
+          "disabled": false,
+          "guid": "b4333b7700265bd56f8bdbe3438bc46d",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "counter": "{{.increment_counter.counter | plus: 1}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::SendToStoryAgent",
+          "name": "Get Chrome Extensions",
+          "disabled": false,
+          "guid": "374e7dccbbafec39baf4cfbd60b74a63",
+          "options": {
+            "story": "{% story Crowdstrike - Run RTR Command %}",
+            "payload": {
+              "command": "runscript -CloudFile=\"tines_extract_chrome_extensions_from_endpoint\" -CommandLine=\"\"",
+              "device_id": "cc0904730de3470eb5570c5f648f6716"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::SendToStoryAgent",
+          "name": "Show Pop Up Message",
+          "disabled": false,
+          "guid": "e4829f7cbeb4e76cd2db5e02637abc0a",
+          "options": {
+            "story": "{% story Crowdstrike - Run RTR Command %}",
+            "payload": {
+              "command": "runscript -CloudFile=\"tines_show_pop_up_message_on_endpoint\" -CommandLine=\"hello\" -CommandLine=\"C:\"",
+              "device_id": "50b29185696d4ea1aa465e4609b9b751"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Parse Response",
+          "disabled": false,
+          "guid": "dc4cf9804103ea6041b8116fb6936c1b",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "message": "{{.send_to_story_agent.result.stdout | json_parse | as_object}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Trigger if Error",
+          "disabled": false,
+          "guid": "2f3a1d6daa2b35a89cadafbdd7ae8571",
+          "options": {
+            "rules": [
+              {
+                "type": "regex",
+                "value": "400|404|403",
+                "path": "{{.execute_rtr_command.status}} {{.start_an_rtr_session_in_crowdstrike_falcon.status}} {{.check_status_and_retrieve_results_of_an_active_responder_rtr_command.status}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Query Complete",
+          "disabled": false,
+          "guid": "aa536fcffdb2a2626268258f2a5ec7e0",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "true",
+                "path": "{{.check_status_and_retrieve_results_of_an_active_responder_rtr_command.body.resources.first.complete}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::TriggerAgent",
+          "name": "Query Not Complete",
+          "disabled": false,
+          "guid": "f4675d3461b9faa1af0d584515d2e64b",
+          "options": {
+            "rules": [
+              {
+                "type": "field==value",
+                "value": "false",
+                "path": "{{.check_status_and_retrieve_results_of_an_active_responder_rtr_command.body.resources.first.complete}}"
+              }
+            ]
+          },
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Build Results",
+          "disabled": false,
+          "guid": "a935228ecdec1bbce21aa81839398d62",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "query_successful": "{% if trigger_if_error %}false{% else %}true{% endif %}",
+              "session_closed": "{% if .delete_an_rtr_session_in_crowdstrike_falcon.status == 204 %}true{% else %}false{% endif %}",
+              "result": "{{.check_status_and_retrieve_results_of_an_active_responder_rtr_command.body.resources.first | default: 'Error - no results available' | as_object}}",
+              "error": "{% if .start_an_rtr_session_in_crowdstrike_falcon.status != 201 %}Error Starting RTR Session - {{.start_an_rtr_session_in_crowdstrike_falcon.body.errors.first.message}}{% elsif .execute_rtr_command.status != 201 %}Error Executing Command on Device - {{.execute_rtr_command.body.errors.first.message}}{% elsif .check_status_and_retrieve_results_of_an_active_responder_rtr_command.status != 200 %}Error running script - {{.check_status_and_retrieve_results_of_an_active_responder_rtr_command.body.errors.first.message}}{% else %}No errors found when executing command {% endif %}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Explode an Array",
+          "disabled": false,
+          "guid": "6f851fef4ea5e4560fb84477508b7ddd",
+          "options": {
+            "mode": "explode",
+            "path": "{{.parse_response.message}}",
+            "to": "individual_record"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Parse Response",
+          "disabled": false,
+          "guid": "b7cab8f3cdf9be0dc2b8dda84dcbd739",
+          "options": {
+            "mode": "message_only",
+            "payload": {
+              "message": "{{.get_chrome_extensions.result.stdout | json_parse | as_object}}"
+            }
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::EventTransformationAgent",
+          "name": "Explode extensions",
+          "disabled": false,
+          "guid": "6e09c0fc096a26e757089c066a44e425",
+          "options": {
+            "mode": "explode",
+            "path": "{{.parse_response.message}}",
+            "to": "extension"
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Check Status and Retrieve Results of an Active Responder RTR Command",
+          "disabled": false,
+          "guid": "298e8285246329c77b7eae9d8a14c37d",
+          "options": {
+            "url": "https://api.{{.RESOURCE.crowdstrike_domain}}/real-time-response/entities/active-responder-command/v1",
+            "content_type": "json",
+            "method": "get",
+            "payload": {
+              "cloud_request_id": "{{.execute_rtr_command.body.resources.first.cloud_request_id}}",
+              "sequence_id": "{{.increment_count.counter | default: 0}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{.CREDENTIAL.crowdstrike}}"
+            },
+            "retry_on_status": [
+              "429"
+            ]
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Delete an RTR Session in Crowdstrike Falcon",
+          "disabled": false,
+          "guid": "40337632418271e096062f49346d2790",
+          "options": {
+            "url": "https://api.{{.RESOURCE.crowdstrike_domain}}/real-time-response/entities/sessions/v1",
+            "content_type": "json",
+            "method": "delete",
+            "payload": {
+              "session_id": "{{.start_an_rtr_session_in_crowdstrike_falcon.body.resources.first.session_id}}"
+            },
+            "headers": {
+              "Authorization": "Bearer {{.CREDENTIAL.crowdstrike}}"
+            },
+            "retry_on_status": [
+              "429"
+            ]
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::HTTPRequestAgent",
+          "name": "Start an RTR Session in Crowdstrike Falcon",
+          "disabled": false,
+          "guid": "458714891e74d3cd13e8f3dd10179db6",
+          "options": {
+            "url": "https://api.{{.RESOURCE.crowdstrike_domain}}/real-time-response/entities/sessions/v1",
+            "content_type": "json",
+            "method": "post",
+            "payload": {
+              "device_id": "{{.receive_command.body.device_id}}",
+              "origin": "string",
+              "queue_offline": true
+            },
+            "headers": {
+              "Authorization": "Bearer {{.CREDENTIAL.crowdstrike}}"
+            },
+            "retry_on_status": [
+              "429"
+            ]
+          },
+          "schedule": null,
+          "keep_events_for": 0
+        },
+        {
+          "type": "Agents::WebhookAgent",
+          "name": "Receive form",
+          "disabled": false,
+          "guid": "4c084dec52aba5172cb07dc65ec21f0a",
+          "options": {
+            "secret": "9537f2c1f25af1b9109f184c7d077c5e",
+            "verbs": "get,post"
+          },
+          "keep_events_for": 0
+        }
+      ],
+      "diagram_notes": [],
+      "links": [
+        {
+          "source": 0,
+          "receiver": 17
+        },
+        {
+          "source": 1,
+          "receiver": 7
+        },
+        {
+          "source": 2,
+          "receiver": 15
+        },
+        {
+          "source": 3,
+          "receiver": 4
+        },
+        {
+          "source": 4,
+          "receiver": 15
+        },
+        {
+          "source": 5,
+          "receiver": 13
+        },
+        {
+          "source": 7,
+          "receiver": 12
+        },
+        {
+          "source": 8,
+          "receiver": 16
+        },
+        {
+          "source": 9,
+          "receiver": 16
+        },
+        {
+          "source": 10,
+          "receiver": 3
+        },
+        {
+          "source": 13,
+          "receiver": 14
+        },
+        {
+          "source": 15,
+          "receiver": 10
+        },
+        {
+          "source": 15,
+          "receiver": 9
+        },
+        {
+          "source": 15,
+          "receiver": 8
+        },
+        {
+          "source": 16,
+          "receiver": 11
+        },
+        {
+          "source": 17,
+          "receiver": 2
+        },
+        {
+          "source": 18,
+          "receiver": 6
+        }
+      ],
+      "diagram_layout": "{\"65952bca9d77826fee79659e0535f5a2\":[105.0,75.0],\"d89ab90adfccd54eefe4c911a0e30d5b\":[-180.0,75.0],\"d77b041cdf637537811111a551c3b92c\":[105.0,240.0],\"e1d4077823e250751f7bcfe575df0c53\":[105.0,525.0],\"b4333b7700265bd56f8bdbe3438bc46d\":[105.0,600.0],\"374e7dccbbafec39baf4cfbd60b74a63\":[-435.0,75.0],\"e4829f7cbeb4e76cd2db5e02637abc0a\":[-660.0,165.0],\"dc4cf9804103ea6041b8116fb6936c1b\":[-180.0,165.0],\"2f3a1d6daa2b35a89cadafbdd7ae8571\":[600.0,450.0],\"aa536fcffdb2a2626268258f2a5ec7e0\":[360.0,450.0],\"f4675d3461b9faa1af0d584515d2e64b\":[105.0,450.0],\"a935228ecdec1bbce21aa81839398d62\":[525.0,630.0],\"6f851fef4ea5e4560fb84477508b7ddd\":[-180.0,240.0],\"b7cab8f3cdf9be0dc2b8dda84dcbd739\":[-435.0,165.0],\"6e09c0fc096a26e757089c066a44e425\":[-435.0,240.0],\"298e8285246329c77b7eae9d8a14c37d\":[105.0,330.0],\"40337632418271e096062f49346d2790\":[525.0,525.0],\"458714891e74d3cd13e8f3dd10179db6\":[105.0,150.0],\"4c084dec52aba5172cb07dc65ec21f0a\":[-663.0,75.0]}",
+      "send_to_story_enabled": true,
+      "entry_agent_guid": "65952bca9d77826fee79659e0535f5a2",
+      "exit_agent_guids": [
+        "a935228ecdec1bbce21aa81839398d62"
+      ],
+      "exit_agent_guid": "a935228ecdec1bbce21aa81839398d62",
+      "form": {
+        "name": "Show message on endpoint",
+        "description": "",
+        "fields": [],
+        "visibility": "tenant",
+        "agent_guid": "4c084dec52aba5172cb07dc65ec21f0a",
+        "success_message": "Thank you for your submission"
+      }
+    }
+  ],
+  "form": {
+    "name": "CS Response Form",
+    "description": "Enter a bunch of IOCs to search crowdstrike",
+    "fields": [
+      {
+        "name": "IOCs",
+        "description": "IOCs",
+        "required": false,
+        "type": "LONG_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 0,
+        "max_characters": null
+      }
+    ],
+    "visibility": "world",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}

@@ -1,0 +1,701 @@
+{
+  "schema_version": 3,
+  "name": "Slack Interactive Bot Example",
+  "description": "Demo Story for handling Slack Interactive Responses\n\nTo test this Story, either Run the Agent called \"Run to kick off test\", or submit a form.\nThis Jira ticket can be used for testing: https://tinesio.atlassian.net/browse/DEMO-2558\n\n\nWhen enabling a Slack App to allow Interactive Content, a single Webhook URL must be provided. This webhook will receive all interactive responses related to this Slack App. \n\n\nThis story will take a given email address, and send that user a custom message with the option to confirm or deny that action.\nIf the user denies the action, then a Jira ticket will be updated noting this response.\nIf a user confirms the action, they will be presented with a modal view allowing them to add some extra context about the action taken. Once submitted, the Jira ticket will be updated with the additional information. If the user closes this dialog before submitting a response, the Jira ticket will be updated to include that detail.\n\nAfter either submitting a response, or denying the activity, the original Slack message will be overwritten with a message confirming the response and providing the Incident ID.\n\n",
+  "guid": "debb674d0452d8397c199844a471af98",
+  "exported_at": "2021-03-19T17:05:02Z",
+  "agents": [
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive Interactive From Slack",
+      "disabled": false,
+      "guid": "e4b6618a1b1a3f8453a009c9e6fab97e",
+      "options": {
+        "secret": "83e5cd5a2a00a942e9ebc18b03d66ab6",
+        "verbs": "get,post",
+        "response": ""
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Send message to user in Slack to confirm",
+      "disabled": false,
+      "guid": "f7defd50975c9876e3bcf0d5ab734eba",
+      "options": {
+        "url": "https://slack.com/api/chat.postMessage",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "channel": "{{.search_user_by_email_in_slack.body.user.id}}",
+          "text": "{{.receive_form.body.message}}",
+          "blocks": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Information Security Alert*"
+              },
+              "block_id": "header_text"
+            },
+            {
+              "type": "section",
+              "fields": [
+                {
+                  "type": "mrkdwn",
+                  "text": "{{.receive_form.body.message}}"
+                }
+              ],
+              "block_id": "message_text"
+            },
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "emoji": true,
+                    "text": "This Was Me"
+                  },
+                  "style": "primary",
+                  "action_id": "confirm",
+                  "value": "-----{\"incident_id\": \"{{.receive_form.body.incident_id}}\",\"incident_type\": \"{{.receive_form.body.incident_type}}\",\"username\": \"{{.receive_form.body.email}}\", \"slack_id\": \"{{.search_user_by_email_in_slack.body.user.id}}\"}"
+                },
+                {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "emoji": true,
+                    "text": "I don't recognize this"
+                  },
+                  "style": "danger",
+                  "action_id": "deny",
+                  "value": "-----{\"incident_id\": \"{{.receive_form.body.incident_id}}\",\"incident_type\": \"{{.receive_form.body.incident_type}}\",\"username\": \"{{.receive_form.body.email}}\", \"slack_id\": \"{{.search_user_by_email_in_slack.body.user.id}}\"}"
+                }
+              ],
+              "block_id": "send_message_to_user"
+            }
+          ]
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.slack_interactive_bot_token}}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search User by Email in Slack",
+      "disabled": false,
+      "guid": "53974eb7686f7254de21e48eb216d18b",
+      "options": {
+        "url": "https://slack.com/api/users.lookupByEmail",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "email": "{{.receive_form.body.email}}"
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.slack_interactive_bot_token}}"
+        },
+        "expected_update_period_in_days": "1",
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "Receive Form",
+      "disabled": false,
+      "guid": "9e8875c684a09cfea3cf6bcfe20a8bc1",
+      "options": {
+        "secret": "e8327186a21087d109ceee0111b99588",
+        "verbs": "get,post"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Modal Cancelled",
+      "disabled": false,
+      "guid": "87fb97040d912393f3fab8a6b7beaf04",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "dialog_cancellation|view_closed",
+            "path": "{{.receive_interactive_from_slack.body.payload}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Request More Info Modal",
+      "disabled": false,
+      "guid": "99bf54e7a05cb2315d4fbff5602b8d3f",
+      "options": {
+        "url": "https://slack.com/api/views.open",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "trigger_id": "{{.parse_response.response.trigger_id}}",
+          "view": {
+            "type": "modal",
+            "private_metadata": "{{.parse_response.response.actions.first.value}}",
+            "title": {
+              "type": "plain_text",
+              "text": "Additional Information"
+            },
+            "submit": {
+              "type": "plain_text",
+              "text": "Submit"
+            },
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "plain_text",
+                  "text": "Thank you for confirming this action. \nTo help the Information Security team resolve this incident, please provide some details of the action taken, and the reasoning for this.",
+                  "emoji": true
+                },
+                "block_id": "\"{{.parse_response.response.message.ts}}\",{{.parse_response.response.channel.id}}"
+              },
+              {
+                "type": "input",
+                "element": {
+                  "type": "plain_text_input",
+                  "multiline": true,
+                  "action_id": "response_summary"
+                },
+                "label": {
+                  "type": "plain_text",
+                  "text": "Summary",
+                  "emoji": true
+                },
+                "block_id": "summary_textbox_block"
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "input",
+                "element": {
+                  "type": "radio_buttons",
+                  "options": [
+                    {
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": "I would like Information Security to contact me regarding this incident."
+                      },
+                      "value": "confirm_contact"
+                    },
+                    {
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": "No need to contact me, this should clear it up."
+                      },
+                      "value": "reject_contact"
+                    }
+                  ],
+                  "action_id": "radio-action"
+                },
+                "label": {
+                  "type": "plain_text",
+                  "text": "Follow-Up",
+                  "emoji": true
+                },
+                "block_id": "radio_button_block"
+              }
+            ],
+            "notify_on_close": "true"
+          }
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.slack_interactive_bot_token}}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Parse Response",
+      "disabled": false,
+      "guid": "91b2a8dee2339d363ef97d60b55eccc4",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "response": "{{.receive_interactive_from_slack.body.payload | json_parse | as_object}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Parse Incident Information",
+      "disabled": false,
+      "guid": "bd33cb084dcbb80f8cdd30121c2ef844",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "incident_data": "{{.parse_response.response.view.private_metadata | replace: '-----' | json_parse | as_object}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Parse Response",
+      "disabled": false,
+      "guid": "85a57f5d1063ae05a8cfa22b8cac8b6b",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "response": "{{.receive_interactive_from_slack.body.payload | replace: '\\\"{', '{' | replace: '}\\\"', '}' | json_parse | as_object}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Parse Response",
+      "disabled": false,
+      "guid": "9aaa99d75ab34d31cee17b1a523101f2",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "response": "{{.receive_interactive_from_slack.body.payload | json_parse | as_object}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "User Denied",
+      "disabled": false,
+      "guid": "30f69711f54f6ab78d54d0017c3c8196",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "deny",
+            "path": "{{.parse_response.response.actions.first.action_id}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "User Confirmed",
+      "disabled": false,
+      "guid": "f540d29605c43c5eceb49ad9dbf909b0",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "confirm",
+            "path": "{{.parse_response.response.actions.first.action_id}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if User Response",
+      "disabled": false,
+      "guid": "c968b26df8cc51a55e62b45626b75727",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "send_message_to_user",
+            "path": "{{.parse_response.response.actions.first.block_id}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Block Action Response",
+      "disabled": false,
+      "guid": "7492f3c5cd47edead6291336fd344e6a",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "block_actions",
+            "path": "{{.receive_interactive_from_slack.body.payload}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Parse Incident Information",
+      "disabled": false,
+      "guid": "28dcf99f6a66a60c317b328a0dc0948c",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "incident_data": "{{.parse_response.response.view.private_metadata | replace: '-----' | json_parse | as_object}}",
+          "response_metadata": "{{.parse_response.response.view.blocks.first.block_id | split: ',' | as_object}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Modal Response",
+      "disabled": false,
+      "guid": "ee01383b60fb5fa5200bd7948ed32404",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "view_submission",
+            "path": "{{.receive_interactive_from_slack.body.payload}}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Run to kick off test",
+      "disabled": false,
+      "guid": "96ce6f3a13f95933034b4356eb0ed2e8",
+      "options": {
+        "url": "http://www.tines.io",
+        "content_type": "json",
+        "method": "get",
+        "payload": {},
+        "headers": {}
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Receive Form",
+      "disabled": false,
+      "guid": "2fc654d8aa7e95749d8eac32ecf663bb",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "body": {
+            "email": "thomas@tines.io",
+            "message": "This is a test message",
+            "incident_id": "DEMO-2558",
+            "incident_type": "phishing"
+          }
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Update Message",
+      "disabled": false,
+      "guid": "e5094d1570346b8218fdbcf30c0e29e8",
+      "options": {
+        "url": "https://slack.com/api/chat.update",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "channel": "{{.parse_response.response.channel.id}}",
+          "ts": "\"{{.parse_response.response.message.ts}}\"",
+          "text": "Thank you for your response - a member of the Security team will be in touch with further guidance.\nThe Incident ID for this alert is *{{.parse_incident_information.incident_data.incident_id}}*",
+          "attachments": []
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.slack_interactive_bot_token}}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Update Message",
+      "disabled": false,
+      "guid": "6595cc9c16c85da19a8ee44cd6161a76",
+      "options": {
+        "url": "https://slack.com/api/chat.update",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "channel": "{{.parse_incident_information.response_metadata.last}}",
+          "ts": "{{.parse_incident_information.response_metadata.first}}",
+          "text": "Your response has been received.",
+          "attachments": [],
+          "blocks": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "Thank you, your response has been recorded.\nIf you need to contact the Information Security Team regarding this alert, please quote the Incident ID: *{{.parse_incident_information.incident_data.incident_id}}*"
+              },
+              "block_id": "header_text"
+            }
+          ]
+        },
+        "headers": {
+          "Authorization": "Bearer {{.CREDENTIAL.slack_interactive_bot_token}}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Comment to Jira Ticket",
+      "disabled": false,
+      "guid": "c5be15d55b65a6021480762f188e00b6",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/issue/{{.parse_incident_information.incident_data.incident_id}}/comment/",
+        "content_type": "json",
+        "method": "post",
+        "basic_auth": [
+          "{{.RESOURCE.jira_svc_user}}",
+          "{{.CREDENTIAL.jira_svc_pwd}}"
+        ],
+        "payload": {
+          "body": "The user has indicated that they did not carry out this activity.\nResponse time: {{'now' | date: '%e %b %Y %H:%M:%S%p'}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Parse Incident Information",
+      "disabled": false,
+      "guid": "eea3b16edf54d125cfd02cd3bbe68a4e",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "incident_data": "{{.parse_response.response.actions.first.value | replace: '-----' | json_parse | as_object}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Comment to Jira Ticket",
+      "disabled": false,
+      "guid": "d2c4610b2d5a48e32926d4c3be873e9e",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/issue/{{.parse_incident_information.incident_data.incident_id}}/comment/",
+        "content_type": "json",
+        "method": "post",
+        "basic_auth": [
+          "{{.RESOURCE.jira_svc_user}}",
+          "{{.CREDENTIAL.jira_svc_pwd}}"
+        ],
+        "payload": {
+          "body": "The user has indicated that they did carry out this activity, and has included this context:\n\nbq. {{.parse_response.response.view.state.values.summary_textbox_block.response_summary.value}} \n\nResponse time: {{'now' | date: '%e %b %Y %H:%M:%S%p'}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Add Comment to Jira Ticket",
+      "disabled": false,
+      "guid": "1469ee6bd8ead7630361cc506212fcb1",
+      "options": {
+        "url": "https://{{ .RESOURCE.jira_domain }}/rest/api/2/issue/{{.parse_incident_information.incident_data.incident_id}}/comment/",
+        "content_type": "json",
+        "method": "post",
+        "basic_auth": [
+          "{{.RESOURCE.jira_svc_user}}",
+          "{{.CREDENTIAL.jira_svc_pwd}}"
+        ],
+        "payload": {
+          "body": "The user indicated they did carry out this activity, but closed or cancelled the response window before submitting any extra context.\n\nResponse time: {{'now' | date: '%e %b %Y %H:%M:%S%p'}}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 0,
+      "receiver": 13
+    },
+    {
+      "source": 0,
+      "receiver": 15
+    },
+    {
+      "source": 0,
+      "receiver": 4
+    },
+    {
+      "source": 2,
+      "receiver": 1
+    },
+    {
+      "source": 3,
+      "receiver": 2
+    },
+    {
+      "source": 4,
+      "receiver": 6
+    },
+    {
+      "source": 6,
+      "receiver": 7
+    },
+    {
+      "source": 7,
+      "receiver": 23
+    },
+    {
+      "source": 8,
+      "receiver": 12
+    },
+    {
+      "source": 9,
+      "receiver": 14
+    },
+    {
+      "source": 10,
+      "receiver": 21
+    },
+    {
+      "source": 11,
+      "receiver": 5
+    },
+    {
+      "source": 12,
+      "receiver": 10
+    },
+    {
+      "source": 12,
+      "receiver": 11
+    },
+    {
+      "source": 13,
+      "receiver": 8
+    },
+    {
+      "source": 14,
+      "receiver": 19
+    },
+    {
+      "source": 15,
+      "receiver": 9
+    },
+    {
+      "source": 16,
+      "receiver": 17
+    },
+    {
+      "source": 17,
+      "receiver": 2
+    },
+    {
+      "source": 18,
+      "receiver": 20
+    },
+    {
+      "source": 19,
+      "receiver": 22
+    },
+    {
+      "source": 21,
+      "receiver": 18
+    }
+  ],
+  "diagram_layout": "{\"e4b6618a1b1a3f8453a009c9e6fab97e\":[285.0,150.0],\"f7defd50975c9876e3bcf0d5ab734eba\":[-450.0,330.0],\"53974eb7686f7254de21e48eb216d18b\":[-450.0,240.0],\"9e8875c684a09cfea3cf6bcfe20a8bc1\":[-450.0,165.0],\"87fb97040d912393f3fab8a6b7beaf04\":[585.0,240.0],\"99bf54e7a05cb2315d4fbff5602b8d3f\":[-150.0,555.0],\"91b2a8dee2339d363ef97d60b55eccc4\":[585.0,330.0],\"bd33cb084dcbb80f8cdd30121c2ef844\":[585.0,405.0],\"85a57f5d1063ae05a8cfa22b8cac8b6b\":[-150.0,330.0],\"9aaa99d75ab34d31cee17b1a523101f2\":[285.0,330.0],\"30f69711f54f6ab78d54d0017c3c8196\":[60.0,495.0],\"f540d29605c43c5eceb49ad9dbf909b0\":[-150.0,495.0],\"c968b26df8cc51a55e62b45626b75727\":[-150.0,405.0],\"7492f3c5cd47edead6291336fd344e6a\":[-150.0,240.0],\"28dcf99f6a66a60c317b328a0dc0948c\":[285.0,405.0],\"ee01383b60fb5fa5200bd7948ed32404\":[285.0,240.0],\"96ce6f3a13f95933034b4356eb0ed2e8\":[-735.0,90.0],\"2fc654d8aa7e95749d8eac32ecf663bb\":[-735.0,165.0],\"e5094d1570346b8218fdbcf30c0e29e8\":[60.0,660.0],\"6595cc9c16c85da19a8ee44cd6161a76\":[285.0,495.0],\"c5be15d55b65a6021480762f188e00b6\":[60.0,735.0],\"eea3b16edf54d125cfd02cd3bbe68a4e\":[60.0,570.0],\"d2c4610b2d5a48e32926d4c3be873e9e\":[285.0,570.0],\"1469ee6bd8ead7630361cc506212fcb1\":[585.0,495.0]}",
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "exit_agent_guid": null,
+  "send_to_stories": [],
+  "form": {
+    "name": "Slack Interactive Bot Example",
+    "description": "",
+    "fields": [
+      {
+        "name": "Email",
+        "description": "Include the email address of the user to receive the message.",
+        "required": true,
+        "type": "EMAIL",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 0,
+        "max_characters": null
+      },
+      {
+        "name": "Incident ID",
+        "description": "Include the Incident ID for this alert. e.g. DEMO-1234",
+        "required": true,
+        "type": "SHORT_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 1610612736,
+        "max_characters": null
+      },
+      {
+        "name": "Message",
+        "description": "Include the message to be sent to the user.",
+        "required": true,
+        "type": "LONG_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 1073741824,
+        "max_characters": null
+      },
+      {
+        "name": "Incident Type",
+        "description": "Include an Incident Type. e.g. Malware/Phishing",
+        "required": true,
+        "type": "SHORT_TEXT",
+        "multi_select": false,
+        "options": [
+          "Option 1",
+          "Option 2"
+        ],
+        "ranking": 1879048192,
+        "max_characters": null
+      }
+    ],
+    "visibility": "tenant",
+    "agent_guid": "9e8875c684a09cfea3cf6bcfe20a8bc1",
+    "success_message": "Thank you for your submission"
+  }
+}

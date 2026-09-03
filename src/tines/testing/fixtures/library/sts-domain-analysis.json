@@ -1,0 +1,309 @@
+{
+  "schema_version": 3,
+  "name": "StS Domain Analysis",
+  "description": "",
+  "guid": "d6409713828b25c02e0bf8ece048a617",
+  "exported_at": "2021-03-19T17:18:12Z",
+  "agents": [
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "build results",
+      "disabled": false,
+      "guid": "9dd3b1aa2811920412b1e8272feab72c",
+      "options": {
+        "mode": "message_only",
+        "payload": {
+          "domain": "{{.receive_events.domain}}",
+          "domain_age": "{% if .get_domain_age.body.error %}{{.get_domain_age.body.error}}{% else %}{{.get_domain_age.body.data.domain_age_in_days}}{% endif %}",
+          "urlscan": "{% if .search_domains_in_urlscan_io.body.total == 0 %}New{% elsif .view_domain_results_in_urlscan.body.task.source contains \"certstream-suspicious\" %}Malicious {% else %}Clean{% endif %}",
+          "gsb": "{% assign gsb_results = search_domain_in_gsb.body.matches | join: \" \" %}{% if gsb_results contains \"social_engineering\" %}Social Engineering{% elsif gsb_results contains \"MALWARE\" %}Malware{% else %}Clean{% endif %}",
+          "apivoid": "{% if .check_apivoid_for_domain.body.data.report.blacklists.detections == 0 %}New{% else %}Malicious{% endif %}",
+          "alexa_top_10k": "{{.check_apivoid_for_domain.body.data.report.alexa_top_10k}}",
+          "forcepoint_category": "{% if .search_domain_in_virustotal.body['Forcepoint ThreatSeeker category'] %}{{.search_domain_in_virustotal.body['Forcepoint ThreatSeeker category']}}{% else %}unknown{% endif %}",
+          "raw": "{{.check_apivoid_for_domain | as_object }}"
+        }
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search Domain in GSB",
+      "disabled": false,
+      "guid": "130e281aa8284eeb90bcd2560bbbfd23",
+      "options": {
+        "url": "https://safebrowsing.googleapis.com/v4/threatMatches:find?key={% credential GSB %}",
+        "content_type": "json",
+        "method": "post",
+        "payload": {
+          "client": {
+            "clientId": "tinessecurityservices",
+            "clientVersion": "1.0.0"
+          },
+          "threatInfo": {
+            "threatTypes": [
+              "MALWARE",
+              "SOCIAL_ENGINEERING",
+              "THREAT_TYPE_UNSPECIFIED",
+              "UNWANTED_SOFTWARE",
+              "POTENTIALLY_HARMFUL_APPLICATION"
+            ],
+            "platformTypes": [
+              "PLATFORM_TYPE_UNSPECIFIED",
+              "WINDOWS",
+              "LINUX",
+              "ANDROID",
+              "OSX",
+              "IOS",
+              "ANY_PLATFORM",
+              "ALL_PLATFORMS",
+              "CHROME"
+            ],
+            "threatEntryTypes": [
+              "URL"
+            ],
+            "threatEntries": [
+              {
+                "url": "http://{{.receive_events.domain}}"
+              }
+            ]
+          }
+        },
+        "headers": {},
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "trigger if no urlscan results",
+      "disabled": false,
+      "guid": "442173f5aef1f2c17a7684c1b9a252f7",
+      "options": {
+        "rules": [
+          {
+            "type": "field==value",
+            "value": "0",
+            "path": "{{ .search_domains_in_urlscan_io.body.total }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "view domain results in urlscan",
+      "disabled": false,
+      "guid": "b5f54b11c3c46010dea2c1d8b24d9ea6",
+      "options": {
+        "url": "https://urlscan.io/api/v1/result/{{.search_domains_in_urlscan_io.body.results.first._id}}",
+        "content_type": "json",
+        "method": "get",
+        "headers": {
+          "API-Key": "{% credential urlscan_io %}"
+        },
+        "fail_on_status": "true",
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "trigger if urlscan results exist",
+      "disabled": false,
+      "guid": "6347e12bae75e09fa8a6eb0642d39227",
+      "options": {
+        "rules": [
+          {
+            "type": "field>value",
+            "value": "0",
+            "path": "{{ .search_domains_in_urlscan_io.body.total }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "search domain in Virustotal",
+      "disabled": false,
+      "guid": "2b62d3963cc3dbc96fdac4ce0233ca68",
+      "options": {
+        "url": "https://www.virustotal.com/vtapi/v2/domain/report",
+        "method": "get",
+        "payload": {
+          "apikey": "{% credential virustotal %}",
+          "domain": "{{.receive_events.domain}}"
+        },
+        "fail_on_status": "true",
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Check APIVoid for Domain",
+      "disabled": false,
+      "guid": "ce03e6066925e6110eb247d499fce426",
+      "options": {
+        "url": "https://endpoint.apivoid.com/domainbl/v1/pay-as-you-go/",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "key": "{% credential apivoid %}",
+          "host": "{{.receive_events.domain}}"
+        },
+        "fail_on_status": "true",
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::SendToStoryAgent",
+      "name": "STS Analyze Domain",
+      "disabled": false,
+      "guid": "fd76486120756f47866f0487cd8560ec",
+      "options": {
+        "story": "{% story StS Domain Analysis %}",
+        "payload": {
+          "domain": "irishtimes.com",
+          "action": "inveestigate/network"
+        },
+        "send_payload_as_body": "false"
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "search domains in urlscan.io",
+      "disabled": false,
+      "guid": "7fbee40a08eb5cd4b5050a4da487f254",
+      "options": {
+        "url": "https://urlscan.io/api/v1/search/?q=domain:{{.receive_events.domain}}",
+        "content_type": "json",
+        "method": "get",
+        "headers": {
+          "API-Key": "{% credential urlscan_io %}"
+        },
+        "fail_on_status": "true",
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get Domain Age",
+      "disabled": false,
+      "guid": "e9ea6ca202e582d953202cdc94962c1f",
+      "options": {
+        "url": "https://endpoint.apivoid.com/domainage/v1/pay-as-you-go/",
+        "content_type": "json",
+        "method": "get",
+        "payload": {
+          "key": "{% credential apivoid %}",
+          "host": "{{.receive_events.domain}}"
+        },
+        "log_error_on_status": []
+      },
+      "schedule": null,
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::WebhookAgent",
+      "name": "receive events",
+      "disabled": false,
+      "guid": "66caf360fdb90ee8f857879b49129aaa",
+      "options": {
+        "secret": "40ec25bf6ddf6eb6c911b2526c89c9cb",
+        "verbs": "get,post",
+        "include_headers": "false"
+      },
+      "keep_events_for": 0
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if Known Good",
+      "disabled": false,
+      "guid": "c114a56d613bf71c283df5fc7321e18d",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "value": "foo\\d+bar",
+            "path": "{{ .somekey.subkey.subkey.goal }}"
+          }
+        ]
+      },
+      "keep_events_for": 0
+    }
+  ],
+  "diagram_notes": [],
+  "links": [
+    {
+      "source": 1,
+      "receiver": 5
+    },
+    {
+      "source": 2,
+      "receiver": 6
+    },
+    {
+      "source": 3,
+      "receiver": 6
+    },
+    {
+      "source": 4,
+      "receiver": 3
+    },
+    {
+      "source": 5,
+      "receiver": 8
+    },
+    {
+      "source": 6,
+      "receiver": 9
+    },
+    {
+      "source": 8,
+      "receiver": 4
+    },
+    {
+      "source": 8,
+      "receiver": 2
+    },
+    {
+      "source": 9,
+      "receiver": 0
+    },
+    {
+      "source": 10,
+      "receiver": 11
+    },
+    {
+      "source": 11,
+      "receiver": 1
+    }
+  ],
+  "diagram_layout": "{\"9dd3b1aa2811920412b1e8272feab72c\":[225.0,-195.0],\"130e281aa8284eeb90bcd2560bbbfd23\":[225.0,-840.0],\"442173f5aef1f2c17a7684c1b9a252f7\":[345.0,-555.0],\"b5f54b11c3c46010dea2c1d8b24d9ea6\":[105.0,-465.0],\"6347e12bae75e09fa8a6eb0642d39227\":[105.0,-555.0],\"2b62d3963cc3dbc96fdac4ce0233ca68\":[225.0,-765.0],\"ce03e6066925e6110eb247d499fce426\":[225.0,-360.0],\"fd76486120756f47866f0487cd8560ec\":[570.0,-915.0],\"7fbee40a08eb5cd4b5050a4da487f254\":[225.0,-675.0],\"e9ea6ca202e582d953202cdc94962c1f\":[225.0,-270.0],\"66caf360fdb90ee8f857879b49129aaa\":[225.0,-975.0],\"c114a56d613bf71c283df5fc7321e18d\":[225.0,-915.0]}",
+  "send_to_story_enabled": true,
+  "entry_agent_guid": "66caf360fdb90ee8f857879b49129aaa",
+  "exit_agent_guids": [
+    "9dd3b1aa2811920412b1e8272feab72c"
+  ],
+  "exit_agent_guid": "9dd3b1aa2811920412b1e8272feab72c",
+  "send_to_stories": [],
+  "form": {
+    "name": "StS Domain Analysis Form",
+    "description": "",
+    "fields": [],
+    "visibility": "tenant",
+    "agent_guid": null,
+    "success_message": "Thank you for your submission"
+  }
+}
