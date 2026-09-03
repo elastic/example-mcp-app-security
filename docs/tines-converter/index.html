@@ -109,7 +109,8 @@ footer{margin-top:87.5px;padding-top:32.5px;border-top:1px solid var(--bd);color
  <li><a href="#actions">Action &amp; transform mapping</a></li>
  <li><a href="#design">Design decisions</a></li>
  <li><a href="#plan">Implementation plan</a></li>
- <li><a href="#risks">Risks &amp; open questions</a></li>
+ <li><a href="#validation">Validation against a real story</a>
+<a href="#risks">Risks &amp; open questions</a></li>
 </ol></div>
 
 <h2 id="tldr"><span class="n">01</span>Executive summary</h2>
@@ -138,13 +139,13 @@ as the central design constraint rather than an edge case.</p>
 </div>
 
 <h2 id="source"><span class="n">02</span>Source schema: Tines stories</h2>
-<p class="lead">There is <b>no published JSON Schema</b>. <code>schema_version</code> is an internal integer (currently
-<b>18</b>). The contract is the export endpoint <code>GET /api/v1/stories/{id}/export</code> plus the action docs.</p>
+<p class="lead">There is <b>no published JSON Schema</b>. <code>schema_version</code> is an internal integer &mdash; <b>observed 30</b> in a live
+export (2026-09-03), not the 18 this report first inferred from docs. The contract is the export endpoint <code>GET /api/v1/stories/{id}/export</code> plus the action docs.</p>
 
 <pre>{
-  <span class="k">"schema_version"</span>: <span class="n">18</span>,
-  <span class="k">"standard_lib_version"</span>: <span class="n">41</span>,
-  <span class="k">"action_runtime_version"</span>: <span class="n">6</span>,
+  <span class="k">"schema_version"</span>: <span class="n">30</span>,
+  <span class="k">"standard_lib_version"</span>: <span class="n">94</span>,
+  <span class="k">"action_runtime_version"</span>: <span class="n">87</span>,
   <span class="k">"name"</span>: <span class="s">"Suspicious login triage"</span>,
   <span class="k">"guid"</span>: <span class="s">"8de58314250ff167127d6ae213711de9"</span>,
   <span class="k">"agents"</span>: [ <span class="c">/* the actions */</span> ],
@@ -563,7 +564,7 @@ pure functions over JSON needing no HTTP, so the containerised suite starts at P
 <b>loudly</b> rather than degrading to a weaker green.</p>
 
 <h2 id="plan"><span class="n">08</span>Implementation plan</h2>
-<p class="lead">Eight phases, 63 tasks, landing in
+<p class="lead">Eight phases, 67 tasks, landing in
 <code>elastic/example-mcp-app-security</code> on <code>feat/tines-story-converter</code> as an OpenSpec change.
 Phases 0&ndash;6 are headless and independently testable; the MCP surface comes last, on top of a proven core.</p>
 
@@ -621,7 +622,7 @@ Phases 0&ndash;6 are headless and independently testable; the MCP surface comes 
 <p>zod schemas for the export envelope and all 8 agent types. Parse real story exports; fail loudly on unknown
 <code>type</code> rather than silently skipping.</p></div></div>
 
-<div class="card"><div class="ph"><span class="pt">PHASE 1 · 6 tasks</span><h4>Formula lexer + parser</h4>
+<div class="card"><div class="ph"><span class="pt">PHASE 1 · 10 tasks</span><h4>Formula lexer + parser</h4>
 <p><code>&lt;&lt;...&gt;&gt;</code> extraction, function-call AST, slug resolution with Tines' documented
 sluggification and collision rules.</p></div></div>
 
@@ -655,6 +656,64 @@ graph and emitted workflow, gaps highlighted.</p></div></div>
  graph-nesting bugs through a chat client. The core earns its correctness first.
 </div>
 
+
+<h2 id="validation">Validation against a real story</h2>
+<p class="sub">On 2026-09-03 the plan was tested against a live Tines tenant (2 stories, read-only export).
+Everything below is <b>measured</b>, not inferred &mdash; and it corrected three claims.</p>
+
+<div class="call warn">
+<b>The headline: the tree-flattening assumption broke on the very first real story.</b>
+<code>Analyze CrowdStrike detections</code> (13 actions, 13 links) contains a genuine
+<b>fan-in join</b>: <code>Implode behaviors</code> has indegree 2, fed by both
+<code>Search for IoC in VirusTotal</code> and <code>Trigger if IoC is not different to sha256</code>.
+A DAG with a join does not flatten to a step tree without either duplicating the shared subgraph
+or introducing an explicit rejoin. This was listed as a medium risk; it is now a
+<b>confirmed blocker for the naive approach</b>, present in the first non-trivial story examined.
+</div>
+
+<table>
+<thead><tr><th>Claim in this report</th><th>Reality</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td><code>schema_version</code> is 18</td><td>Live export is <b>30</b>; std lib 94, runtime 87</td><td class="bad">corrected</td></tr>
+<tr><td>Graph is a DAG; joins are a risk</td><td>Pure DAG confirmed (no cycles), but a real fan-in join exists</td><td class="warn">confirmed + escalated</td></tr>
+<tr><td>Interpolation is <code>&lt;&lt;path&gt;&gt;</code> + formulas</td><td>Confirmed. 53 interpolations, 43 unique</td><td class="ok">holds</td></tr>
+<tr><td>Credentials are referenced, not embedded</td><td>Confirmed &mdash; all 4 are <code>&lt;&lt;CREDENTIAL.x&gt;&gt;</code>; secret scan found zero literals</td><td class="ok">holds</td></tr>
+<tr><td><em>(not covered)</em></td><td><code>&lt;&lt;RESOURCE.*&gt;&gt;</code> &mdash; a second global-lookup namespace this report never mentioned</td><td class="bad">gap</td></tr>
+</tbody>
+</table>
+
+<h3>What the real story actually uses</h3>
+<p>Action mix: 7&times; <code>HTTPRequestAgent</code>, 5&times; <code>EventTransformationAgent</code>,
+1&times; <code>TriggerAgent</code>. Notably <b>4 of the 5 transform modes in one story</b> are the
+hard ones &mdash; <code>explode</code>&times;2, <code>implode</code>, <code>deduplicate</code>,
+<code>throttle</code>. The stateful modes are not exotic edge cases; they are the backbone of an
+ordinary SOAR story.</p>
+
+<p>Formula usage was <b>far lighter than the 219-function matrix implies</b>: only 5 distinct
+functions appear &mdash; <code>DEFAULT</code>&times;4, <code>DATE</code>&times;3,
+<code>REPLACE</code>&times;2, <code>PLUS</code>, <code>LIQUID_SIZE</code>. This is a single sample and
+must not be over-read, but it supports the recommendation to let real fidelity reports prioritise the
+Liquid filter work rather than pre-building all 219. <code>DEFAULT</code> and <code>PLUS</code> map
+cleanly to Liquid; <code>REPLACE</code> nests two-deep in one expression; <code>LIQUID_SIZE</code>
+is used as <code>implode</code>'s <code>size_path</code> &mdash; it is load-bearing control flow, not
+cosmetic formatting.</p>
+
+<h3>The explode/implode pair, as actually written</h3>
+<pre>explode:  path = =explode_detections.individual_detection.behaviors
+          to   = individual_behavior
+implode:  guid_path = =explode_behaviors.guid
+          size_path = =LIQUID_SIZE(explode_behaviors, "dot_notation")</pre>
+<p>Note the <code>=</code> prefix marking a formula-valued option, and that <code>implode</code>
+correlates purely by <code>guid</code> + computed size. The <code>foreach</code> mapping must
+reproduce that correlation, and the join sits precisely where the fan-in occurs &mdash; the two
+hardest findings are the same finding.</p>
+
+<div class="call">
+<b>Sample size caveat.</b> Two stories, one of them a trivial 2-action starter with no links.
+That is enough to <em>falsify</em> claims (and it falsified three), but nowhere near enough to
+<em>validate</em> the converter. The capability matrix remains triage, not measurement.
+</div>
+
 <h2 id="risks"><span class="n">09</span>Risks &amp; open questions</h2>
 <table>
 <thead><tr><th style="width:26%">Risk</th><th style="width:11%">Severity</th><th>Mitigation</th></tr></thead>
@@ -663,7 +722,7 @@ graph and emitted workflow, gaps highlighted.</p></div></div>
 <td>Every converted row needs a passing equivalence test; untested rows default to unconvertible. This is the
 single most dangerous failure mode — it produces silently wrong automation.</td></tr>
 <tr><td><b>Schema drift</b></td><td class="warn">Medium</td>
-<td>No published Tines JSON Schema; <code>schema_version</code> 18 is observed, not contracted. Pin the version,
+<td>No published Tines JSON Schema; <code>schema_version</code> <b>30</b> observed live; the docs-derived guess of 18 was already stale &mdash; drift is real, not theoretical. Pin the version,
 fail loudly on unrecognised values.</td></tr>
 <tr><td><b>Join semantics differ subtly</b></td><td class="warn">Medium</td>
 <td>Hoist-and-gate preserves single-execution but changes ordering. Round-trip harness diffs the actual request

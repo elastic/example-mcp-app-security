@@ -1,0 +1,147 @@
+{
+  "schema_version": 30,
+  "standard_lib_version": 94,
+  "action_runtime_version": 87,
+  "name": "Your first story",
+  "description": "",
+  "guid": "a63b83cb650d92a4d72d43b5be374a38",
+  "slug": "your_first_story",
+  "agents": [
+    {
+      "type": "Agents::EmailAgent",
+      "name": "Send email",
+      "disabled": false,
+      "description": null,
+      "guid": "bac0df5efbf6d86b7c462de312b31954",
+      "origin_story_identifier": "cloud:8695e5e387cb47f1d052e39e8540bf8a:a63b83cb650d92a4d72d43b5be374a38",
+      "options": {
+        "recipients": [
+          ""
+        ],
+        "sender_name": "Simple weather",
+        "subject": "Today’s weather forecast for <<get_weather.body.location>> is <<get_weather.body.weather.first.description>>",
+        "body": "<p>It worked!! You created an automation using Tines 🎉.</p> \n\n<p>Today’s weather forecast for <b><<get_weather.body.location>></b> is <b><<get_weather.body.weather.first.description>></b>.</p> \n\n<p><a href=\"https://<<META.tenant.domain>>/stories/<<META.story.id>>\">You can jump back into Tines now</a> to continue editing your story. If you have any questions about how this automation works, or if you’d like to learn more about using Tines to automate your workflows, <a href=\"https://www.tines.com/book-a-demo\">let’s chat</a>.</p>"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get weather",
+      "disabled": false,
+      "description": "",
+      "guid": "e265c446b75607f5ca216f98c55da6e5",
+      "origin_story_identifier": "cloud:8695e5e387cb47f1d052e39e8540bf8a:a63b83cb650d92a4d72d43b5be374a38",
+      "options": {
+        "url": "https://v1.simple-weather-api.com/api/public/weather?location=<<INPUT.location>>&key=<<INPUT.api_key>>",
+        "method": "get"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "seconds"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": "00c1d2528e7985c7e21c78166a0852823b4f801524e6dee7eceb1faf2bad1d34",
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": [
+        {
+          "cron": "58 8 * * 1",
+          "timezone": "Europe/Dublin"
+        }
+      ]
+    }
+  ],
+  "diagram_notes": [],
+  "links": [],
+  "diagram_layout": "{\"bac0df5efbf6d86b7c462de312b31954\":[1065,105],\"e265c446b75607f5ca216f98c55da6e5\":[1065,0]}",
+  "story_library_metadata": {},
+  "monitor_failures": false,
+  "synchronous_webhooks_enabled": false,
+  "integrations": [
+    {
+      "action_inputs": [
+        {
+          "name": "Location",
+          "description": "",
+          "required": true,
+          "type": "TEXT",
+          "ranking": 0,
+          "value": "\"\"",
+          "options": [],
+          "is_collapsed": false,
+          "sub_type": "HTML",
+          "multi_select_enabled": false,
+          "llm_json_schema": "{}"
+        },
+        {
+          "name": "API key",
+          "description": "",
+          "required": false,
+          "type": "CREDENTIAL",
+          "ranking": 1073741824,
+          "value": "null",
+          "options": [],
+          "is_collapsed": false,
+          "sub_type": "HTML",
+          "multi_select_enabled": false,
+          "llm_json_schema": "{}"
+        }
+      ],
+      "action_guid": "e265c446b75607f5ca216f98c55da6e5",
+      "product": "Simple Weather API",
+      "action_options_keys": []
+    }
+  ],
+  "sections": [],
+  "parent_only_send_to_story": false,
+  "send_to_story_timeout_enabled": false,
+  "send_to_story_timeout_duration_seconds": null,
+  "keep_events_for": 86400,
+  "reporting_status": true,
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "api_entry_action_guids": [],
+  "api_exit_action_guids": [],
+  "send_to_story_access": null,
+  "send_to_story_access_source": 0,
+  "send_to_story_skill_use_requires_confirmation": true,
+  "pages": [],
+  "tags": [],
+  "time_saved_unit": "minutes",
+  "time_saved_value": 0,
+  "origin_story_identifier": "cloud:8695e5e387cb47f1d052e39e8540bf8a:a63b83cb650d92a4d72d43b5be374a38",
+  "recipients": [
+    "contact@patrykkopycinski.com"
+  ],
+  "integration_product": null,
+  "integration_vendor": null,
+  "llm_product_instructions": "",
+  "start_reference": null,
+  "app_endpoints": [],
+  "send_to_stories": [],
+  "exported_at": "2026-09-03T09:36:09Z",
+  "icon": ":simple_weather_api:"
+}

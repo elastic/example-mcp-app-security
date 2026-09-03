@@ -1,0 +1,588 @@
+{
+  "schema_version": 30,
+  "standard_lib_version": 94,
+  "action_runtime_version": 87,
+  "name": "Analyze CrowdStrike detections",
+  "description": "Pulls a list of new CrowdStrike Detections, flags them as in progress in CrowdStrike, and gets the detection details for each one.\n\nFor each detection, the individual behaviors are examined, and the process hash is checked in VirusTotal to see if it is known malicious.\n\nWhere there is a provided IOC as part of the behavior, this is also checked in VirusTotal.\n\nA Jira ticket is created for each Detection, and a message sent to a Slack Channel. ",
+  "guid": "8961d3a707295b7714680bd538c49f37",
+  "slug": "analyze_crowdstrike_detections",
+  "agents": [
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Update detection to In Progress",
+      "disabled": true,
+      "description": null,
+      "guid": "722a278c51e87c605af018e08d3956f0",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "url": "https://api.<<RESOURCE.crowdstrike_domain>>/detects/entities/detects/v2",
+        "content_type": "application_json",
+        "method": "patch",
+        "headers": {
+          "Authorization": "Bearer <<CREDENTIAL.crowdstrike>>"
+        },
+        "payload": {
+          "ids": "=get_detections_in_crowdstrike_falcon.body.resources",
+          "status": "in_progress"
+        }
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Deduplicate events",
+      "disabled": false,
+      "description": null,
+      "guid": "9bd3a594a92f4ae80719d18368ad08b2",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "mode": "deduplicate",
+        "period": "86400",
+        "path": "<<explode_detections>>"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Create ticket in Jira",
+      "disabled": false,
+      "description": null,
+      "guid": "7b5e857d18b66861ae69a330b4e51d7d",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "url": "https://<<RESOURCE.jira_domain>>/rest/api/2/issue",
+        "content_type": "application_json",
+        "method": "post",
+        "payload": {
+          "fields": {
+            "project": {
+              "key": "DEMO"
+            },
+            "issuetype": {
+              "name": "Task"
+            },
+            "priority": {
+              "name": "Highest"
+            },
+            "description": "Alert Overview\n\n||*Key*||*Value*||\n|*Severity*|<<explode_detections.individual_detection.max_severity_displayname>>|\n|*Max Severity*|<<explode_detections.individual_detection.max_severity>>|\n|*Max Confidence*|<<explode_detections.individual_detection.max_confidence>>|\n|*Hostname*|<<explode_detections.individual_detection.device.hostname>>|\n|*Device ID*|<<explode_detections.individual_detection.device.device_id>>|\n|*External IP*|<<explode_detections.individual_detection.device.external_ip>>|\n|*Local IP*|<<explode_detections.individual_detection.device.local_ip>>|\n|*Platform*|<<explode_detections.individual_detection.device.platform_name>>|\n|*OS Version*|<<explode_detections.individual_detection.device.os_version>>|\n|*Product Type*|<<explode_detections.individual_detection.device.product_type_desc>>|\n\nBehaviors <%for behavior in implode_behaviors%><<PLUS(behavior.explode_behaviors.index, 1)>> of <<LIQUID_SIZE(explode_behaviors, \"dot_notation\")>> \n||*Key*||*Value*||\n|Severity / Confidence|<<behavior.explode_behaviors.individual_behavior.confidence>>|\n|Link to Behavior|https://falcon.crowdstrike.com/activity/detections/detail/<<REPLACE(REPLACE(behavior.explode_behaviors.individual_behavior.control_graph_id, \"ctg:\", \"\"), \":\", \"/\")>>|\n|Filename|<<behavior.explode_behaviors.individual_behavior.filename>>|\n|User Name|<<behavior.explode_behaviors.individual_behavior.user_name>>|\n|SHA256|<<behavior.explode_behaviors.individual_behavior.sha256>>|\n|SHA256 VT Score|[<<behavior.search_for_process_sha256_in_virustotal.body.data.attributes.last_analysis_stats.malicious>>|https://www.virustotal.com/gui/file/<<behavior.explode_behaviors.individual_behavior.sha256>>/detection]|\n|SHA256 VT Total Creation Date|<<DEFAULT(DATE(behavior.search_for_process_sha256_in_virustotal.body.data.attributes.creation_date, \"%a, %e %b %Y %H:%M:%S\"),\"N/A\")>>|\n|SHA256 VT First Submission Date|<<DATE(behavior.search_for_process_sha256_in_virustotal.body.data.attributes.first_submission_date, \"%a, %e %b %Y %H:%M:%S\")>>|\n|SHA256 VT Last Submission Date|<<DATE(behavior.search_for_process_sha256_in_virustotal.body.data.attributes.last_submission_date, \"%a, %e %b %Y %H:%M:%S\")>>|\n|SHA256 VT Tags|<<behavior.search_for_process_sha256_in_virustotal.body.data.attributes.tags>>|\n|Cmdline|<<behavior.explode_behaviors.individual_behavior.cmdline>>|\n|Scenario + Technique|<<behavior.explode_behaviors.individual_behavior.scenario>>/<<behavior.explode_behaviors.individual_behavior.technique>>|\n|IOC Value|<<DEFAULT(behavior.explode_behaviors.individual_behavior.ioc_value, \"n/a does not exist or same as SHA256\")>>|\n|IOC VT Score|<%if behavior.trigger_if_ioc_is_different_to_sha256_value.rule_matched%>[<<behavior.search_for_ioc_in_virustotal.body.data.attributes.last_analysis_stats.malicious>>|https://www.virustotal.com/gui/file/<<behavior.explode_behaviors.individual_behavior.ioc_value>>/detection]|<%else%>n/a does not exist or same as SHA256<%endif%>|\n|IOC Source|<<DEFAULT(behavior.explode_behaviors.individual_behavior.ioc_source, \"n/a does not exist or same as SHA256\")>>|\n|IOC Description|<<DEFAULT(behavior.explode_behaviors.individual_behavior.ioc_description, \"n/a does not exist or same as SHA256\")>>|\n\n\n\n<%endfor%>\n\n",
+            "summary": "CrowdStrike Malicious Event <<get_detection_details.body.resources.first.device.os_version>> "
+          }
+        },
+        "basic_auth": [
+          "<<RESOURCE.jira_username>>",
+          "<<CREDENTIAL.jira>>"
+        ]
+      },
+      "reporting": {
+        "time_saved_value": 5,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode behaviors",
+      "disabled": false,
+      "description": null,
+      "guid": "ad8f1fdad1776086339ea5f75b5140a5",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "mode": "explode",
+        "path": "=explode_detections.individual_detection.behaviors",
+        "to": "individual_behavior"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get detection details",
+      "disabled": false,
+      "description": null,
+      "guid": "3d74958c66346d577a27914769449182",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "url": "https://api.<<RESOURCE.crowdstrike_domain>>/detects/entities/summaries/GET/v1",
+        "content_type": "application_json",
+        "method": "post",
+        "payload": {
+          "ids": "=get_detections_in_crowdstrike_falcon.body.resources"
+        },
+        "headers": {
+          "Authorization": "Bearer <<CREDENTIAL.crowdstrike>>"
+        }
+      },
+      "reporting": {
+        "time_saved_value": 10,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Throttle event",
+      "disabled": false,
+      "description": null,
+      "guid": "057433e9790ca4ca05f36816ec39bd6f",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "mode": "throttle",
+        "capacity": "30"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search for IoC in VirusTotal",
+      "disabled": false,
+      "description": null,
+      "guid": "a16df9015bea39b44b8671c703e0d7d7",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "url": "https://www.virustotal.com/api/v3/files/<<explode_behaviors.individual_behavior.ioc_value>>",
+        "method": "get",
+        "headers": {
+          "x-apikey": "<<CREDENTIAL.virustotal>>"
+        }
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Implode behaviors",
+      "disabled": false,
+      "description": null,
+      "guid": "bc83886b3f9a81fcd08448388ccd72a3",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "mode": "implode",
+        "guid_path": "=explode_behaviors.guid",
+        "size_path": "=LIQUID_SIZE(explode_behaviors, \"dot_notation\")"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::EventTransformationAgent",
+      "name": "Explode detections",
+      "disabled": false,
+      "description": null,
+      "guid": "3f34f24e6bf11cf125179119efa35593",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "mode": "explode",
+        "path": "=get_detection_details.body.resources",
+        "to": "individual_detection"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Post message to a Slack channel",
+      "disabled": false,
+      "description": null,
+      "guid": "dc8dfd738562c4fc407d3994a4799fb2",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "url": "https://slack.com/api/chat.postMessage",
+        "content_type": "application_json",
+        "method": "post",
+        "payload": {
+          "text": "Alert just created in Jira: <<create_ticket_in_jira.body.key>> for device <<explode_detections.individual_detection.device.device_id>> ",
+          "channel": "<<RESOURCE.slack_channel>>"
+        },
+        "headers": {
+          "Authorization": "Bearer <<CREDENTIAL.slack>>"
+        }
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Search for process SHA256 in VirusTotal",
+      "disabled": false,
+      "description": null,
+      "guid": "75f248531c8699275f2b225e43a03669",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "url": "https://www.virustotal.com/api/v3/files/<<explode_behaviors.individual_behavior.sha256>>",
+        "method": "get",
+        "headers": {
+          "x-apikey": "<<CREDENTIAL.virustotal>>"
+        },
+        "retry_on_status": [
+          "204",
+          "429"
+        ]
+      },
+      "reporting": {
+        "time_saved_value": 5,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::HTTPRequestAgent",
+      "name": "Get detections in CrowdStrike Falcon",
+      "disabled": false,
+      "description": null,
+      "guid": "3c26a333ebcccc4746ecf5d4797dd66c",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "url": "https://api.<<RESOURCE.crowdstrike_domain>>/detects/queries/detects/v1",
+        "content_type": "application_json",
+        "method": "get",
+        "payload": {
+          "sort": "first_behavior|desc"
+        },
+        "headers": {
+          "Authorization": "Bearer <<CREDENTIAL.crowdstrike>>"
+        }
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null,
+      "schedule": null
+    },
+    {
+      "type": "Agents::TriggerAgent",
+      "name": "Trigger if IoC is not different to sha256 value",
+      "disabled": false,
+      "description": null,
+      "guid": "93c3a811940c4063b173c5ec119fd9af",
+      "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+      "options": {
+        "rules": [
+          {
+            "type": "regex",
+            "path": "<<explode_behaviors.individual_behavior.ioc_value>>",
+            "value": "^$"
+          },
+          {
+            "type": "field==value",
+            "path": "<<explode_behaviors.individual_behavior.ioc_value>>",
+            "value": "<<explode_behaviors.individual_behavior.sha256>>"
+          }
+        ],
+        "must_match": "1"
+      },
+      "reporting": {
+        "time_saved_value": 0,
+        "time_saved_unit": "minutes"
+      },
+      "monitoring": {
+        "monitor_all_events": false,
+        "monitor_failures": false,
+        "monitor_no_events_emitted": null
+      },
+      "template": {
+        "created_from_template_guid": null,
+        "created_from_template_version": null,
+        "template_tags": []
+      },
+      "width": null
+    }
+  ],
+  "diagram_notes": [
+    {
+      "content": "This action is disabled in case you do not wish to mark as `in progress` right away.\nEnable it to automatically update the detection status to `in progress`.",
+      "position": [
+        2475,
+        -990
+      ],
+      "guid": "21798cdf0e61ca344eba1d126bb81b30",
+      "width": 270
+    },
+    {
+      "content": "Pulls a list of new CrowdStrike Detections, flags them as in progress in CrowdStrike, and gets the detection details for each one.\n\nFor each detection, the individual behaviors are examined, and the process hash is checked in VirusTotal to see if it is known malicious.\n\nWhere there is a provided IOC as part of the behavior, this is also checked in VirusTotal.\n\nA Jira ticket is created for each Detection, and a message sent to a Slack channel. \n",
+      "position": [
+        1650,
+        -1020
+      ],
+      "guid": "c0d8cab4ba664406884c9b7d02f0123d",
+      "width": 270
+    },
+    {
+      "content": "# **Requirements**\n\n## **Credentials**\n - [ ] `crowdstrike` - Your [CrowdStrike API Token](https://explained.tines.com/en/articles/7950192-crowdstrike-authentication-guide) with the scopes:\n    - `Detection:Read`\n    - `Detection:Write`\n    - `Hosts:Read`\n    - `Hosts:Write`\n    - `Real Time Response:Read`\n    - `Real Time Response:Write`\n - [ ] `jira` - Your API key for [Jira](https://explained.tines.com/en/articles/7969792-atlassian-authentication-guide)\n - [ ] `virustotal` - The API key for your [VirusTotal](https://explained.tines.com/en/articles/7853769-virustotal-authentication-guide) \n\n## **Resources**\n - [ ] `crowdstrike_domain` - Your CrowdStrike instance domain\n- [ ] `jira_domain` - Your Jira instance domain\n- [ ] `jira_username`- The Jira username associated with your API token\n- [ ] `slack_url` - A Slack channel webhook URL",
+      "position": [
+        1350,
+        -1020
+      ],
+      "guid": "0697ed9289f5632e39efd7f7bf90a089",
+      "width": 270
+    }
+  ],
+  "links": [
+    {
+      "source": 1,
+      "receiver": 3
+    },
+    {
+      "source": 2,
+      "receiver": 9
+    },
+    {
+      "source": 3,
+      "receiver": 5
+    },
+    {
+      "source": 4,
+      "receiver": 8
+    },
+    {
+      "source": 5,
+      "receiver": 10
+    },
+    {
+      "source": 6,
+      "receiver": 7
+    },
+    {
+      "source": 7,
+      "receiver": 2
+    },
+    {
+      "source": 8,
+      "receiver": 1
+    },
+    {
+      "source": 10,
+      "receiver": 12
+    },
+    {
+      "source": 11,
+      "receiver": 0
+    },
+    {
+      "source": 11,
+      "receiver": 4
+    },
+    {
+      "source": 12,
+      "receiver": 6,
+      "link_type": "secondary"
+    },
+    {
+      "source": 12,
+      "receiver": 7
+    }
+  ],
+  "diagram_layout": "{\"057433e9790ca4ca05f36816ec39bd6f\":[1965,-585],\"3c26a333ebcccc4746ecf5d4797dd66c\":[1950,-1080],\"3d74958c66346d577a27914769449182\":[1965,-975],\"3f34f24e6bf11cf125179119efa35593\":[1965,-855],\"722a278c51e87c605af018e08d3956f0\":[2220,-945],\"75f248531c8699275f2b225e43a03669\":[1965,-495],\"7b5e857d18b66861ae69a330b4e51d7d\":[1965,-150],\"93c3a811940c4063b173c5ec119fd9af\":[1965,-405],\"9bd3a594a92f4ae80719d18368ad08b2\":[1965,-765],\"a16df9015bea39b44b8671c703e0d7d7\":[2220,-315],\"ad8f1fdad1776086339ea5f75b5140a5\":[1965,-675],\"bc83886b3f9a81fcd08448388ccd72a3\":[1965,-240],\"dc8dfd738562c4fc407d3994a4799fb2\":[1965,-60]}",
+  "story_library_metadata": {
+    "tags": [
+      "A1002",
+      "A2001",
+      "A3001",
+      "best-of",
+      "CrowdStrike",
+      "Intermediate",
+      "IOCs",
+      "Jira",
+      "Reporting Enabled",
+      "Slack",
+      "VirusTotal",
+      "A4002"
+    ],
+    "icons": [
+      "crowdstrike",
+      "⛳️",
+      "virustotal"
+    ],
+    "visibility": "public"
+  },
+  "monitor_failures": false,
+  "synchronous_webhooks_enabled": false,
+  "integrations": [],
+  "sections": [],
+  "parent_only_send_to_story": false,
+  "send_to_story_timeout_enabled": false,
+  "send_to_story_timeout_duration_seconds": null,
+  "keep_events_for": 86400,
+  "reporting_status": true,
+  "send_to_story_enabled": false,
+  "entry_agent_guid": null,
+  "exit_agent_guids": [],
+  "api_entry_action_guids": [],
+  "api_exit_action_guids": [],
+  "send_to_story_access": null,
+  "send_to_story_access_source": 0,
+  "send_to_story_skill_use_requires_confirmation": true,
+  "pages": [],
+  "tags": [],
+  "time_saved_unit": "minutes",
+  "time_saved_value": 0,
+  "origin_story_identifier": "cloud:d521f765a49c72507257a2620612ee96:b8e1939290f881d04bd37f97eadc9815",
+  "recipients": [
+    "thomas@tines.io"
+  ],
+  "integration_product": null,
+  "integration_vendor": null,
+  "llm_product_instructions": "",
+  "start_reference": null,
+  "app_endpoints": [],
+  "send_to_stories": [],
+  "exported_at": "2026-09-03T09:36:08Z",
+  "icon": ":crowdstrike:"
+}
