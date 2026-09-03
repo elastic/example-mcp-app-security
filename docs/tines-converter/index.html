@@ -110,6 +110,7 @@ footer{margin-top:87.5px;padding-top:32.5px;border-top:1px solid var(--bd);color
  <li><a href="#design">Design decisions</a></li>
  <li><a href="#plan">Implementation plan</a></li>
  <li><a href="#validation">Validation against a real story</a>
+<a href="#d10">D10 &mdash; cycles &rarr; while</a>
 <a href="#risks">Risks &amp; open questions</a></li>
 </ol></div>
 
@@ -486,7 +487,7 @@ Join nodes (multiple in-edges) are <b>hoisted</b> to the dominator's level and g
 </div>
 
 <p><b>Cycles:</b> Tines permits them. Workflows has <code>while</code> but no arbitrary back-edge.
-Detected cycles are reported as <b>unconvertible</b>, never approximated.</p>
+Detected cycles are classified (D10): polling-pattern cycles &mdash; the dominant shape, 8 in 7 of 14 real <code>elastic/infosec</code> stories &mdash; convert to a <code>while</code> step; irreducible cycles are reported <b>unconvertible</b>, never approximated.</p>
 
 <h3>D2 &mdash; Explode scope is computed <em>with</em> the tree, not after it</h3>
 <div class="card" style="padding:26px 24px">
@@ -564,7 +565,7 @@ pure functions over JSON needing no HTTP, so the containerised suite starts at P
 <b>loudly</b> rather than degrading to a weaker green.</p>
 
 <h2 id="plan"><span class="n">08</span>Implementation plan</h2>
-<p class="lead">Eight phases, 67 tasks, landing in
+<p class="lead">Eight phases, 72 tasks, landing in
 <code>elastic/example-mcp-app-security</code> on <code>feat/tines-story-converter</code> as an OpenSpec change.
 Phases 0&ndash;6 are headless and independently testable; the MCP surface comes last, on top of a proven core.</p>
 
@@ -618,7 +619,7 @@ Phases 0&ndash;6 are headless and independently testable; the MCP surface comes 
 
 <h3>Phases</h3>
 <div class="grid g2">
-<div class="card"><div class="ph"><span class="pt">PHASE 0 · 6 tasks</span><h4>Schema foundation</h4>
+<div class="card"><div class="ph"><span class="pt">PHASE 0 · 8 tasks</span><h4>Schema foundation</h4>
 <p>zod schemas for the export envelope and all 8 agent types. Parse real story exports; fail loudly on unknown
 <code>type</code> rather than silently skipping.</p></div></div>
 
@@ -630,8 +631,8 @@ sluggification and collision rules.</p></div></div>
 <p>All 219 rows as data. Emitter is a pure lookup — no per-function branching. Unknown function ⇒ unconvertible,
 never a guess.</p></div></div>
 
-<div class="card"><div class="ph"><span class="pt">PHASE 3 · 7 tasks</span><h4>Graph → tree</h4>
-<p>Topological sort, dominator tree, join hoisting, explode-scope resolution, cycle detection. The hardest phase;
+<div class="card"><div class="ph"><span class="pt">PHASE 3 · 10 tasks</span><h4>Graph → tree</h4>
+<p>Topological sort, dominator tree, join hoisting, explode-scope resolution, cycle classification (D10). The hardest phase;
 property-based tests over generated DAGs.</p></div></div>
 
 <div class="card"><div class="ph"><span class="pt">PHASE 4 · 11 tasks</span><h4>YAML emit + fidelity report</h4>
@@ -713,6 +714,29 @@ hardest findings are the same finding.</p>
 That is enough to <em>falsify</em> claims (and it falsified three), but nowhere near enough to
 <em>validate</em> the converter. The capability matrix remains triage, not measurement.
 </div>
+
+<h2 id="d10">Corpus correction: cycles &rarr; <code>while</code> (D10)</h2>
+<p class="sub">The sanitized <code>elastic/infosec</code> corpus &mdash; 14 stories, 360 agents, 7 embedded sub-stories, vendored as golden fixtures &mdash; falsified the design&rsquo;s &ldquo;cycles are rare, report unconvertible&rdquo; stance.</p>
+<div class="call warn">
+<p><b>Falsified by corpus.</b> <b>8 cycles in 7 of 14</b> real stories. Every one is the same shape:
+async API polling &mdash; <em>poll HTTP &rarr; exit condition &rarr; bounded counter (&ldquo;Counter &lt; 20&rdquo;) &rarr; delay &rarr; back-edge</em>.
+Reporting them unconvertible would hard-fail half of Elastic&rsquo;s own production Tines estate.</p></div>
+<p>The target exists and fits: <code>WhileStepSchema</code> (<code>kbn-workflows/spec/schema.ts</code>) is a do-while step with
+<code>{{ while.iteration }}</code>, <code>max-iterations</code>, <code>iteration-timeout</code>, <code>iteration-on-failure</code>.</p>
+<table>
+<thead><tr><th>Tines polling cycle</th><th>Elastic <code>while</code></th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td>cycle body nodes</td><td class="mono">while.steps</td><td>direct</td></tr>
+<tr><td>exit <code>TriggerAgent</code> rule</td><td class="mono">condition</td><td>negated (do-while: loop <em>while</em> incomplete)</td></tr>
+<tr><td>counter bound &ldquo;&lt; N&rdquo;</td><td class="mono">max-iterations: N</td><td><b>from the counter, never the 2000 default</b></td></tr>
+<tr><td><code>delay</code> node</td><td class="mono">iteration-timeout / leading wait</td><td>preserve first-iteration delay</td></tr>
+</tbody></table>
+<p><b>Classifier contract.</b> A cycle converts only when: exactly one back-edge; the back-edge source is a <code>delay</code>
+or condition node; a <code>TriggerAgent</code> on the cycle supplies the exit condition; counter logic reduces to a numeric
+bound. Everything else is irreducible &rarr; <code>unconvertible</code>. All 8 vendored cycles are golden test cases.</p>
+<p><b>Verdict: <code>degraded</code> until proven.</b> Tines cycles re-emit events per iteration; <code>while</code>
+iterations share Liquid scope. A Microcks per-iteration emitted-event equivalence test must pass before any cycle is marked
+<code>converted</code>.</p>
 
 <h2 id="risks"><span class="n">09</span>Risks &amp; open questions</h2>
 <table>
