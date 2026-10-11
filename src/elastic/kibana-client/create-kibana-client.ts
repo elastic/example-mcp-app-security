@@ -9,22 +9,10 @@ import axios, { AxiosError } from "axios";
 import type { ClusterCredentials } from "../credential-client/index.js";
 import { createHttpsAgent } from "../shared/https-agent.js";
 import type { KibanaClient } from "./kibana-client.js";
+import { KibanaHttpError } from "./kibana-http-error.js";
 
 const USER_AGENT = "elastic-security-mcp-app";
 const DEFAULT_TIMEOUT_MS = 30_000;
-
-/** Error raised for failed Kibana calls; `status` is undefined for network failures. */
-export class KibanaHttpError extends Error {
-  readonly status?: number;
-  readonly body?: unknown;
-
-  constructor(message: string, status?: number, body?: unknown) {
-    super(message);
-    this.name = "KibanaHttpError";
-    this.status = status;
-    this.body = body;
-  }
-}
 
 function describeError(err: AxiosError, clusterName: string): KibanaHttpError {
   const status = err.response?.status;

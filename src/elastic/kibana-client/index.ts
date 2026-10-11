@@ -6,4 +6,5 @@
  */
 
 export type { KibanaClient } from "./kibana-client.js";
-export { createKibanaClient, KibanaHttpError } from "./create-kibana-client.js";
+export { createKibanaClient } from "./create-kibana-client.js";
+export { KibanaHttpError } from "./kibana-http-error.js";

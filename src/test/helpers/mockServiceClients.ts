@@ -7,6 +7,7 @@
 
 import { vi } from "vitest";
 import type { AlertsClient } from "../../elastic/client/alertsClient.js";
+import type { AlertZeroClient } from "../../elastic/client/alertZeroClient.js";
 import type { AttackDiscoveryClient } from "../../elastic/client/attackDiscoveryClient.js";
 import type { CasesClient } from "../../elastic/client/casesClient.js";
 import type { EntityDetailClient } from "../../elastic/client/entityDetailClient.js";
@@ -104,6 +105,25 @@ export function createMockSampleDataClient(): SampleDataClient {
     "deleteByQuery",
     "count",
     "searchAlertsAggregation",
+  ]);
+}
+
+export function createMockAlertZeroClient(): AlertZeroClient {
+  return mockClient<AlertZeroClient>([
+    "getInvestigationsCount",
+    "getCapabilities",
+    "getProposalsByCategory",
+    "getProposal",
+    "listProposalsByConversation",
+    "getConversation",
+    "getConversationAttachments",
+    "getCurrentUserProfile",
+    "bulkGetUserProfiles",
+    "approveProposal",
+    "dismissProposal",
+    "getRuleById",
+    "getRuleByRuleId",
+    "searchAlertsByIds",
   ]);
 }
 

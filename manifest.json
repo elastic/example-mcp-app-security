@@ -57,6 +57,18 @@
     {
       "name": "generate-sample-data",
       "description": "Generate ECS-compliant security events for demos"
+    },
+    {
+      "name": "review-alert-zero-proposals",
+      "description": "Review pending Alert Zero proposals and approve or decline them"
+    },
+    {
+      "name": "get-alert-zero-proposal",
+      "description": "Explain one Alert Zero proposal with its investigation context"
+    },
+    {
+      "name": "check-alert-zero-status",
+      "description": "Check whether Alert Zero is available and why not"
     }
   ],
   "tools_generated": true,

@@ -8,6 +8,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   AlertsClient,
+  AlertZeroClient,
   AttackDiscoveryClient,
   CasesClient,
   EntityDetailClient,
@@ -25,6 +26,7 @@ import { createEsClient } from "./elastic/es-client/index.js";
 import { createKibanaClient } from "./elastic/kibana-client/index.js";
 import {
   AlertsService,
+  AlertZeroService,
   AttackDiscoveryService,
   CasesService,
   EntityDetailService,
@@ -35,6 +37,7 @@ import {
   SampleDataService,
 } from "./elastic/service/index.js";
 import { registerAlertTriageTools } from "./tools/alert-triage.js";
+import { registerAlertZeroTools } from "./tools/alert-zero.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
 import { registerAttackDiscoveryTools } from "./tools/attack-discovery.js";
 import { registerCaseManagementTools } from "./tools/case-management.js";
@@ -79,6 +82,10 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
 
   const alertsService = new AlertsService({
     alertsClient: new AlertsClient({ esClient }),
+  });
+  const alertZeroService = new AlertZeroService({
+    alertZeroClient: new AlertZeroClient({ esClient, kibanaClient }),
+    kibanaUrl: credentials.kibanaUrl,
   });
   const attackDiscoveryService = new AttackDiscoveryService({
     attackDiscoveryClient: new AttackDiscoveryClient({ esClient, kibanaClient }),
@@ -127,6 +134,7 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     casesService,
     analytics,
   });
+  registerAlertZeroTools(server, { alertZeroService, analytics });
   registerAnalyticsTools(server, { analytics });
 
   return server;
