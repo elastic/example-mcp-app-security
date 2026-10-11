@@ -7,6 +7,7 @@
 
 export const VIEW_IDS = [
   "alert-triage",
+  "alert-zero",
   "attack-discovery",
   "case-management",
   "detection-rules",

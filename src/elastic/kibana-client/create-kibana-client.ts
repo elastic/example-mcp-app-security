@@ -13,12 +13,25 @@ import type { KibanaClient } from "./kibana-client.js";
 const USER_AGENT = "elastic-security-mcp-app";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-function describeError(err: AxiosError, clusterName: string): Error {
-  const status = err.response?.status ?? "network";
+/** Error raised for failed Kibana calls; `status` is undefined for network failures. */
+export class KibanaHttpError extends Error {
+  readonly status?: number;
+  readonly body?: unknown;
+
+  constructor(message: string, status?: number, body?: unknown) {
+    super(message);
+    this.name = "KibanaHttpError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+function describeError(err: AxiosError, clusterName: string): KibanaHttpError {
+  const status = err.response?.status;
   const body = err.response?.data;
   const detail =
     typeof body === "string" ? body : JSON.stringify(body ?? err.message ?? {});
-  return new Error(`Kibana [${clusterName}] ${status}: ${detail}`);
+  return new KibanaHttpError(`Kibana [${clusterName}] ${status ?? "network"}: ${detail}`, status, body);
 }
 
 /**
