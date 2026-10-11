@@ -76,7 +76,9 @@ export function ProposalCard({ card, selected, onSelect, now, showInvestigation 
 
       <span className={classNames("az-card-title", { "az-card-title--primary": !showInvestigation })}>
         {card.title}
-        {card.actionName && <span className="az-card-action"> · {card.actionName}</span>}
+        {card.actionName && card.actionName.toLowerCase() !== card.title.toLowerCase() && (
+          <span className="az-card-action"> · {card.actionName}</span>
+        )}
       </span>
 
       <span className="az-card-badges">

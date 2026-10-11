@@ -80,7 +80,7 @@
 }
 
 @media (max-width: 900px) {
-  .kpi-strip.az-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpi-strip.az-kpi-strip { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
   .az-kpi-strip .kpi-tile {
     min-height: 72px;
     padding: 12px;

@@ -69,7 +69,7 @@ function renderAppContent(ctx: McpAppContextValue) {
   return render(
     <ToastProvider>
       <McpAppContext.Provider value={ctx}>
-        <AppContent />
+        <AppContent bootstrapGraceMs={0} />
       </McpAppContext.Provider>
     </ToastProvider>,
   );

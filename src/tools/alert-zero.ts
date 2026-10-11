@@ -367,7 +367,8 @@ export function registerAlertZeroTools(server: McpServer, deps: AlertZeroToolDep
     "approve-alert-zero-proposal",
     {
       title: "Approve Alert Zero Proposal",
-      description: "Approve a proposal (optionally with edited action input)",
+      description:
+        "Approve a proposal. actionInput must equal the stored input the user reviewed (Kibana rejects any change with 409); omit it to send the stored input",
       inputSchema: {
         proposalId: z.string(),
         actionInput: z.record(z.string(), z.unknown()).optional(),

@@ -16,6 +16,7 @@ import {
 } from "../../shared/alert-zero-types.js";
 import type { EsClient } from "../es-client/index.js";
 import type { KibanaClient } from "../kibana-client/index.js";
+import { KibanaHttpError } from "../kibana-client/kibana-http-error.js";
 import type { AlertSearchHit, SearchAlertsResponse } from "./casesClient.js";
 
 const ALERTS_INDEX_PATTERN = ".alerts-security.alerts-*";
@@ -100,6 +101,19 @@ export class AlertZeroClient {
       { applications: [] }
     );
     return data;
+  }
+
+  /** GET `/api/spaces/space/{id}`; false on 404, other failures throw. */
+  async spaceExists(spaceId: string): Promise<boolean> {
+    try {
+      await this.options.kibanaClient.get(`/api/spaces/space/${encodeURIComponent(spaceId)}`, {
+        headers: PUBLIC_HEADERS,
+      });
+      return true;
+    } catch (err) {
+      if (err instanceof KibanaHttpError && err.status === 404) return false;
+      throw err;
+    }
   }
 
   /** GET `/internal/alertzero/proposals/category/{category}` — pending rows, `size` ≤ 100. */

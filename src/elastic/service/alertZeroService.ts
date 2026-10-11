@@ -151,6 +151,31 @@ function timeOf(iso: string | undefined): number {
   return Number.isNaN(t) ? 0 : t;
 }
 
+/**
+ * Oldest first. A failed-action clone copies `revision` and `createdAt` from
+ * the attempt it re-offers, so ties are broken by following `supersededBy`.
+ */
+function orderChain(chain: ProposalWithMetadata[]): ProposalWithMetadata[] {
+  const sorted = [...chain].sort(
+    (a, b) => (a.revision ?? 0) - (b.revision ?? 0) || timeOf(a.createdAt) - timeOf(b.createdAt)
+  );
+  const ids = new Set(sorted.map((p) => p.id));
+  const successorOf = new Map(sorted.filter((p) => p.supersededBy && ids.has(p.supersededBy)).map((p) => [p.id, p.supersededBy!]));
+  const hasPredecessor = new Set(successorOf.values());
+  const ordered: ProposalWithMetadata[] = [];
+  const placed = new Set<string>();
+  const byId = new Map(sorted.map((p) => [p.id, p]));
+  for (const start of sorted) {
+    if (placed.has(start.id) || hasPredecessor.has(start.id)) continue;
+    for (let id: string | undefined = start.id; id && !placed.has(id); id = successorOf.get(id)) {
+      placed.add(id);
+      ordered.push(byId.get(id)!);
+    }
+  }
+  for (const p of sorted) if (!placed.has(p.id)) ordered.push(p);
+  return ordered;
+}
+
 function zeroCounts(): Record<AlertZeroCategory, number> {
   return { respond: 0, investigate: 0, configure: 0 };
 }
@@ -184,7 +209,20 @@ export class AlertZeroService implements AlertZeroServiceApi {
       this.client.getInvestigationsCount(spaceId),
     ]);
     const caps = capsResult.status === "fulfilled" ? capsResult.value : undefined;
-    const fields = this.classify(spaceId, caps, countResult);
+    let fields = this.classify(spaceId, caps, countResult);
+    // Kibana answers capabilities for unknown spaces, so a 404 alone can't
+    // tell "turned off here" from "no such space".
+    if (fields.state === "disabled_in_space" && spaceId !== DEFAULT_SPACE) {
+      const exists = await this.client.spaceExists(spaceId).catch(() => true);
+      if (!exists) {
+        fields = {
+          state: "space_not_found",
+          reason: `Space "${spaceId}" doesn't exist in this Kibana.`,
+          remediation: "Check the space id (Stack Management → Spaces), or omit spaceId to use the default space.",
+          ...(fields.httpStatus !== undefined ? { httpStatus: fields.httpStatus } : {}),
+        };
+      }
+    }
     return {
       ...fields,
       available: fields.state === "enabled",
@@ -222,6 +260,13 @@ export class AlertZeroService implements AlertZeroServiceApi {
       );
     }
     if (countResult.status === "fulfilled") {
+      if (caps && !capabilityFlag(caps, "proposals", "showProposals")) {
+        return state(
+          "missing_privileges",
+          `The API key can use Alert Zero in space "${spaceId}" but can't read its proposals.`,
+          PRIVILEGES_REMEDIATION
+        );
+      }
       return state("enabled", "Alert Zero is enabled.");
     }
     if (httpStatus === 404) {
@@ -416,9 +461,7 @@ export class AlertZeroService implements AlertZeroServiceApi {
     const root = proposal.rootProposalId ?? proposal.id;
     const inChain = (p: ProposalWithMetadata): boolean => p.rootProposalId === root || p.id === root;
     const all = [...byId.values()];
-    const revisionChain = all
-      .filter(inChain)
-      .sort((a, b) => (a.revision ?? 0) - (b.revision ?? 0) || timeOf(a.createdAt) - timeOf(b.createdAt));
+    const revisionChain = orderChain(all.filter(inChain));
     const siblings = all.filter((p) => !inChain(p));
 
     return {

@@ -17,6 +17,7 @@ export const UNAVAILABLE_TITLE: Record<AlertZeroAvailabilityState, string> = {
   enabled: "Alert Zero is unavailable",
   plugin_disabled: "Alert Zero isn't installed",
   disabled_in_space: "Alert Zero is off in this space",
+  space_not_found: "Space not found",
   license: "Enterprise license required",
   serverless_tier: "Security Complete tier required",
   missing_privileges: "Missing privileges",

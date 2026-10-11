@@ -109,9 +109,10 @@ export function createMockSampleDataClient(): SampleDataClient {
 }
 
 export function createMockAlertZeroClient(): AlertZeroClient {
-  return mockClient<AlertZeroClient>([
+  const client = mockClient<AlertZeroClient>([
     "getInvestigationsCount",
     "getCapabilities",
+    "spaceExists",
     "getProposalsByCategory",
     "getProposal",
     "listProposalsByConversation",
@@ -125,6 +126,8 @@ export function createMockAlertZeroClient(): AlertZeroClient {
     "getRuleByRuleId",
     "searchAlertsByIds",
   ]);
+  vi.mocked(client.spaceExists).mockResolvedValue(true);
+  return client;
 }
 
 export function createMockRulesService(): RulesService {

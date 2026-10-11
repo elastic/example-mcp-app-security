@@ -211,6 +211,7 @@ export interface AlertZeroProposalCard {
 export type AlertZeroAvailabilityState =
   | "enabled"
   | "plugin_disabled"
+  | "space_not_found"
   | "disabled_in_space"
   | "license"
   | "serverless_tier"
@@ -491,6 +492,11 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
+/** Entity ids share long prefixes, so keep the distinguishing tail. */
+function tailEllipsis(value: string, keep = 14): string {
+  return value.length > keep + 1 ? `…${value.slice(-keep)}` : value;
+}
+
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
@@ -517,7 +523,7 @@ export function summarizeActionTargets(
         params.pid !== undefined
           ? `pid ${String(params.pid)}`
           : params.entity_id !== undefined
-            ? `entity ${String(params.entity_id)}`
+            ? `entity ${tailEllipsis(String(params.entity_id))}`
             : "process";
       const out = [proc, plural(endpoints.length, "endpoint")];
       if (params.kill_descendants === true) out.push("with descendants");

@@ -233,6 +233,47 @@ describe("AlertZeroService", () => {
       });
     });
 
+    it("is space_not_found when a 404'd non-default space doesn't exist", async () => {
+      const { client, service } = setup();
+      client.getCapabilities.mockResolvedValue(CAPS);
+      client.getInvestigationsCount.mockRejectedValue(httpError(404, "Not Found"));
+      client.spaceExists.mockResolvedValue(false);
+
+      const status = await service.getStatus({ spaceId: "no-such-space" });
+
+      expect(client.spaceExists).toHaveBeenCalledWith("no-such-space");
+      expect(status).toMatchObject({
+        state: "space_not_found",
+        available: false,
+        reason: 'Space "no-such-space" doesn\'t exist in this Kibana.',
+        httpStatus: 404,
+      });
+    });
+
+    it("keeps disabled_in_space when the space lookup fails or the space is default", async () => {
+      const { client, service } = setup();
+      client.getCapabilities.mockResolvedValue(CAPS);
+      client.getInvestigationsCount.mockRejectedValue(httpError(404, "Not Found"));
+      client.spaceExists.mockRejectedValue(httpError(500, "boom"));
+
+      expect((await service.getStatus({ spaceId: "sumo-demo" })).state).toBe("disabled_in_space");
+      expect((await service.getStatus()).state).toBe("disabled_in_space");
+      expect(client.spaceExists).toHaveBeenCalledTimes(1);
+    });
+
+    it("is missing_privileges when Alert Zero answers but proposals can't be read", async () => {
+      const { client, service } = setup();
+      client.getCapabilities.mockResolvedValue({ ...CAPS, proposals: { showProposals: false, decideProposals: false } });
+      client.getInvestigationsCount.mockResolvedValue({ total: 10 });
+
+      const status = await service.getStatus();
+
+      expect(status.state).toBe("missing_privileges");
+      expect(status.available).toBe(false);
+      expect(status.reason).toBe(`The API key can use Alert Zero in space "default" but can't read its proposals.`);
+      expect(status.remediation).toMatch(/Proposed Actions/);
+    });
+
     it("maps a 404 to disabled_in_space when capabilities failed", async () => {
       const { client, service } = setup();
       client.getCapabilities.mockRejectedValue(httpError(500, "x"));
@@ -518,6 +559,20 @@ describe("AlertZeroService", () => {
       expect(out).toMatchObject({ kibanaUrl: KIBANA_URL, spaceId: "sec", canDecide: true });
       expect(out.ruleContext).toBeUndefined();
       expect(client.getRuleById).not.toHaveBeenCalled();
+    });
+
+    it("orders a failed attempt before the clone that re-offers it, even when revision and createdAt tie", async () => {
+      const { client, service } = setup();
+      const failed = item({ id: "failed", rootProposalId: "failed", revision: 1, status: "failed", decision: "approved", supersededBy: "clone" });
+      const clone = item({ id: "clone", rootProposalId: "failed", revision: 1, supersedes: "failed", previousExecutionError: "boom" });
+      client.getProposal.mockResolvedValue(clone);
+      client.listProposalsByConversation.mockResolvedValue({ proposals: [clone, failed], total: 2 });
+      client.getCapabilities.mockResolvedValue(CAPS);
+      client.getConversation.mockResolvedValue(conversation());
+
+      const out = await service.getProposalDetail({ proposalId: "clone" });
+
+      expect(out.revisionChain.map((p) => p.id)).toEqual(["failed", "clone"]);
     });
 
     it("includes the proposal in its chain even when the list call fails, and degrades softly", async () => {

@@ -76,7 +76,9 @@ export function App() {
   );
 }
 
-export function AppContent() {
+const BOOTSTRAP_GRACE_MS = 4000;
+
+export function AppContent({ bootstrapGraceMs = BOOTSTRAP_GRACE_MS }: { readonly bootstrapGraceMs?: number } = {}) {
   const { connected, getApp } = useMcpApp();
   const bootstrap = useMcpAppBootstrap("alert-zero");
   const api = useAlertZeroApi(getApp);
@@ -175,10 +177,13 @@ export function AppContent() {
     trackEvent({ eventType: "view_rendered", viewId: "alert-zero" });
   }, [trackEvent]);
 
+  // Hosts often mount the view before the tool result arrives; give the
+  // bootstrap a head start so a default-scope self-load doesn't flash first.
   useEffect(() => {
     if (!connected || bootstrap.status !== "idle") return;
-    void loadList({ scope: "all", category: "all" });
-  }, [connected, bootstrap.status, loadList]);
+    const timer = setTimeout(() => void loadList({ scope: "all", category: "all" }), bootstrapGraceMs);
+    return () => clearTimeout(timer);
+  }, [connected, bootstrap.status, loadList, bootstrapGraceMs]);
 
   /** Reload the list and bump `reloadToken` so the open detail pane refetches too. */
   const refresh = useCallback((): Promise<void> => {

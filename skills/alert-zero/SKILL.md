@@ -136,6 +136,7 @@ verbatim. `check-alert-zero-status` returns the same fields.
 |---------|---------|-------------|
 | `plugin_disabled` | Alert Zero isn't installed or is switched off for this Kibana | Set `xpack.alertzero.enabled`, `xpack.proposals.enabled` and `xpack.agenticInvestigations.enabled` to true in kibana.yml and restart Kibana |
 | `disabled_in_space` | Turned off in this space | Enable the `securitySolution:enableAlertZero` Advanced Setting (Stack Management → Advanced Settings) in that space |
+| `space_not_found` | The requested space doesn't exist | Check the space id (Stack Management → Spaces), or omit `spaceId` to use the default space |
 | `license` | Requires an Enterprise license | Upgrade to Enterprise or start a trial (Stack Management → License Management) |
 | `serverless_tier` | Requires the Security Complete subscription | Upgrade the Serverless project to the Security Complete tier |
 | `missing_privileges` | The API key's role can't use Alert Zero | Grant the Kibana feature privileges Alert Zero (read), Proposed Actions (read; all to approve/decline) and Agent Builder (read) |

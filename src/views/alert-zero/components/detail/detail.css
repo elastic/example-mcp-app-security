@@ -98,6 +98,13 @@
 
 .azd-tabs .detail-tabs {
   margin-top: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.azd-tabs .detail-tabs > * {
+  flex-shrink: 0;
 }
 
 .azd-body {

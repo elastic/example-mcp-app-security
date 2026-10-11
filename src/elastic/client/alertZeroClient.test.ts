@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import { AlertZeroClient } from "./alertZeroClient.js";
+import { KibanaHttpError } from "../kibana-client/kibana-http-error.js";
 import {
   createMockEsClient,
   createMockKibanaClient,
@@ -61,6 +62,19 @@ describe("AlertZeroClient", () => {
 
     expect(kibanaClient.post).toHaveBeenCalledWith("/s/sec/api/core/capabilities", { applications: [] });
     expect(caps).toEqual({ alertzero: { show: true } });
+  });
+
+  it("spaceExists GETs the spaces API, is false on 404 and rethrows other errors", async () => {
+    const { kibanaClient, client } = setup();
+    kibanaClient.get
+      .mockResolvedValueOnce(dataEnvelope({ id: "sec" }))
+      .mockRejectedValueOnce(new KibanaHttpError("Kibana [test] 404: {}", 404))
+      .mockRejectedValueOnce(new KibanaHttpError("Kibana [test] 500: {}", 500));
+
+    await expect(client.spaceExists("my space")).resolves.toBe(true);
+    expect(kibanaClient.get).toHaveBeenCalledWith("/api/spaces/space/my%20space", { headers: PUBLIC_HEADERS });
+    await expect(client.spaceExists("nope")).resolves.toBe(false);
+    await expect(client.spaceExists("boom")).rejects.toThrow("500");
   });
 
   it("getProposalsByCategory GETs the category route with size/from", async () => {
