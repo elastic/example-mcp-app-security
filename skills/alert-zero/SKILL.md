@@ -124,7 +124,8 @@ Proposals have no owner. `scope: "mine"` matches proposals whose linked investig
 an assignee (`assignedToMe` on the card); `unassigned` matches investigations with no assignee. If `mine` is
 empty, say so plainly and offer the full queue: "No proposals are on investigations assigned to you. There are
 7 awaiting a decision in this space. Want to see them?" (`totalAwaitingDecision` is counted before the scope
-filter.)
+filter.) If the result carries a `notice` (for example, the current user couldn't be identified), relay it instead
+of claiming nothing is assigned to them.
 
 ## When Alert Zero is unavailable
 

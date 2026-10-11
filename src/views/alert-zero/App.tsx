@@ -287,6 +287,11 @@ export function AppContent({ bootstrapGraceMs = BOOTSTRAP_GRACE_MS }: { readonly
           onCategoryChange={changeCategory}
           onGroupByChange={setGroupBy}
         />
+        {result.notice && (
+          <div className="az-notice" role="note">
+            {result.notice}
+          </div>
+        )}
         {result.truncated && (
           <div className="az-notice" role="note">
             Showing the first {cards.length} proposals.{" "}

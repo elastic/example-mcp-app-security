@@ -381,6 +381,13 @@ export class AlertZeroService implements AlertZeroServiceApi {
     return {
       ...base,
       ...(currentUser ? { currentUser } : {}),
+      ...(!currentUser && scope === "mine"
+        ? {
+            notice:
+              "Couldn't identify the current user (the API key owner may not have a Kibana user profile), " +
+              "so no proposal can be matched as assigned to you.",
+          }
+        : {}),
       totalAwaitingDecision: Object.values(countsByCategory).reduce((sum, n) => sum + n, 0),
       countsByCategory,
       proposals: cards,

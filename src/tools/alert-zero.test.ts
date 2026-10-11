@@ -551,6 +551,28 @@ describe("buildProposalDigest", () => {
     expect(narration?.[0].message).toContain("+3500 chars");
   });
 
+  it("keeps every other event type and counts non-tool, non-reasoning steps", () => {
+    const investigation = makeInvestigation();
+    const digest = buildProposalDigest(makeDetail(), {
+      ...investigation,
+      conversation: {
+        ...investigation.conversation,
+        rounds: [
+          {
+            ...investigation.conversation.rounds[0],
+            steps: [...(investigation.conversation.rounds[0].steps ?? []), { type: "relevant_skills" }, { type: "relevant_skills" }],
+          },
+        ],
+      },
+    }).investigation;
+
+    expect(digest?.otherEvents).toEqual([
+      { at: "2026-10-01T00:02:00Z", type: "execution_started", actor: undefined, data: "{}" },
+    ]);
+    expect(digest?.rounds[0].otherStepCounts).toEqual({ relevant_skills: 2 });
+    expect(digest?.summarized).toMatch(/summarized/);
+  });
+
   it("lists attachment lifecycle events", () => {
     const events = buildProposalDigest(makeDetail(), makeInvestigation()).investigation?.attachmentEvents;
     expect(events).toEqual([

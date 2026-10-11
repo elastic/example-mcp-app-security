@@ -39,6 +39,7 @@ const ATTACHMENT_DATA_MAX = 2000;
 const ROUND_INPUT_MAX = 1500;
 const ROUND_RESPONSE_MAX = 3000;
 const TOOL_PARAMS_MAX = 500;
+const OTHER_EVENT_DATA_MAX = 500;
 
 const spaceIdSchema = z
   .string()
@@ -94,6 +95,8 @@ export interface InvestigationDigest {
     attachment_type?: string;
     attachment_id?: string;
   }[];
+  /** Every other event type (execution_*, prompt_response, …) so none is silently dropped. */
+  readonly otherEvents: readonly { at: string; type: string; actor?: string; data?: string }[];
   readonly attachments: readonly {
     id: string;
     type: string;
@@ -111,8 +114,10 @@ export interface InvestigationDigest {
     response?: string;
     toolCalls: readonly { tool_id?: string; params?: string; resultTypes: readonly string[] }[];
     reasoningCount: number;
+    otherStepCounts: Record<string, number>;
   }[];
   readonly alerts: Record<string, EnrichedAlert>;
+  readonly summarized: string;
 }
 
 export interface ProposalDigest {
@@ -173,6 +178,14 @@ function digestInvestigation(investigation: AlertZeroInvestigation): Investigati
         attachment_type: typeof e.data?.attachment_type === "string" ? e.data.attachment_type : undefined,
         attachment_id: typeof e.data?.attachment_id === "string" ? e.data.attachment_id : undefined,
       })),
+    otherEvents: events
+      .filter((e) => e.type !== "user_message" && !e.type.startsWith("attachment_"))
+      .map((e) => ({
+        at: e.created_at,
+        type: e.type,
+        actor: e.actor?.username ?? e.actor?.type,
+        data: e.data === undefined ? undefined : truncateText(JSON.stringify(e.data), OTHER_EVENT_DATA_MAX),
+      })),
     attachments: (conversation.attachments ?? []).map((a) => {
       const current =
         a.versions.find((v) => v.version === a.current_version) ?? a.versions[a.versions.length - 1];
@@ -205,9 +218,15 @@ function digestInvestigation(investigation: AlertZeroInvestigation): Investigati
             resultTypes: (s.results ?? []).map((res) => res.type),
           })),
         reasoningCount: steps.filter((s) => s.type === "reasoning").length,
+        otherStepCounts: steps
+          .filter((s) => s.type !== "tool_call" && s.type !== "reasoning")
+          .reduce<Record<string, number>>((acc, s) => ({ ...acc, [s.type]: (acc[s.type] ?? 0) + 1 }), {}),
       };
     }),
     alerts,
+    summarized:
+      "Reasoning text, tool-call results and long attachment bodies are summarized here (marked where truncated); " +
+      "the interactive view and the Agent Builder chat show them in full.",
   };
 }
 

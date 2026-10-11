@@ -501,6 +501,8 @@ describe("AlertZeroService", () => {
       expect(out.currentUser).toBeUndefined();
       expect(out.proposals).toEqual([]);
       expect(out.totalAwaitingDecision).toBe(1);
+      expect(out.notice).toMatch(/Couldn't identify the current user/);
+      expect((await service.listOpenProposals({ scope: "all" })).notice).toBeUndefined();
     });
   });
 

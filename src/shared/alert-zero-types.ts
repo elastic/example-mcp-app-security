@@ -249,6 +249,8 @@ export interface AlertZeroListResult {
   readonly proposals: readonly AlertZeroProposalCard[];
   /** True when the server had more rows than the pagination cap allowed. */
   readonly truncated: boolean;
+  /** Caveat about the result the user should hear (e.g. "mine" couldn't be evaluated). */
+  readonly notice?: string;
 }
 
 export interface AlertZeroLinks {
