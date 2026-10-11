@@ -28,8 +28,11 @@ export interface ProposalDetailProps {
   readonly api: AlertZeroApi;
   /** Bumped by the parent to force a reload (e.g. after a decision). */
   readonly reloadToken?: number;
-  /** Select another proposal (sibling or revision) by id. */
-  readonly onSelectProposal?: (proposalId: string) => void;
+  /**
+   * Navigate to another proposal (sibling or revision). Build the card with
+   * `toProposalCard` from `shared/alert-zero-types`.
+   */
+  readonly onSelectProposal?: (card: AlertZeroProposalCard) => void;
   /**
    * Footer slot for decision controls (Approve / Decline). Receives the
    * loaded detail and a reload callback. Rendered above the link buttons.

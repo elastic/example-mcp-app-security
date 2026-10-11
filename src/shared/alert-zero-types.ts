@@ -556,5 +556,43 @@ export function plainExcerpt(markdown: string | undefined, max = 300): string {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
+/**
+ * Build a list card from a proposal record. Used by the service for list rows
+ * and by the view when navigating to a proposal that is not in the list
+ * (a sibling or an older revision).
+ */
+export function toProposalCard(
+  p: ProposalWithMetadata & Partial<ProposalItem>,
+  opts: { readonly assignees?: readonly ResolvedUser[]; readonly currentUserUid?: string } = {},
+): AlertZeroProposalCard {
+  const assigneeUids = p.conversationAssignees ?? [];
+  const assignees = opts.assignees ?? assigneeUids.map((uid) => ({ uid }));
+  return {
+    id: p.id,
+    conversationId: p.conversationId,
+    title: p.title,
+    status: p.status,
+    category: p.category ?? p.action?.category,
+    impact: p.impact,
+    confidence: p.confidence,
+    actionWorkflowId: p.actionWorkflowId,
+    actionName: p.action?.name,
+    reversible: p.action?.reversible,
+    approvalPolicy: p.action?.approvalPolicy,
+    createdAt: p.createdAt,
+    expiresAt: p.expiresAt,
+    revision: p.revision,
+    hasPreviousExecutionError: Boolean(p.previousExecutionError),
+    investigationTitle: p.conversationTitle,
+    agentId: p.conversationAgentId,
+    assignees,
+    assignedToMe: Boolean(opts.currentUserUid && assigneeUids.includes(opts.currentUserUid)),
+    entityIds: p.entityIds,
+    priorityScore: priorityScore(p.impact, p.confidence),
+    commentExcerpt: plainExcerpt(p.comment),
+    targets: summarizeActionTargets(p.actionWorkflowId, p.actionInput),
+  };
+}
+
 /** Bootstrap payload for the `alert-zero` view (same shape as the list result). */
 export type AlertZeroBootstrapPayload = AlertZeroListResult;
