@@ -283,7 +283,7 @@ describe("Alert Zero AppContent — filters", () => {
 });
 
 describe("Alert Zero AppContent — detail selection", () => {
-  it("opens the detail for a card and keeps it in sync across refreshes", async () => {
+  it("opens the detail for a card, keeps it in sync, and keeps it open after it leaves the list", async () => {
     let version = 0;
     const app = makeApp(() => {
       const p1 = card({ id: "p1", category: "respond", title: version === 0 ? "Isolate host-7" : "Isolate host-7 (rev 2)", revision: version === 0 ? 1 : 2 });
@@ -305,7 +305,9 @@ describe("Alert Zero AppContent — detail selection", () => {
 
     version = 2;
     fireEvent.click(getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(queryByTestId("proposal-detail")).toBeNull());
+    await waitFor(() => expect(getByText("reload:2")).toBeTruthy());
+    expect(getByText("detail:Isolate host-7 (rev 2)")).toBeTruthy();
+    expect(queryByTestId("proposal-detail")).not.toBeNull();
 
     fireEvent.click(getByRole("button", { name: /Proposal p2/ }));
     fireEvent.click(within(getByTestId("proposal-detail")).getByRole("button", { name: "open sibling" }));

@@ -1,0 +1,405 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+/* Approve / Decline controls in the detail footer, plus their confirmation
+ * dialogs. Buttons extend `.azd-btn` from detail.css. */
+
+/* ─── Footer bar ─────────────────────────────────────────────────────── */
+
+.azdec-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 12px;
+}
+
+.azdec-note {
+  flex: 1 1 220px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.azdec-note--block {
+  flex: none;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+.azdec-buttons {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.azd-btn.azdec-btn {
+  justify-content: center;
+  min-width: 84px;
+}
+
+.azd-btn.azdec-btn--primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.azd-btn.azdec-btn--primary:hover:not(:disabled) {
+  color: #fff;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.azd-btn.azdec-btn--danger {
+  color: #fff;
+  background: var(--severity-critical);
+  border-color: var(--severity-critical);
+}
+
+.azd-btn.azdec-btn--danger:hover:not(:disabled) {
+  color: #fff;
+  background: var(--severity-critical);
+  border-color: var(--severity-critical);
+  filter: brightness(1.1);
+}
+
+.azd-btn.azdec-btn--decline {
+  color: var(--severity-critical);
+  border-color: var(--severity-critical-border);
+}
+
+.azd-btn.azdec-btn--decline:hover:not(:disabled) {
+  color: var(--severity-critical);
+  background: var(--severity-critical-bg);
+}
+
+/* ─── Applying status ────────────────────────────────────────────────── */
+
+.azdec-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid rgba(92, 124, 250, 0.3);
+  border-radius: var(--radius-md);
+  background: var(--accent-dim);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.azdec-status--idle {
+  border-color: var(--border-subtle);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.azdec-status-text {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.azdec-spinner {
+  flex-shrink: 0;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: azdec-spin 0.8s linear infinite;
+}
+
+.azdec-status .azdec-spinner {
+  color: var(--accent);
+}
+
+@keyframes azdec-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .azdec-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* ─── Dialog shell ───────────────────────────────────────────────────── */
+
+.azdec-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  overflow-y: auto;
+  font-family: var(--font-sans);
+}
+
+[data-theme="light"] .azdec-overlay {
+  background: rgba(26, 26, 25, 0.35);
+}
+
+.azdec-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  min-height: 0;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  outline: none;
+}
+
+@media (max-height: 520px) {
+  .azdec-overlay {
+    padding: 8px;
+  }
+  .azdec-dialog {
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+.azdec-dialog-head {
+  flex-shrink: 0;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.azdec-dialog-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.azdec-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.azdec-dialog-foot {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.azdec-dialog .azd-json .az-code {
+  max-height: 220px;
+}
+
+/* ─── Approve content ────────────────────────────────────────────────── */
+
+.azdec-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+}
+
+.azdec-action-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.azdec-action-desc {
+  margin: 0;
+}
+
+.azdec-run {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.azdec-run-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.azdec-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--severity-medium-border);
+  border-radius: var(--radius-md);
+  background: var(--severity-medium-bg);
+  color: var(--severity-medium);
+  font-size: 12px;
+}
+
+.azdec-warning svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ─── Form controls ──────────────────────────────────────────────────── */
+
+.azdec-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.azdec-legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.azdec-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.azdec-radio:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.azdec-radio input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.azdec-radio input:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.azdec-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.azdec-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.azdec-label-hint {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.azdec-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  padding: 6px 8px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.azdec-textarea::placeholder {
+  color: var(--text-dim);
+}
+
+.azdec-textarea:focus {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -1px;
+}
+
+.azdec-textarea[aria-invalid="true"] {
+  border-color: var(--severity-critical);
+}
+
+.azdec-textarea:disabled {
+  opacity: 0.6;
+}
+
+.azdec-field-foot {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.azdec-field-error {
+  color: var(--severity-critical);
+}
+
+.azdec-counter {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.azdec-counter.is-near {
+  color: var(--severity-medium);
+}
+
+.azdec-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--severity-critical-border);
+  border-radius: var(--radius-md);
+  background: var(--severity-critical-bg);
+  color: var(--severity-critical);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.azdec-error-detail {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}

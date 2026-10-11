@@ -33,6 +33,7 @@ import { McpAppProvider } from "../../shared/hooks/McpAppProvider";
 import { useAnalytics } from "../../shared/hooks/useAnalytics";
 import { ALERT_ZERO_APP_TOOLS, useAlertZeroApi } from "./api";
 import { ProposalDetail } from "./components/detail/ProposalDetail";
+import { DecisionBar } from "./components/decide/DecisionBar";
 import { AlertZeroKpis } from "./components/list/AlertZeroKpis";
 import { FilterBar } from "./components/list/FilterBar";
 import { ProposalList } from "./components/list/ProposalList";
@@ -102,11 +103,12 @@ export function AppContent() {
     setScope(next.scope);
     setCategory(next.category);
     setLoadError(null);
+    // A selection that drops out of the list (e.g. just decided) stays open so
+    // the detail pane can show the outcome; the user closes it explicitly.
     setSelection((prev) => {
       if (!prev) return prev;
       const match = (next.proposals ?? EMPTY_CARDS).find((p) => p.id === prev.card.id);
-      if (match) return { card: match, fromList: true };
-      return prev.fromList ? null : prev;
+      return match ? { card: match, fromList: true } : { ...prev, fromList: false };
     });
   }, []);
 
@@ -327,6 +329,15 @@ export function AppContent() {
           api={api}
           reloadToken={reloadToken}
           onSelectProposal={selectFromDetail}
+          renderFooterActions={(loaded, reload) => (
+            <DecisionBar
+              loaded={loaded}
+              reload={reload}
+              api={api}
+              spaceId={result.spaceId}
+              onDecided={() => void refresh()}
+            />
+          )}
         />
       </DetailPane>
     ) : null;
