@@ -116,7 +116,10 @@ export class AlertZeroClient {
     }
   }
 
-  /** GET `/internal/alertzero/proposals/category/{category}` — pending rows, `size` ≤ 100. */
+  /**
+   * GET `/internal/alertzero/proposals/category/{category}` — pending rows, `size` ≤ 100.
+   * Query schema: x-pack/solutions/security/plugins/alertzero/server/routes/proposals/get_proposals_by_category.ts
+   */
   async getProposalsByCategory(
     category: AlertZeroCategory,
     page: PageParams,
@@ -138,7 +141,10 @@ export class AlertZeroClient {
     return data;
   }
 
-  /** GET `/internal/proposals?conversationId=` — every status, superseded rows included. */
+  /**
+   * GET `/internal/proposals?conversationId=` — every status, superseded rows included.
+   * Query schema: `listProposalsQuerySchema` in x-pack/platform/packages/shared/kbn-proposals-common/src/proposal.ts
+   */
   async listProposalsByConversation(
     conversationId: string,
     page: PageParams,
@@ -163,7 +169,10 @@ export class AlertZeroClient {
     return data;
   }
 
-  /** GET `/api/agent_builder/conversations/{id}/attachments?include_deleted=true`. */
+  /**
+   * GET `/api/agent_builder/conversations/{id}/attachments?include_deleted=true`.
+   * Query schema: x-pack/platform/plugins/shared/agent_builder/server/routes/attachments.ts
+   */
   async getConversationAttachments(
     conversationId: string,
     spaceId?: string
@@ -183,7 +192,10 @@ export class AlertZeroClient {
     return data;
   }
 
-  /** POST `/internal/security/user_profile/_bulk_get` — unknown uids are omitted from the result. */
+  /**
+   * POST `/internal/security/user_profile/_bulk_get` — unknown uids are omitted from the result.
+   * Body schema: x-pack/platform/plugins/shared/security/server/routes/user_profile/bulk_get.ts
+   */
   async bulkGetUserProfiles(
     uids: readonly string[],
     spaceId?: string
@@ -195,7 +207,10 @@ export class AlertZeroClient {
     return data;
   }
 
-  /** POST `/internal/proposals/{id}/approve` — responds before the decision is written. */
+  /**
+   * POST `/internal/proposals/{id}/approve` — responds before the decision is written.
+   * Body schema: `approveProposalRequestSchema` in x-pack/platform/packages/shared/kbn-proposals-common/src/proposal.ts
+   */
   async approveProposal(
     proposalId: string,
     body: ApproveProposalBody,
@@ -209,7 +224,10 @@ export class AlertZeroClient {
     return data;
   }
 
-  /** POST `/internal/proposals/{id}/dismiss` — responds before the decision is written. */
+  /**
+   * POST `/internal/proposals/{id}/dismiss` — responds before the decision is written.
+   * Body schema: `dismissProposalRequestSchema` in x-pack/platform/packages/shared/kbn-proposals-common/src/proposal.ts
+   */
   async dismissProposal(
     proposalId: string,
     body: DismissProposalBody,
@@ -223,7 +241,10 @@ export class AlertZeroClient {
     return data;
   }
 
-  /** GET `/api/detection_engine/rules?id=` — by saved-object id (must be a UUID). */
+  /**
+   * GET `/api/detection_engine/rules?id=` — by saved-object id (must be a UUID).
+   * Query schema: x-pack/solutions/security/plugins/security_solution/common/api/detection_engine/rule_management/crud/read_rule/read_rule_route.schema.yaml
+   */
   async getRuleById(id: string, spaceId?: string): Promise<DetectionRule> {
     const { data } = await this.options.kibanaClient.get<DetectionRule>(
       `${spacePrefix(spaceId)}/api/detection_engine/rules`,
@@ -232,7 +253,7 @@ export class AlertZeroClient {
     return data;
   }
 
-  /** GET `/api/detection_engine/rules?rule_id=` — by signature rule id. */
+  /** GET `/api/detection_engine/rules?rule_id=` — by signature rule id (same schema as `getRuleById`). */
   async getRuleByRuleId(ruleId: string, spaceId?: string): Promise<DetectionRule> {
     const { data } = await this.options.kibanaClient.get<DetectionRule>(
       `${spacePrefix(spaceId)}/api/detection_engine/rules`,
