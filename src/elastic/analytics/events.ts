@@ -21,7 +21,7 @@ export const EVENT_TYPES = {
 } as const;
 
 /**
- * EBT payload reported when a model-facing or app-only MCP tool returns.
+ * EBT payload reported when an MCP tool handler returns.
  *
  * Server-side shape used by the EBT shipper — distinct from the
  * client→server wire format types in `src/shared/analytics-events.ts`.

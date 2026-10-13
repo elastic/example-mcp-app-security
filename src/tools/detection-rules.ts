@@ -91,7 +91,7 @@ export function registerDetectionRuleTools(
         sortField: z.string().optional(),
         sortOrder: z.string().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async (args) => {
       const result = await rulesService.findRules(args);
@@ -107,7 +107,7 @@ export function registerDetectionRuleTools(
       title: "Get Rule",
       description: "Get a specific detection rule",
       inputSchema: { id: z.string() },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ id }) => {
       const result = await rulesService.getRule(id);
@@ -125,7 +125,7 @@ export function registerDetectionRuleTools(
       inputSchema: {
         rule: z.string().describe("JSON-encoded rule configuration"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ rule: ruleJson }) => {
       const ruleConfig = JSON.parse(ruleJson) as Record<string, unknown>;
@@ -145,7 +145,7 @@ export function registerDetectionRuleTools(
         id: z.string(),
         updates: z.string().describe("JSON-encoded field updates"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ id, updates }) => {
       const result = await rulesService.patchRule(
@@ -167,7 +167,7 @@ export function registerDetectionRuleTools(
         id: z.string(),
         enabled: z.boolean(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ id, enabled }) => {
       const result = await rulesService.toggleRule(id, enabled);
@@ -186,7 +186,7 @@ export function registerDetectionRuleTools(
         query: z.string(),
         language: z.enum(["kuery", "eql", "esql"]),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ query, language }) => {
       const result = await rulesService.validateQuery(query, language);
@@ -205,7 +205,7 @@ export function registerDetectionRuleTools(
         days: z.number().optional(),
         limit: z.number().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ days, limit }) => {
       const result = await rulesService.noisyRules({ days, limit });
@@ -226,7 +226,7 @@ export function registerDetectionRuleTools(
         listId: z.string().describe("Exception list ID"),
         exception: z.string().optional().describe("JSON-encoded exception (for add)"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ action, ruleId, listId, exception: exceptionJson }) => {
       if (action === "list") {

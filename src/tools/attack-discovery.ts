@@ -146,7 +146,7 @@ export function registerAttackDiscoveryTools(
         days: z.number().optional(),
         limit: z.number().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ days, limit }) => {
       const summary = await attackDiscoveryService.getDiscoveries({ days, limit });
@@ -166,7 +166,7 @@ export function registerAttackDiscoveryTools(
       inputSchema: {
         discoveries: z.string().describe("JSON-encoded array of AttackDiscovery objects"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ discoveries: discoveriesJson }) => {
       const discoveries: AttackDiscovery[] = JSON.parse(discoveriesJson);
@@ -187,7 +187,7 @@ export function registerAttackDiscoveryTools(
       inputSchema: {
         discovery: z.string().describe("JSON-encoded AttackDiscovery object"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ discovery: discoveryJson }) => {
       const discovery: AttackDiscovery = JSON.parse(discoveryJson);
@@ -283,7 +283,7 @@ export function registerAttackDiscoveryTools(
       inputSchema: {
         discoveryIds: z.array(z.string()).describe("Array of discovery document IDs"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ discoveryIds }) => {
       const result = await attackDiscoveryService.acknowledgeDiscoveries(discoveryIds);
@@ -349,7 +349,7 @@ export function registerAttackDiscoveryTools(
         start: z.string().optional(),
         end: z.string().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ size, start, end }) => {
       const result = await attackDiscoveryService.getGenerations({ size, start, end });

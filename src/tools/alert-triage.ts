@@ -119,7 +119,7 @@ export function registerAlertTriageTools(
         status: z.string().optional(),
         query: z.string().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ days, severity, limit, status, query }) => {
       const summary = await alertsService.getAlerts({ days, severity, limit, status, query });
@@ -140,7 +140,7 @@ export function registerAlertTriageTools(
         alertId: z.string().describe("The alert document ID"),
         alert: z.string().describe("JSON-encoded alert document"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ alertId, alert: alertJson }) => {
       const alert = JSON.parse(alertJson) as SecurityAlert;
@@ -161,7 +161,7 @@ export function registerAlertTriageTools(
       inputSchema: {
         alertId: z.string().describe("The alert document ID"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ alertId }) => {
       await alertsService.acknowledgeAlert(alertId);
@@ -181,7 +181,7 @@ export function registerAlertTriageTools(
       inputSchema: {
         alertId: z.string().describe("The alert document ID"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ alertId }) => {
       const result = await alertsService.setAlertWorkflowStatus([alertId], "open");

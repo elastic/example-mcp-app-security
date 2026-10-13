@@ -74,7 +74,7 @@ export function registerSampleDataTools(
         scenario: z.enum(SCENARIO_NAMES as [string, ...string[]]),
         count: z.number().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ scenario, count }) => {
       const args: Parameters<SampleDataService["generateSampleData"]>[0] = {
@@ -97,7 +97,7 @@ export function registerSampleDataTools(
       title: "Cleanup Sample Data",
       description: "Remove all generated sample data",
       inputSchema: {},
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async () => {
       const result = await sampleDataService.cleanupSampleData();
@@ -115,7 +115,7 @@ export function registerSampleDataTools(
       inputSchema: {
         scenario: z.enum(SCENARIO_NAMES as [string, ...string[]]),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ scenario }) => {
       const defs = SCENARIO_RULES[scenario as ScenarioName] || [];
@@ -136,7 +136,7 @@ export function registerSampleDataTools(
       title: "Check Existing Sample Data",
       description: "Check if sample data already exists in the cluster",
       inputSchema: {},
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async () => {
       try {
