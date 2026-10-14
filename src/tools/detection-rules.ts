@@ -43,6 +43,7 @@ export function registerDetectionRuleTools(
         page: z.number().optional(),
         perPage: z.number().optional(),
       },
+      annotations: { readOnlyHint: true },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ filter, page, perPage }) => {
@@ -91,6 +92,7 @@ export function registerDetectionRuleTools(
         sortField: z.string().optional(),
         sortOrder: z.string().optional(),
       },
+      annotations: { readOnlyHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async (args) => {
@@ -107,6 +109,7 @@ export function registerDetectionRuleTools(
       title: "Get Rule",
       description: "Get a specific detection rule",
       inputSchema: { id: z.string() },
+      annotations: { readOnlyHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ id }) => {
@@ -125,6 +128,7 @@ export function registerDetectionRuleTools(
       inputSchema: {
         rule: z.string().describe("JSON-encoded rule configuration"),
       },
+      annotations: { destructiveHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ rule: ruleJson }) => {
@@ -145,6 +149,7 @@ export function registerDetectionRuleTools(
         id: z.string(),
         updates: z.string().describe("JSON-encoded field updates"),
       },
+      annotations: { destructiveHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ id, updates }) => {
@@ -167,6 +172,7 @@ export function registerDetectionRuleTools(
         id: z.string(),
         enabled: z.boolean(),
       },
+      annotations: { destructiveHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ id, enabled }) => {
@@ -186,6 +192,7 @@ export function registerDetectionRuleTools(
         query: z.string(),
         language: z.enum(["kuery", "eql", "esql"]),
       },
+      annotations: { readOnlyHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ query, language }) => {
@@ -205,6 +212,7 @@ export function registerDetectionRuleTools(
         days: z.number().optional(),
         limit: z.number().optional(),
       },
+      annotations: { readOnlyHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ days, limit }) => {
@@ -226,6 +234,7 @@ export function registerDetectionRuleTools(
         listId: z.string().describe("Exception list ID"),
         exception: z.string().optional().describe("JSON-encoded exception (for add)"),
       },
+      annotations: { destructiveHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ action, ruleId, listId, exception: exceptionJson }) => {

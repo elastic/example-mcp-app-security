@@ -45,6 +45,7 @@ export function registerSampleDataTools(
       title: "Generate Sample Security Data",
       description: `Open the interactive sample data generator UI. The user selects attack scenarios (${SCENARIO_NAMES.join(", ")}), event count, and triggers generation from the UI — do NOT ask the user which scenario to generate, just call this tool immediately with no arguments.`,
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async () => {
@@ -97,6 +98,7 @@ export function registerSampleDataTools(
       title: "Cleanup Sample Data",
       description: "Remove all generated sample data",
       inputSchema: {},
+      annotations: { destructiveHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async () => {
@@ -115,6 +117,7 @@ export function registerSampleDataTools(
       inputSchema: {
         scenario: z.enum(SCENARIO_NAMES as [string, ...string[]]),
       },
+      annotations: { destructiveHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ scenario }) => {
@@ -136,6 +139,7 @@ export function registerSampleDataTools(
       title: "Check Existing Sample Data",
       description: "Check if sample data already exists in the cluster",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       _meta: { ui: { visibility: ["model", "app"] } },
     },
     async () => {

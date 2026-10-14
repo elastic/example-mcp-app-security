@@ -26,6 +26,8 @@ The UI (React app in iframe) communicates with the MCP server through the host:
 ### Compact Tool Results
 View tools return **compact summaries** (~1-5KB) to the LLM, not full Elasticsearch documents (800KB+). The UI independently loads full data via the data tools.
 
+Data tools don't have that bound. When the LLM calls them directly it gets the same full payloads the UI does: `poll-alerts` returns up to `limit` complete alert documents (default 50), and `execute-esql` returns whatever the query selects. Skills should start from the view tools and keep data-tool calls small: pass a low `limit`, and add a `LIMIT` to ES|QL queries.
+
 ### Self-Loading UI
 The UI self-loads via `callServerTool` after connecting. The `ontoolresult` callback extracts filter parameters and verdicts from the LLM's tool call.
 

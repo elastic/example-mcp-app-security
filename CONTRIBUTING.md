@@ -128,10 +128,11 @@ The workflow will:
 1. Create the Elastic API client functions in `src/elastic/`
 2. Create the tool registration module in `src/tools/` using `registerAppTool` from `@modelcontextprotocol/ext-apps/server`
 3. Set `_meta.ui.visibility` to `["model", "app"]` for data and action tools the UI calls. Only use `["app"]` for UI plumbing the model must never call (such as `report-analytics-event`) — MCP hosts, including Claude Code, remove `["app"]` tools from the model's tool list, which breaks skills that reference them
-4. Register the module in `src/server.ts`
-5. If the tool has a UI, create a new view directory under `src/views/` with `mcp-app.html` and `App.tsx`
-6. Update `manifest.json` if the tool renders a view (add to the `tools` array)
-7. Run `npm run typecheck` to verify
+4. Set `annotations`. Use `readOnlyHint: true` only if the handler never writes to Elasticsearch or Kibana — hosts may auto-approve those calls. Tools without `readOnlyHint` are treated as potentially destructive by the MCP spec; also set `destructiveHint: true` explicitly on tools that create or change detection rules or delete data. Both lists are pinned in `src/test/integration/tool-metadata.integration.test.ts`
+5. Register the module in `src/server.ts`
+6. If the tool has a UI, create a new view directory under `src/views/` with `mcp-app.html` and `App.tsx`
+7. Update `manifest.json` if the tool renders a view (add to the `tools` array)
+8. Run `npm run typecheck` to verify
 
 ## Code Style
 

@@ -19,6 +19,7 @@ import fs from "fs";
 import { createServer } from "../../server.js";
 import { MockAxios } from "../helpers/mockAxios.js";
 import { connectInProcess } from "../helpers/integrationServer.js";
+import { installClustersJson } from "../helpers/clustersEnv.js";
 import { noopAnalyticsClient } from "../helpers/mockAnalytics.js";
 
 const ES_BASE_URL = "https://es.example.com";
@@ -50,15 +51,10 @@ const USER_PROFILE_PATH = "/internal/security/user_profile";
 describe("MCP server integration (in-process Client + Server)", () => {
   const mockAxios = new MockAxios();
   let restoreAxios: () => void;
-  let originalClustersJson: string | undefined;
-  let originalClustersFile: string | undefined;
+  let restoreClustersEnv: () => void;
 
   beforeAll(() => {
-    originalClustersJson = process.env.CLUSTERS_JSON;
-    originalClustersFile = process.env.CLUSTERS_FILE;
-    process.env.CLUSTERS_JSON = CLUSTERS_JSON;
-    delete process.env.CLUSTERS_FILE;
-
+    restoreClustersEnv = installClustersJson(CLUSTERS_JSON);
     restoreAxios = mockAxios.install();
 
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
@@ -68,10 +64,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
   afterAll(() => {
     restoreAxios();
     vi.restoreAllMocks();
-    if (originalClustersJson === undefined) delete process.env.CLUSTERS_JSON;
-    else process.env.CLUSTERS_JSON = originalClustersJson;
-    if (originalClustersFile === undefined) delete process.env.CLUSTERS_FILE;
-    else process.env.CLUSTERS_FILE = originalClustersFile;
+    restoreClustersEnv();
   });
 
   beforeEach(() => {
