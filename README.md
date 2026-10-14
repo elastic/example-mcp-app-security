@@ -42,7 +42,7 @@ For other hosts (Cursor, VS Code, Claude Code) or building from source, see [Ins
 
 ![Interaction Flow](docs/screenshots/interaction-flow.png)
 
-When a user asks Claude to triage alerts or run a threat hunt, Claude calls a model-facing tool on this server. The tool returns a compact text summary to Claude **and** an interactive React UI that renders inline in the conversation. The UI then calls app-only tools directly for all subsequent interactions — keeping the LLM context small while the UI has full data access.
+When a user asks Claude to triage alerts or run a threat hunt, Claude calls a model-facing tool on this server. The tool returns a compact text summary to Claude **and** an interactive React UI that renders inline in the conversation. The UI then calls the server's data and action tools directly for all subsequent interactions — keeping the LLM context small while the UI has full data access. Those tools are also visible to the model, so Claude Code and custom skills can call them without the UI.
 
 See [docs/architecture.md](docs/architecture.md) for details on how views are built, how the UI communicates with the server, and key design decisions.
 

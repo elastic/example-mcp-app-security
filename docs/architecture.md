@@ -1,9 +1,10 @@
 # Architecture
 
-## The Two Types of Tools
+## Tool Types
 
-- **Model-facing** (`triage-alerts`, `triage-attack-discoveries`, `manage-cases`, `manage-rules`, `threat-hunt`, `generate-sample-data`, `generate-attack-discovery`): The LLM calls these. Each returns a compact text summary AND renders an interactive UI.
-- **App-only** (`poll-alerts`, `get-alert-context`, `investigate-entity`, `get-entity-detail`, `execute-esql`, `get-case-alerts`, `get-case-comments`, etc.): Hidden from the LLM. The UI calls these for interactivity.
+- **View tools** (`triage-alerts`, `triage-attack-discoveries`, `manage-cases`, `manage-rules`, `threat-hunt`, `generate-sample-data`, `generate-attack-discovery`): The LLM calls these. Each returns a compact text summary AND renders an interactive UI.
+- **Data and action tools** (`poll-alerts`, `get-alert-context`, `find-rules`, `get-rule`, `execute-esql`, `list-indices`, `get-mapping`, `update-case`, etc.): The UI calls these for interactivity, and the LLM can call them directly. They are registered with `visibility: ["model", "app"]` so they stay usable from skills and from hosts that don't render views, such as Claude Code.
+- **App-only** (`report-analytics-event`): Registered with `visibility: ["app"]`. MCP hosts (including Claude Code 2.1.280+) remove these from the LLM's tool list, so reserve this for UI plumbing the LLM should never call.
 
 ## How Views Are Built
 
@@ -13,8 +14,8 @@ Each view is a React app bundled into a **single self-contained HTML file** usin
 
 The UI (React app in iframe) communicates with the MCP server through the host:
 
-- **`app.callServerTool()`**: UI calls app-only tools on the server
-- **`app.ontoolresult`**: UI receives the tool result when the LLM calls the model-facing tool
+- **`app.callServerTool()`**: UI calls data and action tools on the server
+- **`app.ontoolresult`**: UI receives the tool result when the LLM calls the view tool
 - **`app.ontoolinput`**: UI receives tool arguments as the LLM generates them (used for verdict streaming)
 - **`app.updateModelContext()`**: UI pushes state back to the LLM's context
 - **`app.sendMessage()`**: UI sends messages to the conversation (used for AI case actions)
@@ -23,7 +24,9 @@ The UI (React app in iframe) communicates with the MCP server through the host:
 ## Key Design Decisions
 
 ### Compact Tool Results
-Model-facing tools return **compact summaries** (~1-5KB) to the LLM, not full Elasticsearch documents (800KB+). The UI independently loads full data via app-only tools.
+View tools return **compact summaries** (~1-5KB) to the LLM, not full Elasticsearch documents (800KB+). The UI independently loads full data via the data tools.
+
+Data tools don't have that bound. When the LLM calls them directly it gets the same full payloads the UI does: `poll-alerts` returns up to `limit` complete alert documents (default 50), and `execute-esql` returns whatever the query selects. Skills should start from the view tools and keep data-tool calls small: pass a low `limit`, and add a `LIMIT` to ES|QL queries.
 
 ### Self-Loading UI
 The UI self-loads via `callServerTool` after connecting. The `ontoolresult` callback extracts filter parameters and verdicts from the LLM's tool call.

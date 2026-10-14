@@ -103,6 +103,7 @@ export function registerAttackDiscoveryTools(
         days: z.number().optional().describe("Number of days to look back (default: 1)"),
         limit: z.number().optional().describe("Max discoveries to return (default: 50)"),
       },
+      annotations: { readOnlyHint: true },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ days, limit }) => {
@@ -146,7 +147,8 @@ export function registerAttackDiscoveryTools(
         days: z.number().optional(),
         limit: z.number().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ days, limit }) => {
       const summary = await attackDiscoveryService.getDiscoveries({ days, limit });
@@ -166,7 +168,8 @@ export function registerAttackDiscoveryTools(
       inputSchema: {
         discoveries: z.string().describe("JSON-encoded array of AttackDiscovery objects"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ discoveries: discoveriesJson }) => {
       const discoveries: AttackDiscovery[] = JSON.parse(discoveriesJson);
@@ -187,7 +190,8 @@ export function registerAttackDiscoveryTools(
       inputSchema: {
         discovery: z.string().describe("JSON-encoded AttackDiscovery object"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ discovery: discoveryJson }) => {
       const discovery: AttackDiscovery = JSON.parse(discoveryJson);
@@ -283,7 +287,7 @@ export function registerAttackDiscoveryTools(
       inputSchema: {
         discoveryIds: z.array(z.string()).describe("Array of discovery document IDs"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ discoveryIds }) => {
       const result = await attackDiscoveryService.acknowledgeDiscoveries(discoveryIds);
@@ -349,7 +353,8 @@ export function registerAttackDiscoveryTools(
         start: z.string().optional(),
         end: z.string().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ size, start, end }) => {
       const result = await attackDiscoveryService.getGenerations({ size, start, end });
@@ -365,6 +370,7 @@ export function registerAttackDiscoveryTools(
       title: "List AI Connectors",
       description: "List available AI connectors. Call this first before generate-attack-discovery to find valid connector names.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
       _meta: { ui: {} },
     },
     async () => {

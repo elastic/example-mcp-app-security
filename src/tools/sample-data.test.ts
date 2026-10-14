@@ -55,7 +55,14 @@ async function setup(): Promise<{
 describe("registerSampleDataTools", () => {
   beforeEach(() => {
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
-    vi.spyOn(fs, "readFileSync").mockReturnValue("<html>sample</html>");
+    // Stub only the view HTML: Node's CJS loader reads module sources through
+    // fs.readFileSync too, so a blanket stub breaks any dependency first
+    // loaded during the per-test re-import.
+    const realReadFileSync = fs.readFileSync;
+    vi.spyOn(fs, "readFileSync").mockImplementation(((file: fs.PathOrFileDescriptor, ...rest: unknown[]) =>
+      String(file).endsWith(".html")
+        ? "<html>sample</html>"
+        : (realReadFileSync as (...args: unknown[]) => unknown)(file, ...rest)) as typeof fs.readFileSync);
   });
 
   it("registers every sample-data tool plus the UI resource", async () => {

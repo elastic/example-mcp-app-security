@@ -38,7 +38,7 @@ The dev server runs on `http://localhost:3001/mcp` in HTTP mode. Use `npm run st
 | `main.ts`       | Entry point — HTTP and stdio transport                       |
 | `src/server.ts` | MCP server factory — registers all tool modules              |
 | `src/elastic/`  | Elasticsearch and Kibana API clients                         |
-| `src/tools/`    | MCP tool definitions (model-facing + app-only)               |
+| `src/tools/`    | MCP tool definitions (view tools + data/action tools)        |
 | `src/views/`    | React UIs (one per capability, bundled as single HTML files) |
 | `src/shared/`   | Shared UI components, types, and utilities                   |
 | `skills/`       | Claude Desktop Skills (`SKILL.md` per capability)            |
@@ -127,17 +127,19 @@ The workflow will:
 
 1. Create the Elastic API client functions in `src/elastic/`
 2. Create the tool registration module in `src/tools/` using `registerAppTool` from `@modelcontextprotocol/ext-apps/server`
-3. Register the module in `src/server.ts`
-4. If the tool has a UI, create a new view directory under `src/views/` with `mcp-app.html` and `App.tsx`
-5. Update `manifest.json` if the tool is model-facing (add to the `tools` array)
-6. Run `npm run typecheck` to verify
+3. Set `_meta.ui.visibility` to `["model", "app"]` for data and action tools the UI calls. Only use `["app"]` for UI plumbing the model must never call (such as `report-analytics-event`) — MCP hosts, including Claude Code, remove `["app"]` tools from the model's tool list, which breaks skills that reference them
+4. Set `annotations`. Use `readOnlyHint: true` only if the handler never writes to Elasticsearch or Kibana — hosts may auto-approve those calls. Tools without `readOnlyHint` are treated as potentially destructive by the MCP spec; also set `destructiveHint: true` explicitly on tools that create or change detection rules or delete data. Both lists are pinned in `src/test/integration/tool-metadata.integration.test.ts`
+5. Register the module in `src/server.ts`
+6. If the tool has a UI, create a new view directory under `src/views/` with `mcp-app.html` and `App.tsx`
+7. Update `manifest.json` if the tool renders a view (add to the `tools` array)
+8. Run `npm run typecheck` to verify
 
 ## Code Style
 
 - TypeScript strict mode is enabled
 - Views use React 19 with Tailwind CSS 4
 - Each view is bundled into a single self-contained HTML file (no external assets)
-- Tool results should be compact summaries — the UI loads full data independently via app-only tools
+- Tool results should be compact summaries — the UI loads full data independently via the data tools
 - When adding a Kibana API query/body param, verify the exact casing against the Zod/OpenAPI schema in the Kibana source (not by assumption) and cite the schema file in a comment
 
 ## License

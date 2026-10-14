@@ -43,6 +43,7 @@ export function registerCaseManagementTools(
         severity: z.enum(["low", "medium", "high", "critical"]).optional().describe("Filter by severity"),
         search: z.string().optional().describe("Search text"),
       },
+      annotations: { readOnlyHint: true },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ status, severity, search }) => {
@@ -89,7 +90,8 @@ export function registerCaseManagementTools(
         page: z.number().optional(),
         perPage: z.number().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ status, severity, search, tags, page, perPage }) => {
       const result = await casesService.listCases({
@@ -112,7 +114,8 @@ export function registerCaseManagementTools(
       title: "Get Case",
       description: "Get a specific case by ID",
       inputSchema: { caseId: z.string() },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ caseId }) => {
       const result = await casesService.getCase(caseId);
@@ -167,7 +170,7 @@ export function registerCaseManagementTools(
         severity: z.string().optional(),
         tags: z.string().optional().describe("Comma-separated tags"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ caseId, version, status, severity, tags }) => {
       const result = await casesService.updateCase(caseId, version, {
@@ -190,7 +193,7 @@ export function registerCaseManagementTools(
         caseId: z.string(),
         comment: z.string(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ caseId, comment }) => {
       const result = await casesService.addComment(caseId, comment);
@@ -212,7 +215,7 @@ export function registerCaseManagementTools(
         ruleId: z.string(),
         ruleName: z.string(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ caseId, alertId, alertIndex, ruleId, ruleName }) => {
       const result = await casesService.attachAlert(caseId, alertId, alertIndex, ruleId, ruleName);
@@ -228,7 +231,8 @@ export function registerCaseManagementTools(
       title: "Get Case Alerts",
       description: "Fetch alerts attached to a case with their details",
       inputSchema: { caseId: z.string() },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ caseId }) => {
       try {
@@ -248,7 +252,8 @@ export function registerCaseManagementTools(
       title: "Get Case Comments",
       description: "Fetch comments for a case",
       inputSchema: { caseId: z.string() },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ caseId }) => {
       const result = await casesService.getComments(caseId);
@@ -264,7 +269,8 @@ export function registerCaseManagementTools(
       title: "Get User Profile",
       description: "Fetch the current user's Kibana profile including avatar",
       inputSchema: {},
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async () => {
       try {

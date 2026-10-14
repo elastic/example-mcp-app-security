@@ -35,9 +35,8 @@ change to take effect.
 ### `mcp_tool_called` (server-side)
 
 Emitted every time an MCP tool handler returns or throws. Wrapped
-around every model-facing tool and every app-only tool _except_
-`report-analytics-event` (which would otherwise duplicate the
-`view_rendered` traffic).
+around every tool _except_ the app-only `report-analytics-event`
+(which would otherwise duplicate the `view_rendered` traffic).
 
 | Field         | Type    | Notes                                                  |
 |---------------|---------|--------------------------------------------------------|

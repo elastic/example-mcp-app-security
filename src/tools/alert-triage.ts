@@ -56,6 +56,7 @@ export function registerAlertTriageTools(
           hosts: z.array(z.string()).optional().describe("Affected hostnames"),
         })).optional().describe("Your triage verdicts — one per detection rule or alert group. Provide these based on your analysis of the alert data."),
       },
+      annotations: { readOnlyHint: true },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async ({ days, severity, limit, query, verdicts }) => {
@@ -119,7 +120,8 @@ export function registerAlertTriageTools(
         status: z.string().optional(),
         query: z.string().optional(),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ days, severity, limit, status, query }) => {
       const summary = await alertsService.getAlerts({ days, severity, limit, status, query });
@@ -140,7 +142,8 @@ export function registerAlertTriageTools(
         alertId: z.string().describe("The alert document ID"),
         alert: z.string().describe("JSON-encoded alert document"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ alertId, alert: alertJson }) => {
       const alert = JSON.parse(alertJson) as SecurityAlert;
@@ -161,7 +164,7 @@ export function registerAlertTriageTools(
       inputSchema: {
         alertId: z.string().describe("The alert document ID"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ alertId }) => {
       await alertsService.acknowledgeAlert(alertId);
@@ -177,11 +180,11 @@ export function registerAlertTriageTools(
     "unacknowledge-alert",
     {
       title: "Unacknowledge Alert",
-      description: "Move an alert back to the open queue (used by the Triage UI Undo affordance after acknowledging)",
+      description: "Move an acknowledged alert back to the open queue",
       inputSchema: {
         alertId: z.string().describe("The alert document ID"),
       },
-      _meta: { ui: { visibility: ["app"] } },
+      _meta: { ui: { visibility: ["model", "app"] } },
     },
     async ({ alertId }) => {
       const result = await alertsService.setAlertWorkflowStatus([alertId], "open");
