@@ -8,6 +8,7 @@
 import type { DetectionRule, RuleException } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
 import type { KibanaClient } from "../kibana-client/index.js";
+import { pathSegment } from "../shared/path-segment.js";
 
 const RULES_API = "/api/detection_engine/rules";
 const EXCEPTIONS_API = "/api/exception_lists/items/_find";
@@ -121,7 +122,7 @@ export class RulesClient {
   /** POST `/api/detection_engine/rules/{ruleId}/exceptions`. */
   async addException(ruleId: string, body: EsRequestBody): Promise<unknown> {
     const { data } = await this.options.kibanaClient.post(
-      `${RULES_API}/${ruleId}/exceptions`,
+      `${RULES_API}/${pathSegment(ruleId)}/exceptions`,
       body,
       { headers: KIBANA_HEADERS }
     );

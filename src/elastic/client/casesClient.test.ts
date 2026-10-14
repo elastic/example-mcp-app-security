@@ -171,4 +171,36 @@ describe("CasesClient", () => {
     );
     expect(hits).toEqual([{ _id: "a", _index: "i", _source: {} }]);
   });
+
+  it("searchAlertsByIds encodes each index name", async () => {
+    const esClient = createMockEsClient();
+    const kibanaClient = createMockKibanaClient();
+    esClient.post.mockResolvedValueOnce(dataEnvelope({ hits: { hits: [] } }));
+
+    const client = new CasesClient({ esClient, kibanaClient });
+    await client.searchAlertsByIds(
+      [".alerts-security.alerts-default", "a/b?c#d"],
+      ["a"]
+    );
+
+    expect(esClient.post).toHaveBeenCalledWith(
+      "/.alerts-security.alerts-default,a%2Fb%3Fc%23d/_search",
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it("encodes the case id in case paths", async () => {
+    const esClient = createMockEsClient();
+    const kibanaClient = createMockKibanaClient();
+    kibanaClient.get.mockResolvedValueOnce(dataEnvelope([]));
+
+    const client = new CasesClient({ esClient, kibanaClient });
+    await client.getCaseAlerts("../x#y");
+
+    expect(kibanaClient.get).toHaveBeenCalledWith(
+      "/api/cases/..%2Fx%23y/alerts",
+      expect.anything()
+    );
+  });
 });

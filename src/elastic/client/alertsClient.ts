@@ -11,6 +11,7 @@ import type {
   SecurityAlert,
 } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
+import { pathSegment } from "../shared/path-segment.js";
 
 /** Wildcard alias matching every Security Solution alerts index. */
 const ALERTS_INDEX = ".alerts-security.alerts-*";
@@ -100,7 +101,7 @@ export class AlertsClient {
    * the partial fields they want to merge into the alert.
    */
   async updateAlert(alertId: string, doc: EsRequestBody): Promise<void> {
-    await this.post(`/${ALERTS_INDEX}/_update/${alertId}`, { doc });
+    await this.post(`/${ALERTS_INDEX}/_update/${pathSegment(alertId)}`, { doc });
   }
 
   /** POST `/.alerts-security.alerts-*\/_update_by_query` */

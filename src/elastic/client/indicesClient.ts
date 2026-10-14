@@ -7,6 +7,7 @@
 
 import type { FieldMapping } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
+import { pathSegment } from "../shared/path-segment.js";
 
 /** A single row returned by `_cat/indices?format=json`. */
 export interface CatIndicesRow {
@@ -44,7 +45,7 @@ export class IndicesClient {
     params: Record<string, string>
   ): Promise<CatIndicesRow[]> {
     const { data } = await this.options.esClient.get<CatIndicesRow[]>(
-      `/_cat/indices/${target}`,
+      `/_cat/indices/${pathSegment(target)}`,
       { params }
     );
     return data;
@@ -53,7 +54,7 @@ export class IndicesClient {
   /** GET `/{index}/_mapping`. */
   async getRawMapping(index: string): Promise<RawMappingResponse> {
     const { data } = await this.options.esClient.get<RawMappingResponse>(
-      `/${index}/_mapping`
+      `/${pathSegment(index)}/_mapping`
     );
     return data;
   }

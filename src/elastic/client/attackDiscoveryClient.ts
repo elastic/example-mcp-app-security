@@ -8,6 +8,7 @@
 import type { EsqlResult } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
 import type { KibanaClient } from "../kibana-client/index.js";
+import { pathSegment } from "../shared/path-segment.js";
 
 const KIBANA_API_VERSION = "2023-10-31";
 
@@ -129,7 +130,7 @@ export class AttackDiscoveryClient {
     body: EsRequestBody
   ): Promise<UpdateByQueryResponse> {
     const { data } = await this.options.esClient.post<UpdateByQueryResponse>(
-      `/${index}/_update_by_query`,
+      `/${pathSegment(index)}/_update_by_query`,
       body
     );
     return data;

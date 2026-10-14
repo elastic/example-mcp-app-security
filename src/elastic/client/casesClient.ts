@@ -8,6 +8,7 @@
 import type { KibanaCase } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
 import type { KibanaClient } from "../kibana-client/index.js";
+import { pathSegment } from "../shared/path-segment.js";
 
 const CASES_API = "/api/cases";
 const KIBANA_API_VERSION = "2023-10-31";
@@ -103,7 +104,7 @@ export class CasesClient {
   /** GET `/api/cases/{caseId}`. */
   async getCase(caseId: string): Promise<KibanaCase> {
     const { data } = await this.options.kibanaClient.get<KibanaCase>(
-      `${CASES_API}/${caseId}`,
+      `${CASES_API}/${pathSegment(caseId)}`,
       { headers: KIBANA_HEADERS }
     );
     return data;
@@ -132,7 +133,7 @@ export class CasesClient {
   /** POST `/api/cases/{caseId}/comments`. */
   async addComment(caseId: string, body: EsRequestBody): Promise<unknown> {
     const { data } = await this.options.kibanaClient.post(
-      `${CASES_API}/${caseId}/comments`,
+      `${CASES_API}/${pathSegment(caseId)}/comments`,
       body,
       { headers: KIBANA_HEADERS }
     );
@@ -142,7 +143,7 @@ export class CasesClient {
   /** GET `/api/cases/{caseId}/alerts` — raw, pre-enrichment. */
   async getCaseAlerts(caseId: string): Promise<RawCaseAlert[]> {
     const { data } = await this.options.kibanaClient.get<RawCaseAlert[]>(
-      `${CASES_API}/${caseId}/alerts`,
+      `${CASES_API}/${pathSegment(caseId)}/alerts`,
       { headers: KIBANA_HEADERS }
     );
     return data;
@@ -154,7 +155,7 @@ export class CasesClient {
     params: Record<string, string>
   ): Promise<FindCommentsResponse> {
     const { data } = await this.options.kibanaClient.get<FindCommentsResponse>(
-      `${CASES_API}/${caseId}/comments/_find`,
+      `${CASES_API}/${pathSegment(caseId)}/comments/_find`,
       { params, headers: KIBANA_HEADERS }
     );
     return data;
@@ -166,7 +167,7 @@ export class CasesClient {
   ): Promise<{ id: string; title: string }[]> {
     const { data } = await this.options.kibanaClient.get<
       { id: string; title: string }[]
-    >(`${CASES_API}/alerts/${alertId}`, { headers: KIBANA_HEADERS });
+    >(`${CASES_API}/alerts/${pathSegment(alertId)}`, { headers: KIBANA_HEADERS });
     return data;
   }
 
@@ -201,7 +202,7 @@ export class CasesClient {
     alertIds: readonly string[]
   ): Promise<AlertSearchHit[]> {
     const { data } = await this.options.esClient.post<SearchAlertsResponse>(
-      `/${indices.join(",")}/_search`,
+      `/${indices.map(pathSegment).join(",")}/_search`,
       {
         query: { ids: { values: alertIds } },
         // `size` must stay within `index.max_result_window` (default 10 000)
