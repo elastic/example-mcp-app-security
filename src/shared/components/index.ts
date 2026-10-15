@@ -10,6 +10,7 @@ export type { AppShellProps } from "./AppShell/AppShell";
 
 export { AppHeader } from "./AppHeader/AppHeader";
 export type { AppHeaderProps } from "./AppHeader/AppHeader";
+export { SpaceControl } from "./AppHeader/SpaceControl";
 
 export { SearchInput } from "./SearchInput/SearchInput";
 export type { SearchInputProps } from "./SearchInput/SearchInput";
@@ -40,6 +41,8 @@ export type { KpiStripProps, KpiTileProps, KpiAccent } from "./KpiStrip/KpiStrip
 
 export { LoadingState, EmptyState } from "./States/States";
 export type { LoadingStateProps, EmptyStateProps } from "./States/States";
+export { OtherSpacesHint } from "./States/OtherSpacesHint";
+export type { OtherSpacesHintProps } from "./States/OtherSpacesHint";
 
 export { ErrorBoundary } from "./ErrorBoundary/ErrorBoundary";
 export type { ErrorBoundaryProps } from "./ErrorBoundary/ErrorBoundary";

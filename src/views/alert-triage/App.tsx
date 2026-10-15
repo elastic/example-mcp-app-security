@@ -21,6 +21,7 @@ import {
   GroupCard,
   ListSubheader,
   LoadingState,
+  OtherSpacesHint,
   QueryPill,
   SearchInput,
   SeverityDonut,
@@ -603,7 +604,10 @@ export function AppContent() {
         ) : bootstrap.status === "error" && !summary ? (
           <EmptyState>{bootstrap.reason}</EmptyState>
         ) : !summary || summary.alerts.length === 0 ? (
-          <EmptyState>{activeQuery ? `No alerts matching "${activeQuery}"` : "No open alerts"}</EmptyState>
+          <EmptyState>
+            <div>{activeQuery ? `No alerts matching "${activeQuery}"` : "No open alerts"}</div>
+            {!activeQuery && <OtherSpacesHint kind="alerts" days={paramsRef.current.days} />}
+          </EmptyState>
         ) : groupedAlerts ? (
           groupedAlerts.length === 0 ? (
             <EmptyState>No alerts have a {GROUP_LABEL[groupBy].toLowerCase()} to group by.</EmptyState>

@@ -7,6 +7,7 @@
 
 import React from "react";
 import { AppGlyph, ExitFullscreenIcon, FullscreenIcon } from "../icons/icons";
+import { SpaceControl } from "./SpaceControl";
 import "./AppHeader.css";
 
 export interface AppHeaderProps {
@@ -21,8 +22,9 @@ export interface AppHeaderProps {
 }
 
 /**
- * Standard app header: brand (glyph + title) on the left, action slot + a
- * fullscreen toggle on the right. Replaces every `.{view}-header*` class.
+ * Standard app header: brand (glyph + title) and the Kibana space control on
+ * the left, action slot + a fullscreen toggle on the right. Replaces every
+ * `.{view}-header*` class.
  */
 export function AppHeader({ title, leftExtras, actions, fullscreen }: AppHeaderProps) {
   return (
@@ -32,6 +34,7 @@ export function AppHeader({ title, leftExtras, actions, fullscreen }: AppHeaderP
           <span className="app-header-glyph" aria-hidden="true"><AppGlyph /></span>
           <h1 className="app-header-title">{title}</h1>
         </div>
+        <SpaceControl />
         {leftExtras}
       </div>
       <div className="app-header-actions">
