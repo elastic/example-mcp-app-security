@@ -275,6 +275,15 @@ async function bulkIndex(
 ): Promise<{ indexed: number }> {
   if (docs.length === 0) return { indexed: 0 };
 
+  // Writing to a space's alerts alias before Kibana has created it would
+  // auto-create a plain index under that name and block Kibana's own setup.
+  const alertsIndex = spaceIndices.alerts();
+  if (docs.some((doc) => doc._index === alertsIndex) && !(await sampleDataClient.resolves(alertsIndex))) {
+    throw new Error(
+      `Security alerts aren't set up in Kibana space "${currentSpaceId()}" yet. Open Security > Alerts in that space once (or enable a detection rule), then generate sample data again.`
+    );
+  }
+
   let totalIndexed = 0;
   for (let i = 0; i < docs.length; i += BULK_CHUNK_SIZE) {
     const chunk = docs.slice(i, i + BULK_CHUNK_SIZE);

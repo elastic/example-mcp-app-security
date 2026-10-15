@@ -42,6 +42,39 @@ describe("SampleDataService", () => {
       expect(ndjson).toContain(TAG);
     });
 
+    it("refuses to write alerts into a space whose alerts alias Kibana hasn't created", async () => {
+      const sampleDataClient = createMockSampleDataClient();
+      const rulesService = createMockRulesService();
+      vi.mocked(sampleDataClient.resolves).mockResolvedValue(false);
+
+      const service = new SampleDataService({ sampleDataClient, rulesService });
+      await expect(
+        runInSpace("fresh", () =>
+          service.generateSampleData({ scenario: "windows-credential-theft", count: 5 })
+        )
+      ).rejects.toThrowError(/Security alerts aren't set up in Kibana space "fresh"/);
+      expect(sampleDataClient.resolves).toHaveBeenCalledWith(".alerts-security.alerts-fresh");
+      expect(sampleDataClient.bulkIndex).not.toHaveBeenCalled();
+    });
+
+    it("writes alerts once the space's alerts alias resolves", async () => {
+      const sampleDataClient = createMockSampleDataClient();
+      const rulesService = createMockRulesService();
+      vi.mocked(sampleDataClient.bulkIndex).mockResolvedValue({
+        items: Array.from({ length: 200 }, () => ({ create: { _index: "x", status: 201 } })),
+        errors: false,
+      });
+
+      const service = new SampleDataService({ sampleDataClient, rulesService });
+      await runInSpace("soc", () =>
+        service.generateSampleData({ scenario: "windows-credential-theft", count: 5 })
+      );
+      expect(sampleDataClient.resolves).toHaveBeenCalledWith(".alerts-security.alerts-soc");
+      expect(vi.mocked(sampleDataClient.bulkIndex).mock.calls[0][0]).toContain(
+        '".alerts-security.alerts-soc"'
+      );
+    });
+
     it("walks the CDR cross-domain extra-events loops when count is high", async () => {
       const sampleDataClient = createMockSampleDataClient();
       const rulesService = createMockRulesService();

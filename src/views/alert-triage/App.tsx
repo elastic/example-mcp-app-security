@@ -606,7 +606,7 @@ export function AppContent() {
         ) : !summary || summary.alerts.length === 0 ? (
           <EmptyState>
             <div>{activeQuery ? `No alerts matching "${activeQuery}"` : "No open alerts"}</div>
-            {!activeQuery && <OtherSpacesHint kind="alerts" days={paramsRef.current.days} />}
+            {!activeQuery && <OtherSpacesHint kind="alerts" />}
           </EmptyState>
         ) : groupedAlerts ? (
           groupedAlerts.length === 0 ? (

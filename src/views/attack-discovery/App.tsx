@@ -861,7 +861,7 @@ function AppContent() {
                 : "Try adjusting the time range or running a new generation."}
             </div>
             {!activeQuery && discoveries.length === 0 && (
-              <OtherSpacesHint kind="discoveries" days={paramsRef.current.days} />
+              <OtherSpacesHint kind="discoveries" />
             )}
           </EmptyState>
         ) : groupedDiscoveries ? (

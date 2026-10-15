@@ -57,6 +57,13 @@ export interface AlertCheckResponse {
   };
 }
 
+/** Response returned by `GET /_resolve/index/<name>`. */
+export interface ResolveIndexResponse {
+  readonly indices?: { readonly name: string }[];
+  readonly aliases?: { readonly name: string }[];
+  readonly data_streams?: { readonly name: string }[];
+}
+
 interface SampleDataClientOptions {
   readonly esClient: EsClient;
 }
@@ -102,6 +109,18 @@ export class SampleDataClient {
       body
     );
     return data;
+  }
+
+  /** GET `/_resolve/index/{name}` — true when an index, alias or data stream has that exact name. */
+  async resolves(name: string): Promise<boolean> {
+    const { status, data } = await this.options.esClient.get<ResolveIndexResponse>(
+      `/_resolve/index/${pathSegment(name)}`,
+      { validateStatus: (s) => s === 200 || s === 404 }
+    );
+    if (status === 404) return false;
+    return [...(data.indices ?? []), ...(data.aliases ?? []), ...(data.data_streams ?? [])].some(
+      (entry) => entry.name === name
+    );
   }
 
   /** POST `/{index}/_count`. */
