@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import { RulesClient } from "./rulesClient.js";
+import { MISSING_INDEX_IS_EMPTY } from "../shared/space-context.js";
 import {
   createMockEsClient,
   createMockKibanaClient,
@@ -163,7 +164,8 @@ describe("RulesClient", () => {
 
     expect(esClient.post).toHaveBeenCalledWith(
       "/.alerts-security.alerts-default/_validate/query",
-      { query: { eql: { query: "x" } } }
+      { query: { eql: { query: "x" } } },
+      MISSING_INDEX_IS_EMPTY
     );
   });
 
@@ -178,7 +180,8 @@ describe("RulesClient", () => {
 
     expect(esClient.post).toHaveBeenCalledWith(
       "/.alerts-security.alerts-default/_search",
-      { size: 0 }
+      { size: 0 },
+      MISSING_INDEX_IS_EMPTY
     );
     expect(out).toEqual(response);
   });

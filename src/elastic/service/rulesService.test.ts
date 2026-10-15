@@ -222,6 +222,14 @@ describe("RulesService", () => {
       expect(body.aggs.by_rule.terms.size).toBe(20);
     });
 
+    it("returns no rules when the space has no alerts index yet", async () => {
+      const rulesClient = createMockRulesClient();
+      vi.mocked(rulesClient.searchAlertsAggregation).mockResolvedValueOnce({});
+
+      const service = new RulesService({ rulesClient });
+      await expect(service.noisyRules({})).resolves.toEqual([]);
+    });
+
     it("normalises buckets into { ruleName, ruleId, alertCount }", async () => {
       const rulesClient = createMockRulesClient();
       vi.mocked(rulesClient.searchAlertsAggregation).mockResolvedValueOnce({

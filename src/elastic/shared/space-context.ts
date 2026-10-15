@@ -30,6 +30,11 @@ export function kibanaSpacePath(path: string, spaceId: string = currentSpaceId()
   return spaceId === DEFAULT_SPACE_ID ? path : `/s/${pathSegment(spaceId)}${path}`;
 }
 
+/** Params for reads on a space index Kibana may not have created yet. */
+export const MISSING_INDEX_IS_EMPTY: { params: Record<string, string> } = {
+  params: { ignore_unavailable: "true", allow_no_indices: "true" },
+};
+
 /** Security Solution indices, which Kibana suffixes with the space ID. */
 export const spaceIndices = {
   alerts: (spaceId: string = currentSpaceId()): string =>

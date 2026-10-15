@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import { AlertsClient } from "./alertsClient.js";
-import { runInSpace } from "../shared/space-context.js";
+import { MISSING_INDEX_IS_EMPTY, runInSpace } from "../shared/space-context.js";
 import {
   createMockEsClient,
   dataEnvelope,
@@ -27,7 +27,7 @@ describe("AlertsClient", () => {
     const body = { query: { match_all: {} } };
     const out = await client.searchAlerts(body);
 
-    expect(esClient.post).toHaveBeenCalledWith(ALERTS_PATH, body);
+    expect(esClient.post).toHaveBeenCalledWith(ALERTS_PATH, body, MISSING_INDEX_IS_EMPTY);
     expect(out).toEqual(response);
   });
 
@@ -42,7 +42,8 @@ describe("AlertsClient", () => {
 
     expect(esClient.post).toHaveBeenCalledWith(
       "/.alerts-security.alerts-soc/_search",
-      { size: 1 }
+      { size: 1 },
+      MISSING_INDEX_IS_EMPTY
     );
   });
 

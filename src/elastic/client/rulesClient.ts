@@ -9,7 +9,7 @@ import type { DetectionRule, RuleException } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
 import type { KibanaClient } from "../kibana-client/index.js";
 import { pathSegment } from "../shared/path-segment.js";
-import { spaceIndices } from "../shared/space-context.js";
+import { MISSING_INDEX_IS_EMPTY, spaceIndices } from "../shared/space-context.js";
 
 const RULES_API = "/api/detection_engine/rules";
 const EXCEPTIONS_API = "/api/exception_lists/items/_find";
@@ -38,9 +38,12 @@ export interface NoisyRulesBucket {
   readonly rule_id: { readonly buckets: { readonly key: string }[] };
 }
 
-/** Typed shape of the noisy-rules `_search` response. */
+/**
+ * Typed shape of the noisy-rules `_search` response. `aggregations` is absent
+ * when the space has no alerts index yet.
+ */
 export interface NoisyRulesAggResponse {
-  readonly aggregations: {
+  readonly aggregations?: {
     readonly by_rule: { readonly buckets: NoisyRulesBucket[] };
   };
 }
@@ -152,7 +155,8 @@ export class RulesClient {
   async validateKqlOrEql(body: EsRequestBody): Promise<unknown> {
     const { data } = await this.options.esClient.post(
       `/${pathSegment(spaceIndices.alerts())}/_validate/query`,
-      body
+      body,
+      MISSING_INDEX_IS_EMPTY
     );
     return data;
   }
@@ -163,7 +167,8 @@ export class RulesClient {
   ): Promise<NoisyRulesAggResponse> {
     const { data } = await this.options.esClient.post<NoisyRulesAggResponse>(
       `/${pathSegment(spaceIndices.alerts())}/_search`,
-      body
+      body,
+      MISSING_INDEX_IS_EMPTY
     );
     return data;
   }

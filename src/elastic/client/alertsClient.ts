@@ -12,7 +12,7 @@ import type {
 } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
 import { pathSegment } from "../shared/path-segment.js";
-import { spaceIndices } from "../shared/space-context.js";
+import { MISSING_INDEX_IS_EMPTY, spaceIndices } from "../shared/space-context.js";
 
 /** Endpoint integration process-event indices. */
 const PROCESS_EVENTS_INDEX = "logs-endpoint.events.process-*";
@@ -73,9 +73,13 @@ interface AlertsClientOptions {
 export class AlertsClient {
   constructor(private readonly options: AlertsClientOptions) {}
 
-  /** POST `/.alerts-security.alerts-<space>/_search` */
+  /**
+   * POST `/.alerts-security.alerts-<space>/_search`. The alias only exists
+   * once Kibana has set up alerts in the space, so a missing index reads as
+   * no alerts rather than an error.
+   */
   searchAlerts(body: EsRequestBody): Promise<AlertSearchResponse> {
-    return this.post(`/${alertsIndex()}/_search`, body);
+    return this.post(`/${alertsIndex()}/_search`, body, MISSING_INDEX_IS_EMPTY);
   }
 
   /** POST `/logs-endpoint.events.process-*\/_search` */
@@ -107,8 +111,14 @@ export class AlertsClient {
     return this.post(`/${alertsIndex()}/_update_by_query`, body);
   }
 
-  private async post<T>(path: string, body: EsRequestBody): Promise<T> {
-    const { data } = await this.options.esClient.post<T>(path, body);
+  private async post<T>(
+    path: string,
+    body: EsRequestBody,
+    config?: { params: Record<string, string> }
+  ): Promise<T> {
+    const { data } = config
+      ? await this.options.esClient.post<T>(path, body, config)
+      : await this.options.esClient.post<T>(path, body);
     return data;
   }
 }
