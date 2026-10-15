@@ -27,6 +27,8 @@ This project provides six interactive security operations tools, each with a ric
 
 See [docs/features.md](docs/features.md) for a full breakdown of each tool's capabilities.
 
+Tools work in one Kibana space at a time: `default`, or the space set in your cluster config (see [Kibana space](docs/setup-local.md#kibana-space)). When the API key can access more than one space, the Alert Triage, Attack Discovery, Case Management, and Detection Rules views can switch spaces for the session.
+
 ## Quick Start
 
 > [!TIP]

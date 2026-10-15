@@ -18,6 +18,8 @@ claude mcp add elastic-security \
 >
 > **Self-signed TLS:** see [TLS verification options](./setup-local.md#tls-verification-options) for `sslVerify` and `caCertPath`.
 >
+> **Kibana space:** to work in a space other than `default`, add `spaceId` to the cluster entry. See [Kibana space](./setup-local.md#kibana-space).
+>
 > **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
 
 ## Option 2: Local server (stdio)

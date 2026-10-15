@@ -41,6 +41,8 @@ Or add manually to `.cursor/mcp.json`:
 > **Keeping secrets out of `mcp.json`:** replace `CLUSTERS_JSON` with `CLUSTERS_FILE` pointing at the absolute path of a JSON file containing the same array. See [Cluster configuration](./setup-local.md#cluster-configuration).
 >
 > **Self-signed TLS:** see [TLS verification options](./setup-local.md#tls-verification-options) for `sslVerify` and `caCertPath`.
+>
+> **Kibana space:** to work in a space other than `default`, add `spaceId` to the cluster entry. See [Kibana space](./setup-local.md#kibana-space).
 
 ## Option 2: Local server (stdio)
 

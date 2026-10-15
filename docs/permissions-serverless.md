@@ -90,6 +90,8 @@ Custom roles are supported on Serverless Security projects (GA since October 202
 
 Note: `feature_securitySolutionRulesV2` on serverless vs `feature_securitySolutionRulesV4` on stateful 9.4+.
 
+The roles below cover the `default` Kibana space. For other spaces, repeat the `-default` index patterns and the `space:default` resource for each space the user will work in — see the space note at the top of [permissions.md](./permissions.md).
+
 ### Full-access custom role (serverless)
 
 ```
