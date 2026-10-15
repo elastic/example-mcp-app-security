@@ -6,6 +6,7 @@
  */
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -19,12 +20,25 @@ import {
   type McpAppBootstrapState,
   inspectMcpAppBootstrapResult,
 } from "../mcp-app-bootstrap";
+import { LIST_SPACES_TOOL, type ListSpacesResult } from "../spaces";
+import { parseListSpacesResult, spaceDisplayName, withSpaceArg } from "../space-calls";
 import {
   McpAppContext,
   type McpAppContextValue,
   type OnToolResult,
   type Unsubscribe,
 } from "./McpAppContext";
+import { McpSpaceContext, type McpSpaceContextValue } from "./McpSpaceContext";
+
+/** Bounds how long a space switch waits for the host to ack the model context update. */
+const MODEL_CONTEXT_TIMEOUT_MS = 2000;
+
+function spaceSwitchText(id: string, name: string, configured: string): string {
+  if (id === configured) {
+    return `The analyst switched the Elastic Security view back to their configured Kibana space "${name}" (id: ${id}). Use the configured space for follow-up questions again (omit the \`space\` argument).`;
+  }
+  return `The analyst switched the Elastic Security view to the Kibana space "${name}" (id: ${id}) for this session. Use this space for follow-up questions about alerts, cases, rules and attack discoveries (pass \`space: "${id}"\` to Elastic Security tools) until they switch back.`;
+}
 
 export interface McpAppProviderProps {
   /** App identification — passed to `new McpApp({ name, version })`. */
@@ -50,6 +64,12 @@ export interface McpAppProviderProps {
  * initial hydration payload after it arrives. Listener registries live
  * in `Set` refs so adding / removing subscribers never re-triggers the
  * connect effect.
+ *
+ * Kibana spaces: after connecting, the provider loads `list-spaces` and
+ * exposes the result via {@link McpSpaceContext} (`useSpaces()`). Every
+ * `callServerTool` on the instance is routed through {@link withSpaceArg},
+ * so once the analyst picks another space for the session, view calls carry
+ * `space` without each call site knowing about it.
  */
 export function McpAppProvider({
   name,
@@ -68,11 +88,30 @@ export function McpAppProvider({
   // event.
   const toolResultListeners = useRef<Set<OnToolResult>>(new Set());
 
+  const [spaceList, setSpaceList] = useState<ListSpacesResult | null>(null);
+  const [activeSpace, setActiveSpaceState] = useState("");
+  // Read by the wrapped `callServerTool`, which outlives any single render.
+  const activeSpaceRef = useRef("");
+  const configuredSpaceRef = useRef("");
+  const switchSeqRef = useRef(0);
+  const [viewKey, setViewKey] = useState(0);
+
   useEffect(() => {
     const app = new McpApp({ name, version });
+    const callServerTool = app.callServerTool.bind(app);
+    app.callServerTool = (params, options) =>
+      callServerTool(
+        withSpaceArg(params, activeSpaceRef.current, configuredSpaceRef.current),
+        options,
+      );
     appRef.current = app;
     setConnected(false);
     setBootstrapState({ status: "idle" });
+    activeSpaceRef.current = "";
+    configuredSpaceRef.current = "";
+    switchSeqRef.current = 0;
+    setSpaceList(null);
+    setActiveSpaceState("");
     applyTheme(app);
 
     let cancelled = false;
@@ -90,6 +129,10 @@ export function McpAppProvider({
 
       const bootstrapResult = inspectMcpAppBootstrapResult(params);
       if (bootstrapResult.status === "not_bootstrap") {
+        return;
+      }
+      // A bootstrap that arrives after a space switch describes the previous space.
+      if (switchSeqRef.current > 0) {
         return;
       }
       if (bootstrapResult.status === "error") {
@@ -113,9 +156,21 @@ export function McpAppProvider({
     };
 
     app.connect()
-      .then(() => {
+      .then(async () => {
         if (cancelled) return;
         setConnected(true);
+        try {
+          const list = parseListSpacesResult(
+            await app.callServerTool({ name: LIST_SPACES_TOOL, arguments: {} }),
+          );
+          if (cancelled || !list) return;
+          configuredSpaceRef.current = list.configured;
+          activeSpaceRef.current = list.configured;
+          setSpaceList(list);
+          setActiveSpaceState(list.configured);
+        } catch {
+          // Older servers have no `list-spaces`; the space UI stays hidden.
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -150,5 +205,50 @@ export function McpAppProvider({
     [bootstrapState, connected, subscribeToToolResult],
   );
 
-  return <McpAppContext.Provider value={value}>{children}</McpAppContext.Provider>;
+  const setActiveSpace = useCallback(
+    async (id: string): Promise<void> => {
+      const app = appRef.current;
+      if (!app || !spaceList || id === activeSpaceRef.current) return;
+      const seq = ++switchSeqRef.current;
+      try {
+        await app.updateModelContext(
+          {
+            content: [
+              {
+                type: "text",
+                text: spaceSwitchText(id, spaceDisplayName(spaceList.spaces, id), spaceList.configured),
+              },
+            ],
+          },
+          { timeout: MODEL_CONTEXT_TIMEOUT_MS },
+        );
+      } catch {
+        // Hosts without model context support still get the view switch.
+      }
+      if (seq !== switchSeqRef.current || appRef.current !== app) return;
+      activeSpaceRef.current = id;
+      setActiveSpaceState(id);
+      setBootstrapState({ status: "idle" });
+      setViewKey((k) => k + 1);
+    },
+    [spaceList],
+  );
+
+  const spaceValue = useMemo<McpSpaceContextValue>(
+    () => ({
+      configured: spaceList?.configured ?? "",
+      active: activeSpace,
+      spaces: spaceList?.spaces ?? [],
+      setActiveSpace,
+    }),
+    [activeSpace, setActiveSpace, spaceList],
+  );
+
+  return (
+    <McpAppContext.Provider value={value}>
+      <McpSpaceContext.Provider value={spaceValue}>
+        <Fragment key={viewKey}>{children}</Fragment>
+      </McpSpaceContext.Provider>
+    </McpAppContext.Provider>
+  );
 }
