@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import { EntityDetailClient } from "./entityDetailClient.js";
+import { MISSING_INDEX_IS_EMPTY } from "../shared/space-context.js";
 import {
   createMockEsClient,
   dataEnvelope,
@@ -28,7 +29,8 @@ describe("EntityDetailClient", () => {
 
       expect(esClient.post).toHaveBeenCalledWith(
         "/logs-endpoint.events.process-*/_search",
-        body
+        body,
+        MISSING_INDEX_IS_EMPTY
       );
       expect(out).toEqual(response);
     });

@@ -25,6 +25,7 @@ const fake = vi.hoisted(() => {
     connect = vi.fn(async () => {});
     close = vi.fn();
     ontoolresult?: (params: unknown) => void;
+    ontoolinput?: (params: { arguments?: Record<string, unknown> }) => void;
     onhostcontextchanged?: (params: unknown) => void;
     callServerTool(params: Params, _options?: unknown) {
       return this.sent(params);
@@ -231,6 +232,84 @@ describe("McpAppProvider — Kibana spaces", () => {
       await spaces.setActiveSpace("default");
     });
     expect(fake.instances[0].updateModelContext).not.toHaveBeenCalled();
+    expect(mounts).toBe(1);
+  });
+
+  it("adopts the space the model rendered the view in, without telling the model", async () => {
+    renderProvider();
+    await waitFor(() => expect(spaces.spaces).toHaveLength(2));
+    const app = fake.instances[0];
+
+    act(() => {
+      app.ontoolinput?.({ arguments: { days: 7, space: "soc" } });
+    });
+
+    expect(screen.getByTestId("active")).toHaveTextContent("soc");
+    expect(app.updateModelContext).not.toHaveBeenCalled();
+    // No bootstrap yet, so the view reloads in the rendered space.
+    await waitFor(() =>
+      expect(sentCalls("poll-alerts").at(-1)).toEqual({
+        name: "poll-alerts",
+        arguments: { days: 7, space: "soc" },
+      }),
+    );
+  });
+
+  it("keeps a bootstrap that already arrived for the rendered space", async () => {
+    renderProvider();
+    await waitFor(() => expect(spaces.spaces).toHaveLength(2));
+    const app = fake.instances[0];
+
+    act(() => {
+      app.ontoolresult?.(bootstrapPush());
+    });
+    act(() => {
+      app.ontoolinput?.({ arguments: { space: "soc" } });
+    });
+
+    expect(screen.getByTestId("active")).toHaveTextContent("soc");
+    expect(screen.getByTestId("bootstrap")).toHaveTextContent("ready");
+    expect(mounts).toBe(1);
+    await act(async () => {
+      await app.callServerTool({ name: "acknowledge-alert", arguments: { alertId: "a1" } });
+    });
+    expect(sentCalls("acknowledge-alert")).toEqual([
+      { name: "acknowledge-alert", arguments: { alertId: "a1", space: "soc" } },
+    ]);
+  });
+
+  it("applies a rendered space that arrives before list-spaces resolves", async () => {
+    let resolveList: (value: unknown) => void = () => {};
+    fake.respond = (params) =>
+      params.name === "list-spaces"
+        ? new Promise((resolve) => {
+            resolveList = resolve;
+          })
+        : { content: [] };
+    renderProvider();
+    await waitFor(() => expect(sentCalls("list-spaces")).toHaveLength(1));
+    const app = fake.instances[0];
+
+    act(() => {
+      app.ontoolinput?.({ arguments: { space: "soc" } });
+    });
+    await act(async () => {
+      resolveList(jsonResult(LIST));
+    });
+
+    await waitFor(() => expect(screen.getByTestId("active")).toHaveTextContent("soc"));
+    expect(spaces.configured).toBe("default");
+  });
+
+  it("ignores a rendered space that isn't a valid space ID", async () => {
+    renderProvider();
+    await waitFor(() => expect(spaces.spaces).toHaveLength(2));
+
+    act(() => {
+      fake.instances[0].ontoolinput?.({ arguments: { space: "../soc" } });
+    });
+
+    expect(screen.getByTestId("active")).toHaveTextContent("default");
     expect(mounts).toBe(1);
   });
 

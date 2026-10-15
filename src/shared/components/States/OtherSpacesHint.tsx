@@ -55,8 +55,10 @@ export function OtherSpacesHint({ kind, days }: OtherSpacesHintProps) {
 
   if (!enabled || !counts) return null;
 
+  // Counts can include spaces the key can read indices for but can't open in Kibana.
+  const openable = new Set(spaces.map((s) => s.id));
   const others = Object.entries(counts)
-    .filter(([id, n]) => id !== active && n > 0)
+    .filter(([id, n]) => id !== active && n > 0 && openable.has(id))
     .sort((a, b) => b[1] - a[1]);
   if (others.length === 0) return null;
 
@@ -85,8 +87,8 @@ export function OtherSpacesHint({ kind, days }: OtherSpacesHintProps) {
         ))}
       </ul>
       <div className="other-spaces-hint-action">
-        Click a space to view it for this session. To change your default, set{" "}
-        <strong>Kibana space</strong> in the Elastic Security app settings.
+        Click a space to view it for this session. To change your default, set the{" "}
+        <strong>Kibana space</strong> in your Elastic Security connection settings.
       </div>
     </div>
   );

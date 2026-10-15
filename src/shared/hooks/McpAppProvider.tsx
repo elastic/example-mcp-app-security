@@ -20,7 +20,7 @@ import {
   type McpAppBootstrapState,
   inspectMcpAppBootstrapResult,
 } from "../mcp-app-bootstrap";
-import { LIST_SPACES_TOOL, type ListSpacesResult } from "../spaces";
+import { LIST_SPACES_TOOL, SPACE_ARG, isValidSpaceId, type ListSpacesResult } from "../spaces";
 import { parseListSpacesResult, spaceDisplayName, withSpaceArg } from "../space-calls";
 import {
   McpAppContext,
@@ -94,6 +94,9 @@ export function McpAppProvider({
   const activeSpaceRef = useRef("");
   const configuredSpaceRef = useRef("");
   const switchSeqRef = useRef(0);
+  // Space the model passed on the tool call that rendered this view.
+  const renderedSpaceRef = useRef("");
+  const bootstrapReadyRef = useRef(false);
   const [viewKey, setViewKey] = useState(0);
 
   useEffect(() => {
@@ -110,11 +113,29 @@ export function McpAppProvider({
     activeSpaceRef.current = "";
     configuredSpaceRef.current = "";
     switchSeqRef.current = 0;
+    renderedSpaceRef.current = "";
+    bootstrapReadyRef.current = false;
     setSpaceList(null);
     setActiveSpaceState("");
     applyTheme(app);
 
     let cancelled = false;
+
+    // The model chose this space, so it isn't told again. A bootstrap from the
+    // same call already holds that space's data; without one, the view reloads.
+    const adoptRenderedSpace = (space: string) => {
+      if (switchSeqRef.current > 0 || space === activeSpaceRef.current) return;
+      activeSpaceRef.current = space;
+      setActiveSpaceState(space);
+      if (!bootstrapReadyRef.current) setViewKey((k) => k + 1);
+    };
+
+    app.ontoolinput = (params) => {
+      const requested = params.arguments?.[SPACE_ARG];
+      if (typeof requested !== "string" || !isValidSpaceId(requested)) return;
+      renderedSpaceRef.current = requested;
+      if (configuredSpaceRef.current) adoptRenderedSpace(requested);
+    };
 
     app.ontoolresult = (params) => {
       // Snapshot the listener set so a subscriber that unsubscribes
@@ -151,6 +172,7 @@ export function McpAppProvider({
             reason: `Received bootstrap for ${bootstrapResult.envelope.viewId} inside ${name}.`,
           };
         }
+        bootstrapReadyRef.current = true;
         return bootstrapResult;
       });
     };
@@ -165,9 +187,12 @@ export function McpAppProvider({
           );
           if (cancelled || !list) return;
           configuredSpaceRef.current = list.configured;
-          activeSpaceRef.current = list.configured;
           setSpaceList(list);
-          setActiveSpaceState(list.configured);
+          if (!activeSpaceRef.current) {
+            activeSpaceRef.current = list.configured;
+            setActiveSpaceState(list.configured);
+          }
+          if (renderedSpaceRef.current) adoptRenderedSpace(renderedSpaceRef.current);
         } catch {
           // Older servers have no `list-spaces`; the space UI stays hidden.
         }

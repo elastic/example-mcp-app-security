@@ -84,7 +84,7 @@ describe("OtherSpacesHint", () => {
     expect(rows[0]).toHaveTextContent("12");
     expect(rows[0]).toHaveTextContent("View →");
     expect(screen.getByText(/Click a space to view it for this session/)).toHaveTextContent(
-      "Click a space to view it for this session. To change your default, set Kibana space in the Elastic Security app settings.",
+      "Click a space to view it for this session. To change your default, set the Kibana space in your Elastic Security connection settings.",
     );
   });
 
@@ -116,6 +116,15 @@ describe("OtherSpacesHint", () => {
     const { container } = renderHint({ callServerTool });
     await waitFor(() => expect(callServerTool).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("leaves out spaces that list-spaces didn't return", async () => {
+    const callServerTool = vi
+      .fn()
+      .mockResolvedValue(countsResult("alerts", { default: 0, soc: 3, "no-kibana-access": 9 }));
+    renderHint({ callServerTool });
+    expect(await screen.findByText(/3 open alerts are in other spaces/)).toBeInTheDocument();
+    expect(screen.queryByText("no-kibana-access")).not.toBeInTheDocument();
   });
 
   it("skips the count call when fewer than two spaces are accessible", () => {
