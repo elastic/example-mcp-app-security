@@ -6,6 +6,7 @@
  */
 
 import type { EsClient } from "../es-client/index.js";
+import { pathSegment } from "../shared/path-segment.js";
 
 /** Domain type for an entity-detail card surfaced in views and tools. */
 export interface EntityDetail {
@@ -49,7 +50,7 @@ export class EntityDetailClient {
     body: EsRequestBody
   ): Promise<SearchResponse<H>> {
     const { data } = await this.options.esClient.post<SearchResponse<H>>(
-      `/${index}/_search`,
+      `/${pathSegment(index)}/_search`,
       body
     );
     return data;

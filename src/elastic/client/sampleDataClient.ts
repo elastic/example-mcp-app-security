@@ -6,6 +6,7 @@
  */
 
 import type { EsClient } from "../es-client/index.js";
+import { pathSegment } from "../shared/path-segment.js";
 
 /** Per-call timeout for `_bulk` requests — bulk indexing is slow. */
 const BULK_TIMEOUT_MS = 120_000;
@@ -96,7 +97,7 @@ export class SampleDataClient {
     body: EsRequestBody
   ): Promise<DeleteByQueryResponse> {
     const { data } = await this.options.esClient.post<DeleteByQueryResponse>(
-      `/${index}/_delete_by_query`,
+      `/${pathSegment(index)}/_delete_by_query`,
       body
     );
     return data;
@@ -105,7 +106,7 @@ export class SampleDataClient {
   /** POST `/{index}/_count`. */
   async count(index: string, body: EsRequestBody): Promise<CountResponse> {
     const { data } = await this.options.esClient.post<CountResponse>(
-      `/${index}/_count`,
+      `/${pathSegment(index)}/_count`,
       body
     );
     return data;

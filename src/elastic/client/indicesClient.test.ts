@@ -58,5 +58,15 @@ describe("IndicesClient", () => {
       expect(esClient.get).toHaveBeenCalledWith("/logs-*/_mapping");
       expect(out).toBe(mapping);
     });
+
+    it("encodes the index name", async () => {
+      const esClient = createMockEsClient();
+      esClient.get.mockResolvedValueOnce(dataEnvelope({}));
+
+      const client = new IndicesClient({ esClient });
+      await client.getRawMapping("../x#y");
+
+      expect(esClient.get).toHaveBeenCalledWith("/..%2Fx%23y/_mapping");
+    });
   });
 });
