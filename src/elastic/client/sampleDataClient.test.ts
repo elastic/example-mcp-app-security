@@ -68,7 +68,7 @@ describe("SampleDataClient", () => {
     expect(out).toEqual({ count: 17 });
   });
 
-  it("searchAlertsAggregation POSTs to the alerts wildcard search index", async () => {
+  it("searchAlertsAggregation POSTs to the default space's alerts search index", async () => {
     const esClient = createMockEsClient();
     const response = {
       hits: { total: { value: 0 } },
@@ -80,7 +80,7 @@ describe("SampleDataClient", () => {
     const out = await client.searchAlertsAggregation({ size: 0 });
 
     expect(esClient.post).toHaveBeenCalledWith(
-      "/.alerts-security.alerts-*/_search",
+      "/.alerts-security.alerts-default/_search",
       { size: 0 }
     );
     expect(out).toEqual(response);

@@ -7,6 +7,7 @@
 
 import type { EsClient } from "../es-client/index.js";
 import { pathSegment } from "../shared/path-segment.js";
+import { spaceIndices } from "../shared/space-context.js";
 
 /** Per-call timeout for `_bulk` requests — bulk indexing is slow. */
 const BULK_TIMEOUT_MS = 120_000;
@@ -113,14 +114,15 @@ export class SampleDataClient {
   }
 
   /**
-   * POST `/.alerts-security.alerts-*\/_search` — used by `checkExistingData`
-   * to count tag-matching alerts and bucket them by rule name.
+   * POST `/.alerts-security.alerts-<space>/_search` — used by
+   * `checkExistingData` to count tag-matching alerts and bucket them by rule
+   * name.
    */
   async searchAlertsAggregation(
     body: EsRequestBody
   ): Promise<AlertCheckResponse> {
     const { data } = await this.options.esClient.post<AlertCheckResponse>(
-      "/.alerts-security.alerts-*/_search",
+      `/${pathSegment(spaceIndices.alerts())}/_search`,
       body
     );
     return data;

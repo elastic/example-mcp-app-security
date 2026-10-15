@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import { InvestigateService } from "./investigateService.js";
 import type { EsqlEnvelope } from "../client/investigateClient.js";
 import { createMockInvestigateClient } from "../../test/helpers/mockServiceClients.js";
+import { runInSpace } from "../shared/space-context.js";
 
 function envelope(
   columns: string[],
@@ -210,4 +211,22 @@ describe("InvestigateService", () => {
     const firstQuery = vi.mocked(investigateClient.runEsql).mock.calls[0][0];
     expect(firstQuery).toContain("@timestamp >= NOW() - 2 days");
   });
+
+  it.each(["user", "host"])(
+    "reads %s alerts from the call's space alerts index",
+    async (type) => {
+      const investigateClient = createMockInvestigateClient();
+      vi.mocked(investigateClient.runEsql).mockResolvedValue(envelope([], []));
+
+      const service = new InvestigateService({ investigateClient });
+      await runInSpace("soc", () => service.investigateEntity(type, "x"));
+
+      const alertQueries = vi
+        .mocked(investigateClient.runEsql)
+        .mock.calls.map((call) => call[0])
+        .filter((q) => q.includes(".alerts-security"));
+      expect(alertQueries).toHaveLength(1);
+      expect(alertQueries[0]).toMatch(/^FROM \.alerts-security\.alerts-soc \|/);
+    }
+  );
 });
