@@ -20,12 +20,24 @@ import {
 } from "../elastic/service/index.js";
 import { createMcpAppBootstrap } from "../shared/mcp-app-bootstrap.js";
 import type { AnalyticsClient } from "../elastic/analytics/index.js";
+import { currentSpaceId } from "../elastic/shared/space-context.js";
 import { registerTrackedAppTool } from "./tracked-app-tool.js";
 import { resolveViewPath } from "./view-path.js";
 
 const RESOURCE_URI = "ui://generate-sample-data/mcp-app.html";
 
-const _pendingRuleIdMap: Record<string, string> = {};
+/** Rule ids created per space; rules only exist in the space they were created in. */
+const _pendingRuleIdMaps = new Map<string, Record<string, string>>();
+
+function pendingRuleIdMap(): Record<string, string> {
+  const spaceId = currentSpaceId();
+  let map = _pendingRuleIdMaps.get(spaceId);
+  if (!map) {
+    map = {};
+    _pendingRuleIdMaps.set(spaceId, map);
+  }
+  return map;
+}
 
 export interface SampleDataToolDeps {
   readonly sampleDataService: SampleDataService;
@@ -82,8 +94,9 @@ export function registerSampleDataTools(
         scenario: scenario as ScenarioName,
         count,
       };
-      if (Object.keys(_pendingRuleIdMap).length > 0) {
-        args.ruleIdMap = _pendingRuleIdMap;
+      const ruleIdMap = pendingRuleIdMap();
+      if (Object.keys(ruleIdMap).length > 0) {
+        args.ruleIdMap = ruleIdMap;
       }
       const result = await sampleDataService.generateSampleData(args);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
@@ -126,7 +139,7 @@ export function registerSampleDataTools(
         return { content: [{ type: "text" as const, text: JSON.stringify({ created: 0, ruleIds: [], message: "No rule definitions for this scenario" }) }] };
       }
       const result = await sampleDataService.createRulesForScenario(scenario as ScenarioName);
-      Object.assign(_pendingRuleIdMap, result.ruleIdMap);
+      Object.assign(pendingRuleIdMap(), result.ruleIdMap);
       return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
     }
   );

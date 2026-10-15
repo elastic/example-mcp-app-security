@@ -61,6 +61,9 @@ const READ_ONLY_TOOLS = [
   // sample-data
   "generate-sample-data",
   "check-existing-sample-data",
+  // spaces
+  "list-spaces",
+  "count-by-space",
   // threat-hunt
   "threat-hunt",
   "execute-esql",

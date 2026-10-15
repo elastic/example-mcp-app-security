@@ -33,7 +33,7 @@ import type { SampleDataService } from "../elastic/service/index.js";
 const RESOURCE_URI = "ui://generate-sample-data/mcp-app.html";
 
 /**
- * `sample-data.ts` carries module-scoped state (`_pendingRuleIdMap`) that
+ * `sample-data.ts` carries module-scoped state (`_pendingRuleIdMaps`) that
  * `create-rules-for-scenario` mutates and `generate-scenario` reads. We
  * dynamically re-import the module per test to keep that state isolated.
  */
@@ -152,6 +152,44 @@ describe("registerSampleDataTools", () => {
         count: undefined,
         ruleIdMap: { "Rule A": "rid-1", "Rule B": "rid-2" },
       });
+    });
+
+    it("only uses rule ids created in the same Kibana space", async () => {
+      const { server, sampleDataService } = await setup();
+      // Same module instance as the freshly re-imported sample-data.ts.
+      const { runInSpace } = await import("../elastic/shared/space-context.js");
+      vi.mocked(sampleDataService.createRulesForScenario).mockResolvedValueOnce(
+        {
+          created: 1,
+          existing: 0,
+          ruleIds: ["soc-rid"],
+          ruleIdMap: { "Rule A": "soc-rid" },
+        }
+      );
+      vi.mocked(sampleDataService.generateSampleData).mockResolvedValue({
+        indexed: 1,
+        scenario: "ransomware-kill-chain",
+        indices: [],
+      });
+      const scenario = { scenario: "ransomware-kill-chain" };
+
+      await runInSpace("soc", () =>
+        server.tool("create-rules-for-scenario").callback(scenario)
+      );
+      await runInSpace("finance", () =>
+        server.tool("generate-scenario").callback(scenario)
+      );
+      await server.tool("generate-scenario").callback(scenario);
+      await runInSpace("soc", () =>
+        server.tool("generate-scenario").callback(scenario)
+      );
+
+      const calls = vi.mocked(sampleDataService.generateSampleData).mock.calls;
+      expect(calls.map(([args]) => args.ruleIdMap)).toEqual([
+        undefined,
+        undefined,
+        { "Rule A": "soc-rid" },
+      ]);
     });
   });
 
