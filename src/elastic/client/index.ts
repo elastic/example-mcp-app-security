@@ -76,3 +76,6 @@ export { SampleDataClient } from "./sampleDataClient.js";
 
 export type { TelemetryConfig } from "./telemetryConfigClient.js";
 export { TelemetryConfigClient } from "./telemetryConfigClient.js";
+
+export type { SpaceCountsAggResponse } from "./spacesClient.js";
+export { SpacesClient } from "./spacesClient.js";

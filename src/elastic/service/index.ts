@@ -20,3 +20,4 @@ export type {
 } from "./sampleDataService.js";
 export { SampleDataService, SCENARIO_NAMES, SCENARIO_RULES } from "./sampleDataService.js";
 export { TelemetryService } from "./telemetryService.js";
+export { SpacesService } from "./spacesService.js";

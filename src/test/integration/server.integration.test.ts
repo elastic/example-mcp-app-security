@@ -134,6 +134,9 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "generate-attack-discovery",
           "get-generation-status",
           "list-ai-connectors",
+          // spaces
+          "list-spaces",
+          "count-by-space",
           // analytics
           "report-analytics-event",
         ].sort()
