@@ -7,6 +7,7 @@
 
 import { readFileSync } from "node:fs";
 import { z } from "zod";
+import { DEFAULT_SPACE_ID } from "../../shared/spaces.js";
 import type {
   ClusterCredentials,
   ClusterSummary,
@@ -238,6 +239,7 @@ function parseClusters({ raw, source }: RawSource): ParsedClusters {
         kibanaUrl: stripTrailingSlash(c.kibanaUrl),
         elasticsearchApiKey: c.elasticsearchApiKey,
         sslVerify: c.sslVerify,
+        spaceId: DEFAULT_SPACE_ID,
         ...(caCert ? { caCert } : {}),
       });
     })

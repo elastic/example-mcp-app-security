@@ -16,6 +16,7 @@ const creds: ClusterCredentials = {
   kibanaUrl: "https://kb.example.com",
   elasticsearchApiKey: "secret-key",
   sslVerify: true,
+  spaceId: "default",
 };
 
 /**

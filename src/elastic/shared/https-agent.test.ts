@@ -18,6 +18,7 @@ function creds(
     kibanaUrl: "https://kb.example.com",
     elasticsearchApiKey: "key-1",
     sslVerify: true,
+    spaceId: "default",
     ...overrides,
   };
 }

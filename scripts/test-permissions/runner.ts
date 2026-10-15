@@ -232,6 +232,7 @@ function adminServices(admin: AdminConfig): Services {
     kibanaUrl: admin.kibanaUrl,
     elasticsearchApiKey: admin.elasticsearchApiKey,
     sslVerify: true,
+    spaceId: "default",
   };
   return buildServices(creds);
 }
@@ -243,6 +244,7 @@ function scopedServices(admin: AdminConfig, scopedKey: string): Services {
     kibanaUrl: admin.kibanaUrl,
     elasticsearchApiKey: scopedKey,
     sslVerify: true,
+    spaceId: "default",
   };
   return buildServices(creds);
 }

@@ -19,6 +19,8 @@ export interface ClusterCredentials {
   readonly elasticsearchApiKey: string;
   /** Whether to verify TLS certificates (default `true`). */
   readonly sslVerify: boolean;
+  /** Kibana space tools use when a call doesn't pass `space` (default `"default"`). */
+  readonly spaceId: string;
   /** Custom CA bundle, pre-loaded at startup when `caCertPath` was set. */
   readonly caCert?: Buffer;
 }
