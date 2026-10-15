@@ -8,6 +8,7 @@
 import axios, { AxiosError } from "axios";
 import type { ClusterCredentials } from "../credential-client/index.js";
 import { createHttpsAgent } from "../shared/https-agent.js";
+import { kibanaSpacePath } from "../shared/space-context.js";
 import type { KibanaClient } from "./kibana-client.js";
 
 const USER_AGENT = "elastic-security-mcp-app";
@@ -28,7 +29,8 @@ function describeError(err: AxiosError, clusterName: string): Error {
  * API (`get`, `post`, `put`, `delete`, `request`, …) directly. The required
  * Kibana headers (`kbn-xsrf`, `x-elastic-internal-origin`) are set as
  * defaults; per-call `headers` overrides handle endpoint-specific concerns
- * such as `elastic-api-version`.
+ * such as `elastic-api-version`. Relative paths are prefixed with the current
+ * call's space (`/s/<space>`), so callers always pass space-less API paths.
  */
 export function createKibanaClient(creds: ClusterCredentials): KibanaClient {
   const instance = axios.create({
@@ -42,6 +44,13 @@ export function createKibanaClient(creds: ClusterCredentials): KibanaClient {
       "kbn-xsrf": "true",
       "x-elastic-internal-origin": "Kibana",
     },
+  });
+
+  instance.interceptors.request.use((config) => {
+    if (config.url?.startsWith("/")) {
+      config.url = kibanaSpacePath(config.url);
+    }
+    return config;
   });
 
   instance.interceptors.response.use(

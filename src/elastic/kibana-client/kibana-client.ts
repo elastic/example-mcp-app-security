@@ -16,6 +16,8 @@ import type { AxiosInstance } from "axios";
  *   - default `Content-Type: application/json`
  *   - `kbn-xsrf: true` and `x-elastic-internal-origin: Kibana` headers
  *   - default 30s timeout
+ *   - request interceptor that prefixes relative paths with the current
+ *     call's space (`/s/<space>`; none for the default space)
  *   - response interceptor that rewrites errors to include {@link clusterName}
  *
  * Per-call header overrides are used for things like `elastic-api-version`.

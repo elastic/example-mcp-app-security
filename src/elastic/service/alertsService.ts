@@ -154,8 +154,8 @@ export class AlertsService {
 
   /**
    * Mark a single alert as `acknowledged`. Delegates to the bulk path because
-   * the single-document `_update` API does not accept wildcard index patterns
-   * (`.alerts-security.alerts-*`), but `_update_by_query` does.
+   * the single-document `_update` API on the alerts alias only reaches its
+   * write index, while `_update_by_query` covers every backing index.
    */
   async acknowledgeAlert(alertId: string): Promise<void> {
     await this.acknowledgeAlerts([alertId]);

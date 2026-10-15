@@ -7,15 +7,16 @@
 
 import { describe, it, expect } from "vitest";
 import { AlertsClient } from "./alertsClient.js";
+import { runInSpace } from "../shared/space-context.js";
 import {
   createMockEsClient,
   dataEnvelope,
 } from "../../test/helpers/mockHttpClient.js";
 
-const ALERTS_PATH = "/.alerts-security.alerts-*/_search";
+const ALERTS_PATH = "/.alerts-security.alerts-default/_search";
 
 describe("AlertsClient", () => {
-  it("searchAlerts POSTs to the alerts wildcard search endpoint", async () => {
+  it("searchAlerts POSTs to the default space's alerts search endpoint", async () => {
     const esClient = createMockEsClient();
     const response = {
       hits: { total: { value: 0 }, hits: [] },
@@ -28,6 +29,21 @@ describe("AlertsClient", () => {
 
     expect(esClient.post).toHaveBeenCalledWith(ALERTS_PATH, body);
     expect(out).toEqual(response);
+  });
+
+  it("searchAlerts targets the alerts index of the call's space", async () => {
+    const esClient = createMockEsClient();
+    esClient.post.mockResolvedValueOnce(
+      dataEnvelope({ hits: { total: { value: 0 }, hits: [] } })
+    );
+    const client = new AlertsClient({ esClient });
+
+    await runInSpace("soc", () => client.searchAlerts({ size: 1 }));
+
+    expect(esClient.post).toHaveBeenCalledWith(
+      "/.alerts-security.alerts-soc/_search",
+      { size: 1 }
+    );
   });
 
   it("searchProcessEvents POSTs to the endpoint process events index", async () => {
@@ -71,7 +87,7 @@ describe("AlertsClient", () => {
       });
 
       expect(esClient.post).toHaveBeenCalledWith(
-        "/.alerts-security.alerts-*/_update/abc-123",
+        "/.alerts-security.alerts-default/_update/abc-123",
         { doc: { "kibana.alert.workflow_status": "acknowledged" } }
       );
     });
@@ -96,7 +112,7 @@ describe("AlertsClient", () => {
     const out = await client.updateAlertsByQuery(body);
 
     expect(esClient.post).toHaveBeenCalledWith(
-      "/.alerts-security.alerts-*/_update_by_query",
+      "/.alerts-security.alerts-default/_update_by_query",
       body
     );
     expect(out).toEqual({ updated: 7 });

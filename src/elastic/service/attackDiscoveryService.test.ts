@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import { AttackDiscoveryService } from "./attackDiscoveryService.js";
 import { createMockAttackDiscoveryClient } from "../../test/helpers/mockServiceClients.js";
 import type { AttackDiscovery } from "../client/attackDiscoveryClient.js";
+import { runInSpace } from "../shared/space-context.js";
 
 const SCHEDULED_INDEX = ".alerts-security.attack.discovery.alerts-default";
 const ADHOC_INDEX = ".adhoc.alerts-security.attack.discovery.alerts-default";
@@ -661,6 +662,106 @@ describe("AttackDiscoveryService", () => {
         { id: "1", name: "Bedrock", actionTypeId: ".bedrock" },
         { id: "3", name: "GenAI", actionTypeId: ".gen-ai" },
       ]);
+    });
+  });
+
+  describe("Kibana spaces", () => {
+    const SOC_SCHEDULED = ".alerts-security.attack.discovery.alerts-soc";
+    const SOC_ADHOC = ".adhoc.alerts-security.attack.discovery.alerts-soc";
+
+    it("queries the scheduled + adhoc indices of the call's space, including the per-index fallback", async () => {
+      const attackDiscoveryClient = createMockAttackDiscoveryClient();
+      vi.mocked(attackDiscoveryClient.runEsql)
+        .mockRejectedValueOnce(new Error("multi-fails"))
+        .mockResolvedValueOnce(envelope(DISCOVERY_COLUMNS, [makeRow("d1")]))
+        .mockResolvedValueOnce(envelope(DISCOVERY_COLUMNS, [makeRow("d2")]));
+
+      const service = new AttackDiscoveryService({ attackDiscoveryClient });
+      const out = await runInSpace("soc", () => service.getDiscoveries({}));
+
+      expect(out.discoveries.map((d) => d.id)).toEqual(["d1", "d2"]);
+      const queries = vi
+        .mocked(attackDiscoveryClient.runEsql)
+        .mock.calls.map((c) => c[0]);
+      expect(queries[0]).toContain(
+        `FROM ${SOC_SCHEDULED}, ${SOC_ADHOC} METADATA _id`
+      );
+      expect(queries[1]).toContain(`FROM ${SOC_SCHEDULED} METADATA _id`);
+      expect(queries[1]).not.toContain(SOC_ADHOC);
+      expect(queries[2]).toContain(`FROM ${SOC_ADHOC} METADATA _id`);
+      expect(queries.join("\n")).not.toContain("-default");
+    });
+
+    it("acknowledges on the call's space indices", async () => {
+      const attackDiscoveryClient = createMockAttackDiscoveryClient();
+      vi.mocked(attackDiscoveryClient.acknowledgeOnIndex).mockResolvedValue({
+        updated: 1,
+      });
+
+      const service = new AttackDiscoveryService({ attackDiscoveryClient });
+      await runInSpace("soc", () => service.acknowledgeDiscoveries(["d1"]));
+
+      expect(
+        vi
+          .mocked(attackDiscoveryClient.acknowledgeOnIndex)
+          .mock.calls.map((c) => c[0])
+      ).toEqual([SOC_SCHEDULED, SOC_ADHOC]);
+    });
+
+    it.each([
+      ["default", ".alerts-security.alerts-default", "risk-score.risk-score-latest-default"],
+      ["soc", ".alerts-security.alerts-soc", "risk-score.risk-score-latest-soc"],
+    ])(
+      "scopes confidence alert and risk lookups to the %s space (no cross-space wildcard)",
+      async (spaceId, alertsIndex, riskIndex) => {
+        const attackDiscoveryClient = createMockAttackDiscoveryClient();
+        vi.mocked(attackDiscoveryClient.runEsql).mockResolvedValueOnce(
+          envelope(
+            ["_id", "kibana.alert.rule.name", "host.name", "user.name"],
+            [["a1", "RuleA", "h1", "u1"]]
+          )
+        );
+        vi.mocked(attackDiscoveryClient.runEsql).mockResolvedValue(
+          envelope([], [])
+        );
+
+        const service = new AttackDiscoveryService({ attackDiscoveryClient });
+        await runInSpace(spaceId, () =>
+          service.assessConfidence([
+            { ...emptyDiscovery, id: "d1", alertIds: ["a1"] },
+          ])
+        );
+
+        const queries = vi
+          .mocked(attackDiscoveryClient.runEsql)
+          .mock.calls.map((c) => c[0]);
+        expect(queries).toHaveLength(3);
+        expect(queries[0]).toContain(`FROM ${alertsIndex} METADATA _id`);
+        expect(queries[1]).toContain(`FROM ${alertsIndex}\n`);
+        expect(queries[2]).toContain(`FROM ${riskIndex}\n`);
+        expect(queries.join("\n")).not.toMatch(/alerts-\*|latest-\*/);
+      }
+    );
+
+    it("generates against the call's space alerts index", async () => {
+      const attackDiscoveryClient = createMockAttackDiscoveryClient();
+      vi.mocked(
+        attackDiscoveryClient.findAnonymizationFields
+      ).mockResolvedValueOnce({ data: [] });
+      vi.mocked(attackDiscoveryClient.generate).mockResolvedValueOnce({
+        execution_uuid: "exec-1",
+      });
+
+      const service = new AttackDiscoveryService({ attackDiscoveryClient });
+      await runInSpace("soc", () =>
+        service.generateAttackDiscovery({
+          connectorId: "c1",
+          actionTypeId: ".gen-ai",
+        })
+      );
+
+      const body = vi.mocked(attackDiscoveryClient.generate).mock.calls[0][0];
+      expect(body.alertsIndexPattern).toBe(".alerts-security.alerts-soc");
     });
   });
 });

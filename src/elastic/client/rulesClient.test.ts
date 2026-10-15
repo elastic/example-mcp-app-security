@@ -162,7 +162,7 @@ describe("RulesClient", () => {
     await client.validateKqlOrEql({ query: { eql: { query: "x" } } });
 
     expect(esClient.post).toHaveBeenCalledWith(
-      "/.alerts-security.alerts-*/_validate/query",
+      "/.alerts-security.alerts-default/_validate/query",
       { query: { eql: { query: "x" } } }
     );
   });
@@ -177,7 +177,7 @@ describe("RulesClient", () => {
     const out = await client.searchAlertsAggregation({ size: 0 });
 
     expect(esClient.post).toHaveBeenCalledWith(
-      "/.alerts-security.alerts-*/_search",
+      "/.alerts-security.alerts-default/_search",
       { size: 0 }
     );
     expect(out).toEqual(response);

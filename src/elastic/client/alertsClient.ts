@@ -12,9 +12,7 @@ import type {
 } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
 import { pathSegment } from "../shared/path-segment.js";
-
-/** Wildcard alias matching every Security Solution alerts index. */
-const ALERTS_INDEX = ".alerts-security.alerts-*";
+import { spaceIndices } from "../shared/space-context.js";
 
 /** Endpoint integration process-event indices. */
 const PROCESS_EVENTS_INDEX = "logs-endpoint.events.process-*";
@@ -75,9 +73,9 @@ interface AlertsClientOptions {
 export class AlertsClient {
   constructor(private readonly options: AlertsClientOptions) {}
 
-  /** POST `/.alerts-security.alerts-*\/_search` */
+  /** POST `/.alerts-security.alerts-<space>/_search` */
   searchAlerts(body: EsRequestBody): Promise<AlertSearchResponse> {
-    return this.post(`/${ALERTS_INDEX}/_search`, body);
+    return this.post(`/${alertsIndex()}/_search`, body);
   }
 
   /** POST `/logs-endpoint.events.process-*\/_search` */
@@ -95,22 +93,27 @@ export class AlertsClient {
   }
 
   /**
-   * POST `/.alerts-security.alerts-*\/_update/{id}`.
+   * POST `/.alerts-security.alerts-<space>/_update/{id}`.
    *
    * Wraps the body in the required `{ doc }` envelope so callers only pass
    * the partial fields they want to merge into the alert.
    */
   async updateAlert(alertId: string, doc: EsRequestBody): Promise<void> {
-    await this.post(`/${ALERTS_INDEX}/_update/${pathSegment(alertId)}`, { doc });
+    await this.post(`/${alertsIndex()}/_update/${pathSegment(alertId)}`, { doc });
   }
 
-  /** POST `/.alerts-security.alerts-*\/_update_by_query` */
+  /** POST `/.alerts-security.alerts-<space>/_update_by_query` */
   updateAlertsByQuery(body: EsRequestBody): Promise<UpdateByQueryResponse> {
-    return this.post(`/${ALERTS_INDEX}/_update_by_query`, body);
+    return this.post(`/${alertsIndex()}/_update_by_query`, body);
   }
 
   private async post<T>(path: string, body: EsRequestBody): Promise<T> {
     const { data } = await this.options.esClient.post<T>(path, body);
     return data;
   }
+}
+
+/** Security Solution alerts alias for the current call's space. */
+function alertsIndex(): string {
+  return pathSegment(spaceIndices.alerts());
 }

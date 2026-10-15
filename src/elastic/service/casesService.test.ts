@@ -8,6 +8,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { CasesService } from "./casesService.js";
 import { createMockCasesClient } from "../../test/helpers/mockServiceClients.js";
+import { runInSpace } from "../shared/space-context.js";
 
 describe("CasesService", () => {
   describe("listCases", () => {
@@ -422,5 +423,23 @@ describe("CasesService", () => {
       expect(out).toEqual([]);
       expect(casesClient.searchAlertsByIds).not.toHaveBeenCalled();
     });
+  });
+
+  it("looks alerts up in the call's space alerts index", async () => {
+    const casesClient = createMockCasesClient();
+    vi.mocked(casesClient.searchAlertsByIds).mockResolvedValue([]);
+    vi.mocked(casesClient.getCaseAlerts).mockResolvedValueOnce([
+      { id: "a1", index: "", attached_at: "t" },
+    ]);
+
+    const service = new CasesService({ casesClient });
+    await runInSpace("soc", async () => {
+      await service.attachAlertsByIds("c1", ["a1"]);
+      await service.getCaseAlerts("c1");
+    });
+
+    expect(
+      vi.mocked(casesClient.searchAlertsByIds).mock.calls.map((c) => c[0])
+    ).toEqual([[".alerts-security.alerts-soc"], [".alerts-security.alerts-soc"]]);
   });
 });

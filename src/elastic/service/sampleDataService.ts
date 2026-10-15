@@ -6,6 +6,7 @@
  */
 
 import type { SampleDataClient } from "../client/sampleDataClient.js";
+import { currentSpaceId, spaceIndices } from "../shared/space-context.js";
 import type { RulesService } from "./rulesService.js";
 
 const TAG = "elastic-security-sample-data";
@@ -26,9 +27,10 @@ interface SampleDataServiceOptions {
  * Preserves the legacy `sample-data.ts` behaviour 1:1: the same
  * `SCENARIOS` map, the same `SCENARIO_RULES` table, the same generators,
  * the same chunked `_bulk` strategy, and the same per-index swallowing
- * cleanup. The `_ruleIdMap` singleton is intentionally preserved as a
- * module-level `let` to match legacy semantics; per-instance state is a
- * follow-up concern.
+ * cleanup. Alerts, the CDR higher-order rule, and the rule-id map follow the
+ * current call's Kibana space; event data streams stay in the `default`
+ * namespace. The rule-id map is module-level state keyed by space;
+ * per-instance state is a follow-up concern.
  */
 export class SampleDataService {
   constructor(private readonly options: SampleDataServiceOptions) {}
@@ -164,7 +166,7 @@ async function cleanupSampleData(
     "logs-docker.events-default",
     "logs-kubernetes.audit-default",
     "logs-custom.messy-default",
-    ".alerts-security.alerts-default",
+    spaceIndices.alerts(),
   ];
 
   let totalDeleted = 0;
@@ -365,12 +367,13 @@ interface AlertFields {
   extra?: Record<string, unknown>;
 }
 
-let _ruleIdMap: Record<string, string> = {};
+/** Rule name to rule id, per space: rules created in one space don't exist in another. */
+const ruleIdMaps = new Map<string, Record<string, string>>();
 
-function setRuleIdMap(map: Record<string, string>) { _ruleIdMap = map; }
+function setRuleIdMap(map: Record<string, string>) { ruleIdMaps.set(currentSpaceId(), map); }
 
 function alert(timestamp: string, fields: AlertFields): IndexedDoc {
-  const ruleUuid = _ruleIdMap[fields.ruleName] || crypto.randomUUID();
+  const ruleUuid = ruleIdMaps.get(currentSpaceId())?.[fields.ruleName] || crypto.randomUUID();
   const agentType = fields.agentType || "endpoint";
   const dataset = fields.dataset || (agentType === "endpoint" ? "endpoint.events.process" : "crowdstrike.fdr");
   const src: Record<string, unknown> = {
@@ -404,7 +407,7 @@ function alert(timestamp: string, fields: AlertFields): IndexedDoc {
     "kibana.alert.original_event.category": ["process"],
     "kibana.alert.original_event.action": "start",
     "kibana.alert.original_event.dataset": dataset,
-    "kibana.space_ids": ["default"],
+    "kibana.space_ids": [currentSpaceId()],
     "kibana.version": "8.17.0",
   };
 
@@ -429,7 +432,7 @@ function alert(timestamp: string, fields: AlertFields): IndexedDoc {
 
   if (fields.extra) Object.assign(src, fields.extra);
 
-  return { _index: ".alerts-security.alerts-default", _source: src };
+  return { _index: spaceIndices.alerts(), _source: src };
 }
 
 function randomIp(): string {
@@ -598,10 +601,16 @@ export const SCENARIO_RULES: Record<string, ScenarioRuleDef[]> = {
       description: "Higher-Order Rule: fires when the same user has alerts from multiple data sources (e.g. CrowdStrike endpoint + Okta identity) within 24 hours, indicating a cross-domain attack",
       severity: "critical",
       risk_score: 99,
-      query: `FROM .alerts-security.alerts-* | WHERE kibana.alert.workflow_status : "open" AND user.email IS NOT NULL AND tags : "${TAG}" | EVAL day = DATE_TRUNC(24 hours, @timestamp) | STATS alert_count = COUNT(*), rule_names = VALUES(kibana.alert.rule.name), severities = VALUES(kibana.alert.severity) BY user.email, day | WHERE alert_count >= 4`,
+      // Getters, not values: the alerts index must follow the space of the call
+      // that reads the rule, not the space active at module load.
+      get query() {
+        return `FROM ${spaceIndices.alerts()} | WHERE kibana.alert.workflow_status : "open" AND user.email IS NOT NULL AND tags : "${TAG}" | EVAL day = DATE_TRUNC(24 hours, @timestamp) | STATS alert_count = COUNT(*), rule_names = VALUES(kibana.alert.rule.name), severities = VALUES(kibana.alert.severity) BY user.email, day | WHERE alert_count >= 4`;
+      },
       language: "esql",
       type: "esql",
-      index: [".alerts-security.alerts-*"],
+      get index() {
+        return [spaceIndices.alerts()];
+      },
       threat: [mitre("TA0001", "Initial Access", "T1078", "Valid Accounts")],
       tags: [TAG, "Rule Type: Higher-Order Rule", "CDR"],
       enabled: true,
