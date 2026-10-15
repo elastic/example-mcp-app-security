@@ -9,7 +9,7 @@ import type { AttackDiscovery } from "../../src/elastic/client/index.js";
 import { hasPrivileges } from "./elastic-admin.js";
 import type { Services } from "./services.js";
 
-// The app currently targets the "default" Kibana space, so role definitions
+// The permission tests run in the "default" Kibana space, so role definitions
 // hard-code the resolved index/resource names rather than the <space-id>
 // placeholders used in docs/permissions.md.
 const SPACE = "default";
