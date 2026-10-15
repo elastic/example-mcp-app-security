@@ -6,12 +6,40 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createCredentialClient } from "./create-credential-client.js";
 
 const ENV_KEYS = ["CLUSTERS_FILE", "CLUSTERS_JSON"] as const;
+
+const MANIFEST_PATH = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../manifest.json"
+);
+
+interface Manifest {
+  server: { mcp_config: { env: Record<string, string> } };
+  user_config: Record<
+    string,
+    { type: string; required: boolean; sensitive: boolean; default?: unknown }
+  >;
+}
+
+function readManifest(): Manifest {
+  return JSON.parse(readFileSync(MANIFEST_PATH, "utf-8")) as Manifest;
+}
+
+/** Substitute `${user_config.<key>}` tokens the way the .mcpb host does; unknown keys stay literal. */
+function renderClustersJsonTemplate(
+  values: Record<string, string | boolean>
+): string {
+  return readManifest().server.mcp_config.env.CLUSTERS_JSON.replace(
+    /\$\{user_config\.(\w+)\}/g,
+    (token, key: string) => (key in values ? String(values[key]) : token)
+  );
+}
 
 function setClustersJson(value: object | string): void {
   process.env.CLUSTERS_JSON =
@@ -25,6 +53,7 @@ const validCluster = (overrides: Partial<{
   elasticsearchApiKey: string;
   sslVerify: boolean | "true" | "false";
   caCertPath: string;
+  spaceId: string;
 }> = {}) => ({
   name: "primary",
   elasticsearchUrl: "https://es.example.com",
@@ -112,6 +141,22 @@ describe("createCredentialClient", () => {
           elasticsearchUrl: "",
           kibanaUrl: "",
           elasticsearchApiKey: "",
+        },
+      ]);
+
+      expect(() => createCredentialClient()).toThrow(
+        /No clusters configured/
+      );
+    });
+
+    it("ignores spaceId when detecting the empty-template CLUSTERS_JSON", () => {
+      process.env.CLUSTERS_JSON = JSON.stringify([
+        {
+          name: "primary",
+          elasticsearchUrl: "",
+          kibanaUrl: "",
+          elasticsearchApiKey: "",
+          spaceId: "soc",
         },
       ]);
 
@@ -435,6 +480,170 @@ describe("createCredentialClient", () => {
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe("Kibana space", () => {
+    it("defaults spaceId to the default space when omitted", () => {
+      setClustersJson([validCluster()]);
+      const creds = createCredentialClient().get();
+      expect(creds.spaceId).toBe("default");
+      expect(creds.kibanaUrl).toBe("https://kb.example.com");
+    });
+
+    it("uses an explicit spaceId", () => {
+      setClustersJson([validCluster({ spaceId: "soc" })]);
+      expect(createCredentialClient().get().spaceId).toBe("soc");
+    });
+
+    it.each([[""], ["  "], ["${user_config.kibana_space}"]])(
+      "treats spaceId %j as unset",
+      (spaceId) => {
+        setClustersJson([validCluster({ spaceId })]);
+        expect(createCredentialClient().get().spaceId).toBe("default");
+      }
+    );
+
+    it.each([
+      ["https://kb.example.com/s/soc"],
+      ["https://kb.example.com/s/soc/"],
+    ])("derives the space from kibanaUrl %s and strips the suffix", (kibanaUrl) => {
+      setClustersJson([validCluster({ kibanaUrl })]);
+      const creds = createCredentialClient().get();
+      expect(creds.spaceId).toBe("soc");
+      expect(creds.kibanaUrl).toBe("https://kb.example.com");
+    });
+
+    it("keeps a Kibana base path when stripping the space suffix", () => {
+      setClustersJson([
+        validCluster({ kibanaUrl: "https://example.com/kibana/s/soc-2_a" }),
+      ]);
+      const creds = createCredentialClient().get();
+      expect(creds.spaceId).toBe("soc-2_a");
+      expect(creds.kibanaUrl).toBe("https://example.com/kibana");
+    });
+
+    it("accepts an explicit spaceId that matches the kibanaUrl space", () => {
+      setClustersJson([
+        validCluster({
+          kibanaUrl: "https://kb.example.com/s/soc",
+          spaceId: "soc",
+        }),
+      ]);
+      const creds = createCredentialClient().get();
+      expect(creds.spaceId).toBe("soc");
+      expect(creds.kibanaUrl).toBe("https://kb.example.com");
+    });
+
+    it("rejects an explicit spaceId that conflicts with the kibanaUrl space", () => {
+      setClustersJson([
+        validCluster({
+          kibanaUrl: "https://kb.example.com/s/ops",
+          spaceId: "soc",
+        }),
+      ]);
+      expect(() => createCredentialClient()).toThrow(
+        /0\.spaceId: "soc" conflicts with space "ops" in kibanaUrl/
+      );
+    });
+
+    it.each([["SOC"], ["soc space"]])("rejects invalid spaceId %j", (spaceId) => {
+      setClustersJson([validCluster({ spaceId })]);
+      expect(() => createCredentialClient()).toThrow(
+        new RegExp(
+          `0\\.spaceId: invalid space ID "${spaceId}" — Kibana space IDs use lowercase letters, digits, '_' and '-'`
+        )
+      );
+    });
+
+    it("rejects an invalid space ID in the kibanaUrl suffix", () => {
+      setClustersJson([
+        validCluster({ kibanaUrl: "https://kb.example.com/s/SOC" }),
+      ]);
+      expect(() => createCredentialClient()).toThrow(
+        /0\.kibanaUrl: invalid space ID "SOC" in the \/s\/<space> suffix — Kibana space IDs use lowercase letters/
+      );
+    });
+
+    it("resolves the space independently per cluster", () => {
+      setClustersJson([
+        validCluster({ name: "a", spaceId: "soc" }),
+        validCluster({
+          name: "b",
+          elasticsearchApiKey: "k2",
+          elasticsearchUrl: "https://es2.example.com",
+          kibanaUrl: "https://kb2.example.com/s/ops",
+        }),
+        validCluster({
+          name: "c",
+          elasticsearchApiKey: "k3",
+          elasticsearchUrl: "https://es3.example.com",
+          kibanaUrl: "https://kb3.example.com",
+        }),
+      ]);
+      const client = createCredentialClient();
+      expect(client.get("a").spaceId).toBe("soc");
+      expect(client.get("b").spaceId).toBe("ops");
+      expect(client.get("b").kibanaUrl).toBe("https://kb2.example.com");
+      expect(client.get("c").spaceId).toBe("default");
+    });
+  });
+
+  describe("manifest CLUSTERS_JSON template", () => {
+    const filled = {
+      elasticsearch_url: "https://es.example.com",
+      kibana_url: "https://kb.example.com",
+      elasticsearch_api_key: "key-1",
+      ssl_verification: true,
+    };
+
+    it("declares kibana_space as an optional, non-sensitive string defaulting to empty", () => {
+      expect(readManifest().user_config.kibana_space).toMatchObject({
+        type: "string",
+        required: false,
+        sensitive: false,
+        default: "",
+      });
+    });
+
+    it("renders valid JSON with an empty kibana_space and resolves the default space", () => {
+      const rendered = renderClustersJsonTemplate({ ...filled, kibana_space: "" });
+      expect(JSON.parse(rendered)).toEqual([
+        {
+          name: "primary",
+          elasticsearchUrl: "https://es.example.com",
+          kibanaUrl: "https://kb.example.com",
+          elasticsearchApiKey: "key-1",
+          sslVerify: true,
+          spaceId: "",
+        },
+      ]);
+
+      setClustersJson(rendered);
+      expect(createCredentialClient().get().spaceId).toBe("default");
+    });
+
+    it("passes kibana_space through as the cluster's spaceId", () => {
+      setClustersJson(renderClustersJsonTemplate({ ...filled, kibana_space: "soc" }));
+      expect(createCredentialClient().get().spaceId).toBe("soc");
+    });
+
+    it("treats an unsubstituted kibana_space token as the default space", () => {
+      setClustersJson(renderClustersJsonTemplate(filled));
+      expect(createCredentialClient().get().spaceId).toBe("default");
+    });
+
+    it("still treats a blank install as having no inline credentials", () => {
+      setClustersJson(
+        renderClustersJsonTemplate({
+          elasticsearch_url: "",
+          kibana_url: "",
+          elasticsearch_api_key: "",
+          ssl_verification: true,
+          kibana_space: "",
+        })
+      );
+      expect(() => createCredentialClient()).toThrow(/No clusters configured/);
     });
   });
 });
