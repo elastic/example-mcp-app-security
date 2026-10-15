@@ -34,7 +34,7 @@ const CLUSTERS_JSON = JSON.stringify([
   },
 ]);
 
-const ALERTS_PATH = "/.alerts-security.alerts-*/_search";
+const ALERTS_PATH = "/.alerts-security.alerts-default/_search";
 const RULES_FIND_PATH = "/api/detection_engine/rules/_find";
 const CAT_INDICES_PATH = "/_cat/indices/logs-*%2C.alerts-security*";
 const ESQL_PATH = "/_query";
@@ -134,6 +134,9 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "generate-attack-discovery",
           "get-generation-status",
           "list-ai-connectors",
+          // spaces
+          "list-spaces",
+          "count-by-space",
           // analytics
           "report-analytics-event",
         ].sort()

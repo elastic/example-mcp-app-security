@@ -99,12 +99,15 @@ export function createMockRulesClient(): RulesClient {
 }
 
 export function createMockSampleDataClient(): SampleDataClient {
-  return mockClient<SampleDataClient>([
+  const client = mockClient<SampleDataClient>([
     "bulkIndex",
     "deleteByQuery",
     "count",
     "searchAlertsAggregation",
+    "resolves",
   ]);
+  vi.mocked(client.resolves).mockResolvedValue(true);
+  return client;
 }
 
 export function createMockRulesService(): RulesService {

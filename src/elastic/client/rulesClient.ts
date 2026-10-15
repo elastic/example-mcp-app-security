@@ -9,10 +9,10 @@ import type { DetectionRule, RuleException } from "../../shared/types.js";
 import type { EsClient } from "../es-client/index.js";
 import type { KibanaClient } from "../kibana-client/index.js";
 import { pathSegment } from "../shared/path-segment.js";
+import { MISSING_INDEX_IS_EMPTY, spaceIndices } from "../shared/space-context.js";
 
 const RULES_API = "/api/detection_engine/rules";
 const EXCEPTIONS_API = "/api/exception_lists/items/_find";
-const ALERTS_INDEX = ".alerts-security.alerts-*";
 const KIBANA_API_VERSION = "2023-10-31";
 
 /** Headers required on every Kibana detection-engine call. */
@@ -38,9 +38,12 @@ export interface NoisyRulesBucket {
   readonly rule_id: { readonly buckets: { readonly key: string }[] };
 }
 
-/** Typed shape of the noisy-rules `_search` response. */
+/**
+ * Typed shape of the noisy-rules `_search` response. `aggregations` is absent
+ * when the space has no alerts index yet.
+ */
 export interface NoisyRulesAggResponse {
-  readonly aggregations: {
+  readonly aggregations?: {
     readonly by_rule: { readonly buckets: NoisyRulesBucket[] };
   };
 }
@@ -148,22 +151,24 @@ export class RulesClient {
     return data;
   }
 
-  /** POST `/.alerts-security.alerts-*\/_validate/query` on `esClient`. */
+  /** POST `/.alerts-security.alerts-<space>/_validate/query` on `esClient`. */
   async validateKqlOrEql(body: EsRequestBody): Promise<unknown> {
     const { data } = await this.options.esClient.post(
-      `/${ALERTS_INDEX}/_validate/query`,
-      body
+      `/${pathSegment(spaceIndices.alerts())}/_validate/query`,
+      body,
+      MISSING_INDEX_IS_EMPTY
     );
     return data;
   }
 
-  /** POST `/.alerts-security.alerts-*\/_search` on `esClient` for noisy-rules. */
+  /** POST `/.alerts-security.alerts-<space>/_search` on `esClient` for noisy-rules. */
   async searchAlertsAggregation(
     body: EsRequestBody
   ): Promise<NoisyRulesAggResponse> {
     const { data } = await this.options.esClient.post<NoisyRulesAggResponse>(
-      `/${ALERTS_INDEX}/_search`,
-      body
+      `/${pathSegment(spaceIndices.alerts())}/_search`,
+      body,
+      MISSING_INDEX_IS_EMPTY
     );
     return data;
   }

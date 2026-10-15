@@ -25,7 +25,9 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 24px;
+  row-gap: 8px;
 }
 
 .app-header-brand {
@@ -122,8 +124,118 @@
   cursor: not-allowed;
 }
 
+/* ─── Kibana space control ─── */
+
+.app-header-space {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.app-header-space-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 8px 2px 2px;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-header-space-trigger svg {
+  display: block;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.app-header-space-trigger:hover svg {
+  color: var(--text-primary);
+}
+
+.app-header-space-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.app-header-space-label {
+  color: var(--text-muted);
+}
+
+.app-header-space-name {
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.app-header-space-viewing {
+  border-color: #3b5b8f;
+  background: rgba(97, 162, 255, 0.08);
+}
+
+.app-header-space-back {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.app-header-space-back:hover {
+  border-color: var(--text-muted);
+}
+
+.app-header-space-menu {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.dropdown-option.app-header-space-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+}
+
+.app-header-space-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Responsive — let the search shrink before the title wraps */
 @media (max-width: 640px) {
   .app-header { gap: 12px; padding: 12px; }
+  .app-header-left { gap: 12px; }
   .app-header-title { font-size: 16px; }
+  .app-header-space-name { max-width: 110px; }
 }

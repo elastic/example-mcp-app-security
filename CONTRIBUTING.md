@@ -76,7 +76,7 @@ The resulting file is `example-mcp-app-security.mcpb` in the repo root.
 - `manifest.json` — MCPB spec v0.3 manifest declaring server config, user-configurable credentials, tool metadata, and compatibility
 - `.mcpbignore` — controls which files are excluded from the bundle (keeps it lean by only including the esbuild bundle + views)
 
-> **Single-cluster only in the manifest (for now):** `manifest.json` exposes only the three required single-cluster fields (`elasticsearch_url`, `elasticsearch_api_key`, `kibana_url`) and assembles them into a single-entry `CLUSTERS_JSON` env var. The server itself supports multi-cluster config (`CLUSTERS_JSON` / `CLUSTERS_FILE`, see `src/elastic/credential-client/create-credential-client.ts`), but the `clusters_file` picker and `configuration_acknowledged` checkbox have been removed from the manifest until full multi-cluster support (per-tool cluster routing, file-picker UX) lands. The MCPB spec doesn't support conditional/either-or required fields ([modelcontextprotocol/mcpb#196](https://github.com/modelcontextprotocol/mcpb/issues/196), closed `not_planned`), so re-introducing a clusters-file alternative will need a different UX.
+> **Single-cluster only in the manifest (for now):** `manifest.json` exposes only the three required single-cluster fields (`elasticsearch_url`, `elasticsearch_api_key`, `kibana_url`) plus the optional `kibana_space` and `ssl_verification`, and assembles them into a single-entry `CLUSTERS_JSON` env var. The server itself supports multi-cluster config (`CLUSTERS_JSON` / `CLUSTERS_FILE`, see `src/elastic/credential-client/create-credential-client.ts`), but the `clusters_file` picker and `configuration_acknowledged` checkbox have been removed from the manifest until full multi-cluster support (per-tool cluster routing, file-picker UX) lands. The MCPB spec doesn't support conditional/either-or required fields ([modelcontextprotocol/mcpb#196](https://github.com/modelcontextprotocol/mcpb/issues/196), closed `not_planned`), so re-introducing a clusters-file alternative will need a different UX.
 
 ### npm Tarball (for VS Code / npx)
 
@@ -125,8 +125,8 @@ The workflow will:
 
 ## Adding a New Tool
 
-1. Create the Elastic API client functions in `src/elastic/`
-2. Create the tool registration module in `src/tools/` using `registerAppTool` from `@modelcontextprotocol/ext-apps/server`
+1. Create the Elastic API client functions in `src/elastic/`. If they touch Security indices or Kibana APIs, follow the Kibana space rule under [Code Style](#code-style)
+2. Create the tool registration module in `src/tools/` using `registerAppTool` from `@modelcontextprotocol/ext-apps/server`. Don't add a `space` argument: `src/server.ts` registers tools through `createSpaceScopedServer` (`src/tools/space-scoped-server.ts`), which adds an optional `space` argument to every tool whose `inputSchema` is a plain shape (`{ arg: z.string() }`, not `z.object(...)`) and runs the handler in that Kibana space. Registration fails if the tool already defines `space`
 3. Set `_meta.ui.visibility` to `["model", "app"]` for data and action tools the UI calls. Only use `["app"]` for UI plumbing the model must never call (such as `report-analytics-event`) — MCP hosts, including Claude Code, remove `["app"]` tools from the model's tool list, which breaks skills that reference them
 4. Set `annotations`. Use `readOnlyHint: true` only if the handler never writes to Elasticsearch or Kibana — hosts may auto-approve those calls. Tools without `readOnlyHint` are treated as potentially destructive by the MCP spec; also set `destructiveHint: true` explicitly on tools that create or change detection rules or delete data. Both lists are pinned in `src/test/integration/tool-metadata.integration.test.ts`
 5. Register the module in `src/server.ts`
@@ -140,6 +140,7 @@ The workflow will:
 - Views use React 19 with Tailwind CSS 4
 - Each view is bundled into a single self-contained HTML file (no external assets)
 - Tool results should be compact summaries — the UI loads full data independently via the data tools
+- Code that reads Security indices or calls Kibana must follow the current call's Kibana space. Build index names with `spaceIndices` (or `currentSpaceId()`) from `src/elastic/shared/space-context.ts`, and call Kibana through the injected `KibanaClient` with space-less paths — it adds the `/s/<space>` prefix. Don't hardcode `-default` or `.alerts-security.alerts-*` (the wildcard mixes alerts from every space) unless the tool deliberately spans spaces, like `count-by-space`. Pass `MISSING_INDEX_IS_EMPTY` on searches so a space without the index yet reads as empty. See [Kibana Spaces](docs/architecture.md#kibana-spaces)
 - When adding a Kibana API query/body param, verify the exact casing against the Zod/OpenAPI schema in the Kibana source (not by assumption) and cite the schema file in a comment
 
 ## License

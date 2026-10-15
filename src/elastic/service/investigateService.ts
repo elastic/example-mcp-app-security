@@ -12,6 +12,7 @@ import type {
   InvestigateClient,
   InvestigationResult,
 } from "../client/investigateClient.js";
+import { spaceIndices } from "../shared/space-context.js";
 
 interface InvestigateServiceOptions {
   readonly investigateClient: InvestigateClient;
@@ -67,7 +68,7 @@ export class InvestigateService {
         `FROM logs-endpoint.events.process-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY host.name | SORT count DESC | LIMIT 3`
       ),
       this.safeQuery(
-        `FROM .alerts-security.alerts-* | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name, host.name | SORT count DESC | LIMIT 3`
+        `FROM ${spaceIndices.alerts()} | WHERE user.name == "${esc(userName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name, host.name | SORT count DESC | LIMIT 3`
       ),
     ]);
 
@@ -109,7 +110,7 @@ export class InvestigateService {
         `FROM logs-endpoint.events.network-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY destination.ip | SORT count DESC | LIMIT 3`
       ),
       this.safeQuery(
-        `FROM .alerts-security.alerts-* | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name | SORT count DESC | LIMIT 3`
+        `FROM ${spaceIndices.alerts()} | WHERE host.name == "${esc(hostName)}" ${tc} | STATS count=COUNT(*) BY kibana.alert.rule.name | SORT count DESC | LIMIT 3`
       ),
     ]);
 

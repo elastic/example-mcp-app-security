@@ -160,7 +160,7 @@ export class RulesService {
       },
     });
 
-    return result.aggregations.by_rule.buckets.map((b) => ({
+    return (result.aggregations?.by_rule.buckets ?? []).map((b) => ({
       ruleName: b.key,
       ruleId: b.rule_id.buckets[0]?.key || "",
       alertCount: b.doc_count,

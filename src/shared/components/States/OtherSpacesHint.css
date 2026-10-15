@@ -1,0 +1,87 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+.other-spaces-hint {
+  margin: 16px auto 0;
+  max-width: 420px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  text-align: left;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-primary);
+}
+
+.other-spaces-hint-title strong,
+.other-spaces-hint-action strong {
+  font-weight: 600;
+}
+
+.other-spaces-hint-list {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+}
+
+.other-spaces-hint-list li {
+  border-bottom: 1px solid var(--border);
+}
+
+.other-spaces-hint-list li:last-child {
+  border-bottom: none;
+}
+
+.other-spaces-hint-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% + 16px);
+  padding: 6px 8px;
+  margin: 2px -8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.other-spaces-hint-row:hover,
+.other-spaces-hint-row:focus-visible {
+  background: var(--bg-primary);
+  outline: none;
+}
+
+.other-spaces-hint-name {
+  flex: 1;
+}
+
+.other-spaces-hint-go {
+  color: var(--text-muted);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.other-spaces-hint-row:hover .other-spaces-hint-go,
+.other-spaces-hint-row:focus-visible .other-spaces-hint-go {
+  opacity: 1;
+  color: #61a2ff;
+}
+
+.other-spaces-hint-count {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.other-spaces-hint-action {
+  color: var(--text-muted);
+}

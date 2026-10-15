@@ -8,6 +8,7 @@
 import type { EntityDetailClient } from "../client/entityDetailClient.js";
 import type { EntityDetail } from "../client/entityDetailClient.js";
 import { toScalar } from "../../shared/field-utils.js";
+import { spaceIndices } from "../shared/space-context.js";
 
 interface EntityDetailServiceOptions {
   readonly entityDetailClient: EntityDetailClient;
@@ -45,7 +46,7 @@ export class EntityDetailService {
   private async getAlertDetail(ruleName: string): Promise<EntityDetail> {
     const r = await this.options.entityDetailClient.searchByTerms<{
       _source: Record<string, unknown>;
-    }>(".alerts-security.alerts-*", {
+    }>(spaceIndices.alerts(), {
       size: 1,
       sort: [{ "@timestamp": "desc" }],
       query: {
@@ -170,7 +171,7 @@ export class EntityDetailService {
         ]
       ),
       this.safeSearch(
-        ".alerts-security.alerts-*",
+        spaceIndices.alerts(),
         { "host.name": hostName },
         3,
         ["@timestamp", "kibana.alert.rule.name", "kibana.alert.severity"]
@@ -246,7 +247,7 @@ export class EntityDetailService {
         ["@timestamp", "host.name", "process.name", "process.command_line"]
       ),
       this.safeSearch(
-        ".alerts-security.alerts-*",
+        spaceIndices.alerts(),
         { "user.name": userName },
         3,
         [

@@ -68,7 +68,26 @@ describe("SampleDataClient", () => {
     expect(out).toEqual({ count: 17 });
   });
 
-  it("searchAlertsAggregation POSTs to the alerts wildcard search index", async () => {
+  it("resolves reports whether an index, alias or data stream has the exact name", async () => {
+    const esClient = createMockEsClient();
+    esClient.get
+      .mockResolvedValueOnce({ status: 200, data: { aliases: [{ name: ".alerts-security.alerts-soc" }] } })
+      .mockResolvedValueOnce({ status: 404, data: {} })
+      .mockResolvedValueOnce({ status: 200, data: { indices: [{ name: ".alerts-security.alerts-soc-x" }] } });
+
+    const client = new SampleDataClient({ esClient });
+    await expect(client.resolves(".alerts-security.alerts-soc")).resolves.toBe(true);
+    await expect(client.resolves(".alerts-security.alerts-fresh")).resolves.toBe(false);
+    await expect(client.resolves(".alerts-security.alerts-soc")).resolves.toBe(false);
+
+    expect(esClient.get).toHaveBeenNthCalledWith(
+      1,
+      "/_resolve/index/.alerts-security.alerts-soc",
+      expect.objectContaining({ validateStatus: expect.any(Function) })
+    );
+  });
+
+  it("searchAlertsAggregation POSTs to the default space's alerts search index", async () => {
     const esClient = createMockEsClient();
     const response = {
       hits: { total: { value: 0 } },
@@ -80,7 +99,7 @@ describe("SampleDataClient", () => {
     const out = await client.searchAlertsAggregation({ size: 0 });
 
     expect(esClient.post).toHaveBeenCalledWith(
-      "/.alerts-security.alerts-*/_search",
+      "/.alerts-security.alerts-default/_search",
       { size: 0 }
     );
     expect(out).toEqual(response);

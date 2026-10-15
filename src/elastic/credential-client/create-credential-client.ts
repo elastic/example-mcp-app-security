@@ -7,6 +7,7 @@
 
 import { readFileSync } from "node:fs";
 import { z } from "zod";
+import { DEFAULT_SPACE_ID, isValidSpaceId } from "../../shared/spaces.js";
 import type {
   ClusterCredentials,
   ClusterSummary,
@@ -19,6 +20,41 @@ const SslVerifySchema = z
   .default(true)
   .transform((value) => (typeof value === "boolean" ? value : value === "true"));
 
+const SPACE_ID_RULE =
+  "Kibana space IDs use lowercase letters, digits, '_' and '-'";
+
+/**
+ * The explicit `spaceId`, or `undefined` when unset. The .mcpb template
+ * substitutes an empty string for a blank `kibana_space` field, and some
+ * hosts leave the literal `${user_config.kibana_space}` token instead.
+ */
+function configuredSpaceId(raw: string | undefined): string | undefined {
+  const value = raw?.trim();
+  return value && !value.startsWith("${") ? value : undefined;
+}
+
+/**
+ * Split a Kibana URL copied while inside a space
+ * (`https://kb.example.com/s/soc`) into its base URL and space ID. URLs
+ * without a trailing `/s/<id>` segment come back unchanged.
+ */
+function splitKibanaSpaceUrl(kibanaUrl: string): {
+  readonly baseUrl: string;
+  readonly spaceId?: string;
+} {
+  let url: URL;
+  try {
+    url = new URL(kibanaUrl);
+  } catch {
+    // The cluster refinement still runs when kibanaUrl failed z.url().
+    return { baseUrl: kibanaUrl };
+  }
+  const match = /^(.*)\/s\/([^/]+)\/?$/.exec(url.pathname);
+  if (!match) return { baseUrl: kibanaUrl };
+  url.pathname = match[1];
+  return { baseUrl: url.toString(), spaceId: match[2] };
+}
+
 const ClusterSchema = z
   .object({
     name: z.string().min(1),
@@ -27,6 +63,7 @@ const ClusterSchema = z
     elasticsearchApiKey: z.string().min(1),
     sslVerify: SslVerifySchema,
     caCertPath: z.string().min(1).optional(),
+    spaceId: z.string().optional(),
   })
   .superRefine((cluster, ctx) => {
     if (cluster.sslVerify === false && cluster.caCertPath !== undefined) {
@@ -36,6 +73,48 @@ const ClusterSchema = z
           "sslVerify is false but caCertPath is set — pick one. Set sslVerify to true (the default) when using a CA bundle.",
       });
     }
+
+    const spaceId = configuredSpaceId(cluster.spaceId);
+    const urlSpaceId = splitKibanaSpaceUrl(cluster.kibanaUrl).spaceId;
+    let spaceIdsValid = true;
+    if (spaceId !== undefined && !isValidSpaceId(spaceId)) {
+      spaceIdsValid = false;
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["spaceId"],
+        message: `invalid space ID ${JSON.stringify(spaceId)} — ${SPACE_ID_RULE}`,
+      });
+    }
+    if (urlSpaceId !== undefined && !isValidSpaceId(urlSpaceId)) {
+      spaceIdsValid = false;
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["kibanaUrl"],
+        message: `invalid space ID ${JSON.stringify(urlSpaceId)} in the /s/<space> suffix — ${SPACE_ID_RULE}`,
+      });
+    }
+    if (
+      spaceIdsValid &&
+      spaceId !== undefined &&
+      urlSpaceId !== undefined &&
+      spaceId !== urlSpaceId
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["spaceId"],
+        message: `"${spaceId}" conflicts with space "${urlSpaceId}" in kibanaUrl — remove the /s/${urlSpaceId} suffix from kibanaUrl or set the same space in both`,
+      });
+    }
+  })
+  .transform(({ spaceId, ...cluster }) => {
+    const { baseUrl, spaceId: urlSpaceId } = splitKibanaSpaceUrl(
+      cluster.kibanaUrl
+    );
+    return {
+      ...cluster,
+      kibanaUrl: baseUrl,
+      spaceId: configuredSpaceId(spaceId) ?? urlSpaceId ?? DEFAULT_SPACE_ID,
+    };
   });
 
 /**
@@ -238,6 +317,7 @@ function parseClusters({ raw, source }: RawSource): ParsedClusters {
         kibanaUrl: stripTrailingSlash(c.kibanaUrl),
         elasticsearchApiKey: c.elasticsearchApiKey,
         sslVerify: c.sslVerify,
+        spaceId: c.spaceId,
         ...(caCert ? { caCert } : {}),
       });
     })

@@ -7,6 +7,7 @@
 
 import type { EsClient } from "../es-client/index.js";
 import { pathSegment } from "../shared/path-segment.js";
+import { MISSING_INDEX_IS_EMPTY } from "../shared/space-context.js";
 
 /** Domain type for an entity-detail card surfaced in views and tools. */
 export interface EntityDetail {
@@ -51,7 +52,8 @@ export class EntityDetailClient {
   ): Promise<SearchResponse<H>> {
     const { data } = await this.options.esClient.post<SearchResponse<H>>(
       `/${pathSegment(index)}/_search`,
-      body
+      body,
+      MISSING_INDEX_IS_EMPTY
     );
     return data;
   }

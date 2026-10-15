@@ -8,6 +8,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { EntityDetailService } from "./entityDetailService.js";
 import { createMockEntityDetailClient } from "../../test/helpers/mockServiceClients.js";
+import { runInSpace } from "../shared/space-context.js";
 
 const emptyHits = { hits: { hits: [] } };
 
@@ -371,4 +372,21 @@ describe("EntityDetailService", () => {
       ]);
     });
   });
+
+  it.each(["alert", "host", "user"])(
+    "%s detail searches the call's space alerts index",
+    async (type) => {
+      const entityDetailClient = createMockEntityDetailClient();
+      vi.mocked(entityDetailClient.searchByTerms).mockResolvedValue(emptyHits);
+
+      const service = new EntityDetailService({ entityDetailClient });
+      await runInSpace("soc", () => service.getEntityDetail(type, "x"));
+
+      const alertIndices = vi
+        .mocked(entityDetailClient.searchByTerms)
+        .mock.calls.map((c) => c[0])
+        .filter((index) => index.includes(".alerts-security"));
+      expect(alertIndices).toEqual([".alerts-security.alerts-soc"]);
+    }
+  );
 });

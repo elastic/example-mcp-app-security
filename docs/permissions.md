@@ -5,7 +5,9 @@ This guide defines the least-privilege roles for the Elastic Security MCP app on
 - **[Quickstart](#quickstart--built-in-roles)** — assign a built-in Kibana role plus a small index-privileges add-on. Recommended for most users.
 - **[Advanced — Custom roles](#advanced--custom-roles)** — fully scripted role JSON. Use when you need to provision via API/IaC, or want finer-grained control than the built-ins offer.
 
-> **Space ID:** Kibana index patterns include a `<space-id>` segment (e.g., `.alerts-security.alerts-<space-id>`). For most deployments this is `default`. Replace `<space-id>` with your actual space ID throughout this guide. The app currently targets the `default` space.
+> **Space ID:** Kibana index patterns include a `<space-id>` segment (e.g., `.alerts-security.alerts-<space-id>`). For most deployments this is `default`. Replace `<space-id>` with your actual space ID throughout this guide.
+>
+> The app works in the space set by `spaceId` in your [cluster configuration](setup-local.md#kibana-space) (`default` if unset), and its views can switch to other spaces the key can access. Grant index privileges for every space the user will work in by repeating each `<space-id>` pattern per space (e.g. `.alerts-security.alerts-default` and `.alerts-security.alerts-soc`). Switching spaces in the UI also needs Kibana privileges in those spaces; in a custom role, list each one in `resources` (e.g. `["space:default", "space:soc"]`).
 
 > **Serverless:** This guide targets stateful deployments. For Elastic Cloud Serverless Security projects, see [permissions-serverless.md](./permissions-serverless.md).
 
@@ -197,10 +199,12 @@ The built-ins eliminate the need to specify per-feature privileges like `feature
 
 - Index patterns use the Kibana space ID (e.g., `.alerts-security.alerts-default`)
 - If using a non-default space, update all index patterns in the companion role
-- The app currently targets the `default` space
+- The app uses the `spaceId` from your [cluster configuration](setup-local.md#kibana-space) (`default` if unset), or the space picked in the view; the key needs index privileges for that space
+- The other-space counts in the Alert triage and Attack Discovery empty states only include spaces whose indices the key can read
 
 ### "No alerts found" but alerts exist in Kibana
 
+- The app reads one Kibana space at a time. If the alerts are in another space, set `spaceId` in your [cluster configuration](setup-local.md#kibana-space) or switch spaces from the view header
 - The companion role's index privileges may not cover the alert index for your space
 - Check the space ID in the index pattern matches your Kibana space
 

@@ -16,6 +16,7 @@ import {
   InvestigateClient,
   RulesClient,
   SampleDataClient,
+  SpacesClient,
 } from "./elastic/client/index.js";
 import {
   createCredentialClient,
@@ -33,6 +34,7 @@ import {
   InvestigateService,
   RulesService,
   SampleDataService,
+  SpacesService,
 } from "./elastic/service/index.js";
 import { registerAlertTriageTools } from "./tools/alert-triage.js";
 import { registerAnalyticsTools } from "./tools/analytics.js";
@@ -40,6 +42,8 @@ import { registerAttackDiscoveryTools } from "./tools/attack-discovery.js";
 import { registerCaseManagementTools } from "./tools/case-management.js";
 import { registerDetectionRuleTools } from "./tools/detection-rules.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
+import { createSpaceScopedServer } from "./tools/space-scoped-server.js";
+import { registerSpaceTools } from "./tools/spaces.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
 import { noopAnalyticsClient, type AnalyticsClient } from "./elastic/analytics/index.js";
 
@@ -105,29 +109,35 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     sampleDataClient: new SampleDataClient({ esClient }),
     rulesService,
   });
+  const spacesService = new SpacesService({
+    spacesClient: new SpacesClient({ esClient, kibanaClient }),
+    configuredSpace: credentials.spaceId,
+  });
 
   const server = new McpServer({
     name: "elastic-security",
     version: "1.0.0",
   });
+  const scoped = createSpaceScopedServer(server, credentials.spaceId);
 
-  registerAlertTriageTools(server, { alertsService, analytics });
-  registerCaseManagementTools(server, { casesService, analytics });
-  registerDetectionRuleTools(server, { rulesService, analytics });
-  registerThreatHuntTools(server, {
+  registerAlertTriageTools(scoped, { alertsService, analytics });
+  registerCaseManagementTools(scoped, { casesService, analytics });
+  registerDetectionRuleTools(scoped, { rulesService, analytics });
+  registerThreatHuntTools(scoped, {
     esqlService,
     indicesService,
     investigateService,
     entityDetailService,
     analytics,
   });
-  registerSampleDataTools(server, { sampleDataService, analytics });
-  registerAttackDiscoveryTools(server, {
+  registerSampleDataTools(scoped, { sampleDataService, analytics });
+  registerAttackDiscoveryTools(scoped, {
     attackDiscoveryService,
     casesService,
     analytics,
   });
-  registerAnalyticsTools(server, { analytics });
+  registerSpaceTools(scoped, { spacesService, analytics });
+  registerAnalyticsTools(scoped, { analytics });
 
   return server;
 }

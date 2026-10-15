@@ -46,5 +46,19 @@ The `generate-attack-discovery` tool triggers Kibana's Attack Discovery API with
 ### Kibana 9.x Compatibility
 All Kibana API calls include `elastic-api-version: 2023-10-31` headers, `x-elastic-internal-origin: Kibana` for internal APIs, and camelCase field names.
 
+### Kibana Spaces
+Each tool call runs in one Kibana space:
+
+1. **Resolve**: `src/server.ts` registers tools through `createSpaceScopedServer` (`src/tools/space-scoped-server.ts`), which adds an optional `space` argument to every tool except `list-spaces`, `count-by-space`, and `report-analytics-event`. A call uses its `space` argument when given, otherwise the cluster's configured `spaceId` (`default` if unset — see [Kibana space](./setup-local.md#kibana-space)).
+2. **Propagate**: the handler runs inside `runInSpace(space, …)` (`src/elastic/shared/space-context.ts`), an `AsyncLocalStorage` context. Clients and services read it with `currentSpaceId()` instead of taking a space parameter.
+3. **Apply**: the Kibana client prefixes every request path with `/s/<space>` (no prefix for `default`), and `spaceIndices` builds the space-suffixed Security index names: `.alerts-security.alerts-<space>`, `.alerts-security.attack.discovery.alerts-<space>`, `.adhoc.alerts-security.attack.discovery.alerts-<space>`, and `risk-score.risk-score-latest-<space>`. Alert searches treat a missing index as empty, so a space where Kibana hasn't created the alerts index yet shows no alerts instead of an error.
+
+Two read-only tools span spaces and always run in the configured space:
+
+- **`list-spaces`**: the spaces the API key can access (`GET /api/spaces/space`) and the configured space.
+- **`count-by-space`**: open alerts (default: last 7 days) or open attack discoveries (default: last 1 day) per space, from one aggregation on `kibana.space_ids` across every space's indices.
+
+Views call `list-spaces` after connecting. When the key can access two or more spaces, the Alert triage, Attack Discovery, Cases, and Detection rules headers show a space control. Switching spaces adds `space` to the view's own tool calls for the rest of the session and calls `app.updateModelContext()` so the model passes the same `space` on follow-up calls. A view rendered by a tool call that passed `space` opens in that space (the provider reads it from `ontoolinput`) and shows "Back to <configured>". Threat Hunt and Sample Data have no space control; they use the space of the call that rendered them, or the configured space.
+
 ### Telemetry
 The MCP App emits a small set of anonymised usage events via `@elastic/ebt`, mirrored to the user's Kibana telemetry opt-in. The shipper is fail-closed: events never leave the process unless Kibana reports `optIn === true`. See [`docs/telemetry.md`](./telemetry.md) for the event catalog and opt-out story.

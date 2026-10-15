@@ -85,6 +85,34 @@ When `sslVerify` is `false`, the server logs a warning at startup. When `caCertP
 
 In Claude Desktop's install dialog, the **Verify SSL/TLS Certificates** checkbox maps to `sslVerify`. Uncheck it only for trusted self-signed development clusters.
 
+### Kibana space
+
+The server works in Kibana's `default` space unless you set another one per cluster:
+
+| Field | Type | Default | Purpose |
+|---|---|---|---|
+| `spaceId` | string | `default` | ID of the Kibana space that holds your Security data — the ID shown in the space's URL (`/s/<id>`), not its display name. Lowercase letters, digits, `_` and `-`. |
+
+```json
+[
+  {
+    "name": "primary",
+    "elasticsearchUrl": "https://your-cluster.es.cloud.example.com",
+    "kibanaUrl": "https://your-cluster.kb.cloud.example.com",
+    "elasticsearchApiKey": "your-elasticsearch-api-key",
+    "spaceId": "soc"
+  }
+]
+```
+
+Alternatively, use a Kibana URL copied from inside the space: a `kibanaUrl` ending in `/s/<id>` (e.g. `https://your-cluster.kb.cloud.example.com/s/soc`) sets the space, and the server strips the suffix. If `spaceId` and the URL suffix are both set and differ, the server refuses to start.
+
+In Claude Desktop's install dialog, the optional **Kibana space** field maps to `spaceId`. Leave it empty for the `default` space.
+
+The configured space is where every tool call runs unless it passes a `space` argument; the Alert triage, Attack Discovery, Cases, and Detection rules views can also switch spaces for the session. See [Kibana Spaces](architecture.md#kibana-spaces) for how this works, and [Minimum required permissions](permissions.md) for the privileges the API key needs in each space.
+
+Sample data generation won't write alerts into a space where Kibana hasn't created the Security alerts index yet. Open **Security > Alerts** in that space once (or enable a detection rule), then generate again.
+
 ### Keeping secrets out of config files
 
 If you'd rather not put the API key in `.env` / `mcp.json` directly, set `CLUSTERS_FILE` to the absolute path of a JSON file containing the same array, and leave `CLUSTERS_JSON` unset:

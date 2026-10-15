@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { SampleDataService } from "./sampleDataService.js";
+import { runInSpace } from "../shared/space-context.js";
 import {
   createMockSampleDataClient,
   createMockRulesService,
@@ -39,6 +40,39 @@ describe("SampleDataService", () => {
       const ndjson = vi.mocked(sampleDataClient.bulkIndex).mock.calls[0][0];
       expect(ndjson).toContain('"create"');
       expect(ndjson).toContain(TAG);
+    });
+
+    it("refuses to write alerts into a space whose alerts alias Kibana hasn't created", async () => {
+      const sampleDataClient = createMockSampleDataClient();
+      const rulesService = createMockRulesService();
+      vi.mocked(sampleDataClient.resolves).mockResolvedValue(false);
+
+      const service = new SampleDataService({ sampleDataClient, rulesService });
+      await expect(
+        runInSpace("fresh", () =>
+          service.generateSampleData({ scenario: "windows-credential-theft", count: 5 })
+        )
+      ).rejects.toThrowError(/Security alerts aren't set up in Kibana space "fresh"/);
+      expect(sampleDataClient.resolves).toHaveBeenCalledWith(".alerts-security.alerts-fresh");
+      expect(sampleDataClient.bulkIndex).not.toHaveBeenCalled();
+    });
+
+    it("writes alerts once the space's alerts alias resolves", async () => {
+      const sampleDataClient = createMockSampleDataClient();
+      const rulesService = createMockRulesService();
+      vi.mocked(sampleDataClient.bulkIndex).mockResolvedValue({
+        items: Array.from({ length: 200 }, () => ({ create: { _index: "x", status: 201 } })),
+        errors: false,
+      });
+
+      const service = new SampleDataService({ sampleDataClient, rulesService });
+      await runInSpace("soc", () =>
+        service.generateSampleData({ scenario: "windows-credential-theft", count: 5 })
+      );
+      expect(sampleDataClient.resolves).toHaveBeenCalledWith(".alerts-security.alerts-soc");
+      expect(vi.mocked(sampleDataClient.bulkIndex).mock.calls[0][0]).toContain(
+        '".alerts-security.alerts-soc"'
+      );
     });
 
     it("walks the CDR cross-domain extra-events loops when count is high", async () => {
@@ -359,6 +393,133 @@ describe("SampleDataService", () => {
       const service = new SampleDataService({ sampleDataClient, rulesService });
 
       expect(() => service.setRuleIdMap({ A: "id-A" })).not.toThrow();
+    });
+  });
+
+  describe("Kibana spaces", () => {
+    const RULE = "Credential Dumping via Mimikatz";
+
+    function setup() {
+      const sampleDataClient = createMockSampleDataClient();
+      const rulesService = createMockRulesService();
+      vi.mocked(sampleDataClient.bulkIndex).mockResolvedValue({
+        items: [{ create: { _index: "x", status: 201 } }],
+        errors: false,
+      });
+      const service = new SampleDataService({ sampleDataClient, rulesService });
+      const bulkBodies = () => {
+        const body = vi
+          .mocked(sampleDataClient.bulkIndex)
+          .mock.calls.map((c) => c[0])
+          .join("");
+        vi.mocked(sampleDataClient.bulkIndex).mockClear();
+        return body;
+      };
+      return { sampleDataClient, rulesService, service, bulkBodies };
+    }
+
+    it("keeps the rule-id map of each space isolated", async () => {
+      const { service, bulkBodies } = setup();
+      const generate = () =>
+        service.generateSampleData({
+          scenario: "windows-credential-theft",
+          count: 5,
+        });
+
+      runInSpace("soc", () => service.setRuleIdMap({ [RULE]: "soc-rule-id" }));
+      service.setRuleIdMap({ [RULE]: "default-rule-id" });
+
+      await runInSpace("soc", generate);
+      const soc = bulkBodies();
+      await generate();
+      const dflt = bulkBodies();
+      await runInSpace("space-without-rules", generate);
+      const fresh = bulkBodies();
+
+      expect(soc).toContain("soc-rule-id");
+      expect(soc).not.toContain("default-rule-id");
+      expect(dflt).toContain("default-rule-id");
+      expect(dflt).not.toContain("soc-rule-id");
+      expect(fresh).not.toContain("soc-rule-id");
+      expect(fresh).not.toContain("default-rule-id");
+    });
+
+    it("scopes a supplied ruleIdMap to the call's space", async () => {
+      const { service, bulkBodies } = setup();
+
+      await runInSpace("soc", () =>
+        service.generateSampleData({
+          scenario: "windows-credential-theft",
+          count: 5,
+          ruleIdMap: { [RULE]: "soc-supplied-id" },
+        })
+      );
+      bulkBodies();
+      await runInSpace("ir", () =>
+        service.generateSampleData({
+          scenario: "windows-credential-theft",
+          count: 5,
+        })
+      );
+
+      expect(bulkBodies()).not.toContain("soc-supplied-id");
+    });
+
+    it("writes alerts to the call's space and leaves event data streams in `default`", async () => {
+      const { service, bulkBodies } = setup();
+
+      const out = await runInSpace("soc", () =>
+        service.generateSampleData({
+          scenario: "windows-credential-theft",
+          count: 5,
+        })
+      );
+
+      expect(out.indices).toContain(".alerts-security.alerts-soc");
+      expect(out.indices).toContain("logs-endpoint.events.process-default");
+      expect(out.indices).not.toContain(".alerts-security.alerts-default");
+      const ndjson = bulkBodies();
+      expect(ndjson).toContain('"kibana.space_ids":["soc"]');
+      expect(ndjson).not.toContain('"kibana.space_ids":["default"]');
+    });
+
+    it("cleans up the call's space alerts index", async () => {
+      const { sampleDataClient, service } = setup();
+      vi.mocked(sampleDataClient.deleteByQuery).mockResolvedValue({
+        deleted: 0,
+      });
+
+      await runInSpace("soc", () => service.cleanupSampleData());
+
+      const indices = vi
+        .mocked(sampleDataClient.deleteByQuery)
+        .mock.calls.map((c) => c[0]);
+      expect(indices).toContain(".alerts-security.alerts-soc");
+      expect(indices).not.toContain(".alerts-security.alerts-default");
+      expect(indices).toContain("logs-endpoint.events.process-default");
+    });
+
+    it("points the CDR higher-order rule at the call's space alerts index", async () => {
+      const { rulesService, service } = setup();
+      vi.mocked(rulesService.findRules).mockResolvedValueOnce({
+        data: [],
+        total: 0,
+        page: 1,
+        perPage: 100,
+      });
+      vi.mocked(rulesService.createRule).mockResolvedValue({
+        id: "new",
+      } as never);
+
+      await runInSpace("soc", () =>
+        service.createRulesForScenario("cdr-cross-domain")
+      );
+
+      const esqlRule = vi
+        .mocked(rulesService.createRule)
+        .mock.calls.map((c) => c[0])
+        .find((body) => body.type === "esql");
+      expect(esqlRule?.query).toMatch(/^FROM \.alerts-security\.alerts-soc \|/);
     });
   });
 });

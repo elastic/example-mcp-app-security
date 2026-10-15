@@ -26,6 +26,7 @@ import {
   KpiTile,
   ListSubheader,
   LoadingState,
+  OtherSpacesHint,
   QueryPill,
   RefreshIcon,
   SearchInput,
@@ -859,6 +860,9 @@ function AppContent() {
                 ? "A generation is in progress — results will appear here automatically."
                 : "Try adjusting the time range or running a new generation."}
             </div>
+            {!activeQuery && discoveries.length === 0 && (
+              <OtherSpacesHint kind="discoveries" />
+            )}
           </EmptyState>
         ) : groupedDiscoveries ? (
           groupedDiscoveries.length === 0 ? (

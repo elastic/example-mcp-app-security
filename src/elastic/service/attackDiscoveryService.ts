@@ -16,11 +16,7 @@ import type {
   GenerationResult,
   TriagedDiscovery,
 } from "../client/attackDiscoveryClient.js";
-
-const SCHEDULED_INDEX = ".alerts-security.attack.discovery.alerts-default";
-const ADHOC_INDEX = ".adhoc.alerts-security.attack.discovery.alerts-default";
-const ALERTS_INDEX = ".alerts-security.alerts-*";
-const RISK_INDEX = "risk-score.risk-score-latest-*";
+import { spaceIndices } from "../shared/space-context.js";
 
 interface AttackDiscoveryServiceOptions {
   readonly attackDiscoveryClient: AttackDiscoveryClient;
@@ -75,8 +71,10 @@ export class AttackDiscoveryService {
     limit?: number;
   }): Promise<DiscoverySummary> {
     const { days = 1, limit = 50 } = options;
+    const scheduledIndex = spaceIndices.attackDiscovery();
+    const adhocIndex = spaceIndices.adhocAttackDiscovery();
 
-    const query = `FROM ${SCHEDULED_INDEX}, ${ADHOC_INDEX} METADATA _id
+    const query = `FROM ${scheduledIndex}, ${adhocIndex} METADATA _id
 | WHERE kibana.alert.workflow_status == "open"
   AND @timestamp >= NOW() - ${days} day
 | KEEP @timestamp, _id,
@@ -96,14 +94,14 @@ export class AttackDiscoveryService {
     if (!result) {
       const scheduled = await this.safeEsql(
         query.replace(
-          `${SCHEDULED_INDEX}, ${ADHOC_INDEX} METADATA _id`,
-          `${SCHEDULED_INDEX} METADATA _id`
+          `${scheduledIndex}, ${adhocIndex} METADATA _id`,
+          `${scheduledIndex} METADATA _id`
         )
       );
       const adhoc = await this.safeEsql(
         query.replace(
-          `${SCHEDULED_INDEX}, ${ADHOC_INDEX} METADATA _id`,
-          `${ADHOC_INDEX} METADATA _id`
+          `${scheduledIndex}, ${adhocIndex} METADATA _id`,
+          `${adhocIndex} METADATA _id`
         )
       );
       if (scheduled && adhoc) {
@@ -179,7 +177,7 @@ export class AttackDiscoveryService {
     }
 
     const idsClause = allAlertIds.map((id) => `"${escapeEsql(id)}"`).join(", ");
-    const diversityResult = await this.safeEsql(`FROM ${ALERTS_INDEX} METADATA _id
+    const diversityResult = await this.safeEsql(`FROM ${spaceIndices.alerts()} METADATA _id
 | WHERE _id IN (${idsClause})
   AND kibana.alert.workflow_status == "open"
 | KEEP _id, kibana.alert.rule.name, kibana.alert.rule.uuid, kibana.alert.severity, host.name, user.name, agent.id`);
@@ -230,7 +228,7 @@ export class AttackDiscoveryService {
       const ruleClause = allRuleNames
         .map((r) => `"${escapeEsql(r)}"`)
         .join(", ");
-      const ruleResult = await this.safeEsql(`FROM ${ALERTS_INDEX}
+      const ruleResult = await this.safeEsql(`FROM ${spaceIndices.alerts()}
 | WHERE kibana.alert.rule.name IN (${ruleClause})
   AND @timestamp >= NOW() - 7 day
 | STATS total = COUNT(*), hosts = COUNT_DISTINCT(host.name)
@@ -264,7 +262,7 @@ export class AttackDiscoveryService {
           `user.name IN (${allUsers.map((u) => `"${escapeEsql(u)}"`).join(", ")})`
         );
       }
-      const riskResult = await this.safeEsql(`FROM ${RISK_INDEX}
+      const riskResult = await this.safeEsql(`FROM ${spaceIndices.riskScoreLatest()}
 | WHERE ${clauses.join(" OR ")}
 | KEEP host.name, user.name,
        host.risk.calculated_level, host.risk.calculated_score_norm,
@@ -376,7 +374,10 @@ export class AttackDiscoveryService {
   ): Promise<{ updated: number }> {
     let totalUpdated = 0;
 
-    for (const index of [SCHEDULED_INDEX, ADHOC_INDEX]) {
+    for (const index of [
+      spaceIndices.attackDiscovery(),
+      spaceIndices.adhocAttackDiscovery(),
+    ]) {
       try {
         const result =
           await this.options.attackDiscoveryClient.acknowledgeOnIndex(index, {
@@ -404,7 +405,7 @@ export class AttackDiscoveryService {
 
     if (alertIds.length > 0) {
       const idsClause = alertIds.map((id) => `"${escapeEsql(id)}"`).join(", ");
-      const result = await this.safeEsql(`FROM ${ALERTS_INDEX} METADATA _id
+      const result = await this.safeEsql(`FROM ${spaceIndices.alerts()} METADATA _id
 | WHERE _id IN (${idsClause})
 | KEEP _id, kibana.alert.rule.name, kibana.alert.severity, kibana.alert.rule.description,
        kibana.alert.risk_score, kibana.alert.reason,
@@ -471,7 +472,7 @@ export class AttackDiscoveryService {
           `user.name IN (${users.map((u) => `"${escapeEsql(u)}"`).join(", ")})`
         );
       }
-      const riskResult = await this.safeEsql(`FROM ${RISK_INDEX}
+      const riskResult = await this.safeEsql(`FROM ${spaceIndices.riskScoreLatest()}
 | WHERE ${clauses.join(" OR ")}
 | KEEP host.name, user.name,
        host.risk.calculated_level, host.risk.calculated_score_norm,
@@ -520,7 +521,7 @@ export class AttackDiscoveryService {
     ];
 
     const withReplacementsResult =
-      await this.safeEsql(`FROM ${SCHEDULED_INDEX}, ${ADHOC_INDEX} METADATA _id
+      await this.safeEsql(`FROM ${spaceIndices.attackDiscovery()}, ${spaceIndices.adhocAttackDiscovery()} METADATA _id
 | WHERE _id == "${escapeEsql(discovery.id)}"
 | KEEP kibana.alert.attack_discovery.title_with_replacements,
        kibana.alert.attack_discovery.summary_markdown_with_replacements,
@@ -590,7 +591,7 @@ export class AttackDiscoveryService {
     const anonymizationFields = await this.getAnonymizationFields();
 
     return this.options.attackDiscoveryClient.generate({
-      alertsIndexPattern: ".alerts-security.alerts-default",
+      alertsIndexPattern: spaceIndices.alerts(),
       anonymizationFields,
       apiConfig: {
         connectorId: options.connectorId,

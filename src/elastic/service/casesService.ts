@@ -14,9 +14,9 @@ import type {
   FindCommentsResponse,
   UserAvatar,
 } from "../client/casesClient.js";
+import { spaceIndices } from "../shared/space-context.js";
 
 const ATTACHMENT_ENRICHMENT_LIMIT = 20;
-const ALERTS_INDEX = ".alerts-security.alerts-default";
 
 interface CasesServiceOptions {
   readonly casesClient: CasesClient;
@@ -154,12 +154,12 @@ export class CasesService {
   /**
    * Bulk-attach alerts to a case by id.
    *
-   * Resolves the ids via a single `ids`-query search over `ALERTS_INDEX` to
-   * recover the source documents (needed for the rule id / name on the
-   * attachment), then attaches each found alert in sequence. Per-attachment
-   * failures are swallowed and a failed lookup is logged — the case stays
-   * created and the caller learns how many of the requested ids were
-   * successfully attached.
+   * Resolves the ids via a single `ids`-query search over the current space's
+   * alerts index to recover the source documents (needed for the rule id /
+   * name on the attachment), then attaches each found alert in sequence.
+   * Per-attachment failures are swallowed and a failed lookup is logged — the
+   * case stays created and the caller learns how many of the requested ids
+   * were successfully attached.
    */
   async attachAlertsByIds(
     caseId: string,
@@ -170,7 +170,7 @@ export class CasesService {
     let attached = 0;
     try {
       const hits = await this.options.casesClient.searchAlertsByIds(
-        [ALERTS_INDEX],
+        [spaceIndices.alerts()],
         uniqueIds
       );
       for (const hit of hits) {
@@ -240,7 +240,7 @@ export class CasesService {
       const ids = [...new Set(toEnrich.map((a) => a.id))];
       try {
         const hits = await this.options.casesClient.searchAlertsByIds(
-          indices.length > 0 ? indices : [ALERTS_INDEX],
+          indices.length > 0 ? indices : [spaceIndices.alerts()],
           ids
         );
         for (const hit of hits) {

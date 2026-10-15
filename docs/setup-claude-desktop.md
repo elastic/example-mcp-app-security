@@ -13,6 +13,7 @@ Claude Desktop installs the extension and then opens a configuration dialog. Fil
 - **Elasticsearch URL**
 - **Elasticsearch API Key** — see [Creating an API key](./setup-local.md#creating-an-api-key)
 - **Kibana URL**
+- **Kibana space** (optional) — ID of the Kibana space that holds your Security data, e.g. `soc`. Leave empty for the `default` space. See [Kibana space](./setup-local.md#kibana-space).
 - **Verify SSL/TLS Certificates** — leave checked for production clusters; uncheck only for trusted self-signed dev clusters. See [TLS verification options](./setup-local.md#tls-verification-options).
 
 > **Permissions:** For production use, create a scoped role instead of using `superuser`. See [Minimum required permissions](permissions.md) for ready-to-paste role definitions.
@@ -40,6 +41,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   }
 }
 ```
+
+To work in a Kibana space other than `default`, add `spaceId` to the cluster entry in `CLUSTERS_JSON` — see [Kibana space](./setup-local.md#kibana-space).
 
 Restart Claude Desktop, then enable the connector if Claude shows it as disabled. The tools appear under the MCP connector menu.
 
