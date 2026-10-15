@@ -58,7 +58,7 @@ Two read-only tools span spaces and always run in the configured space:
 - **`list-spaces`**: the spaces the API key can access (`GET /api/spaces/space`) and the configured space.
 - **`count-by-space`**: open alerts (default: last 7 days) or open attack discoveries (default: last 1 day) per space, from one aggregation on `kibana.space_ids` across every space's indices.
 
-Views call `list-spaces` after connecting. When the key can access two or more spaces, the Alert triage, Attack Discovery, Cases, and Detection rules headers show a space control. Switching spaces adds `space` to the view's own tool calls for the rest of the session and calls `app.updateModelContext()` so the model passes the same `space` on follow-up calls. Threat Hunt and Sample Data have no space control and use the configured space.
+Views call `list-spaces` after connecting. When the key can access two or more spaces, the Alert triage, Attack Discovery, Cases, and Detection rules headers show a space control. Switching spaces adds `space` to the view's own tool calls for the rest of the session and calls `app.updateModelContext()` so the model passes the same `space` on follow-up calls. A view rendered by a tool call that passed `space` opens in that space (the provider reads it from `ontoolinput`) and shows "Back to <configured>". Threat Hunt and Sample Data have no space control; they use the space of the call that rendered them, or the configured space.
 
 ### Telemetry
 The MCP App emits a small set of anonymised usage events via `@elastic/ebt`, mirrored to the user's Kibana telemetry opt-in. The shipper is fail-closed: events never leave the process unless Kibana reports `optIn === true`. See [`docs/telemetry.md`](./telemetry.md) for the event catalog and opt-out story.

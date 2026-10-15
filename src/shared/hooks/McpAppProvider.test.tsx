@@ -255,10 +255,12 @@ describe("McpAppProvider — Kibana spaces", () => {
     );
   });
 
-  it("keeps a bootstrap that already arrived for the rendered space", async () => {
+  it("keeps a bootstrap that already arrived and drops the view's earlier unscoped load", async () => {
     renderProvider();
     await waitFor(() => expect(spaces.spaces).toHaveLength(2));
     const app = fake.instances[0];
+    // The Probe's self-load on connect went out before the space was known.
+    expect(sentCalls("poll-alerts")).toEqual([{ name: "poll-alerts", arguments: { days: 7 } }]);
 
     act(() => {
       app.ontoolresult?.(bootstrapPush());
@@ -268,8 +270,11 @@ describe("McpAppProvider — Kibana spaces", () => {
     });
 
     expect(screen.getByTestId("active")).toHaveTextContent("soc");
+    // Remounted so the old mount's in-flight load can't land, and the
+    // remounted view hydrates from the kept bootstrap instead of reloading.
+    expect(mounts).toBe(2);
     expect(screen.getByTestId("bootstrap")).toHaveTextContent("ready");
-    expect(mounts).toBe(1);
+    expect(sentCalls("poll-alerts")).toHaveLength(1);
     await act(async () => {
       await app.callServerTool({ name: "acknowledge-alert", arguments: { alertId: "a1" } });
     });

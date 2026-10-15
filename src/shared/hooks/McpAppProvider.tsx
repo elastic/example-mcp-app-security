@@ -96,7 +96,6 @@ export function McpAppProvider({
   const switchSeqRef = useRef(0);
   // Space the model passed on the tool call that rendered this view.
   const renderedSpaceRef = useRef("");
-  const bootstrapReadyRef = useRef(false);
   const [viewKey, setViewKey] = useState(0);
 
   useEffect(() => {
@@ -114,20 +113,20 @@ export function McpAppProvider({
     configuredSpaceRef.current = "";
     switchSeqRef.current = 0;
     renderedSpaceRef.current = "";
-    bootstrapReadyRef.current = false;
     setSpaceList(null);
     setActiveSpaceState("");
     applyTheme(app);
 
     let cancelled = false;
 
-    // The model chose this space, so it isn't told again. A bootstrap from the
-    // same call already holds that space's data; without one, the view reloads.
+    // The model chose this space, so it isn't told again. The remount drops any
+    // load the view started in the configured space; a ready bootstrap from the
+    // same call is kept, so the remounted view hydrates from it.
     const adoptRenderedSpace = (space: string) => {
       if (switchSeqRef.current > 0 || space === activeSpaceRef.current) return;
       activeSpaceRef.current = space;
       setActiveSpaceState(space);
-      if (!bootstrapReadyRef.current) setViewKey((k) => k + 1);
+      setViewKey((k) => k + 1);
     };
 
     app.ontoolinput = (params) => {
@@ -172,7 +171,6 @@ export function McpAppProvider({
             reason: `Received bootstrap for ${bootstrapResult.envelope.viewId} inside ${name}.`,
           };
         }
-        bootstrapReadyRef.current = true;
         return bootstrapResult;
       });
     };
@@ -187,11 +185,9 @@ export function McpAppProvider({
           );
           if (cancelled || !list) return;
           configuredSpaceRef.current = list.configured;
+          activeSpaceRef.current = list.configured;
           setSpaceList(list);
-          if (!activeSpaceRef.current) {
-            activeSpaceRef.current = list.configured;
-            setActiveSpaceState(list.configured);
-          }
+          setActiveSpaceState(list.configured);
           if (renderedSpaceRef.current) adoptRenderedSpace(renderedSpaceRef.current);
         } catch {
           // Older servers have no `list-spaces`; the space UI stays hidden.
