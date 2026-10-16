@@ -1,0 +1,210 @@
+/*
+ * Shared primitives for the alert-zero view: badges, markdown, code, chips.
+ * Imported once by styles.css; list and detail components use these classes.
+ */
+
+/* ─── Badges ─────────────────────────────────────────────────────────── */
+
+.az-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: var(--radius-tag);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.az-badge--danger {
+  color: var(--severity-critical);
+  background: var(--severity-critical-bg);
+  border-color: var(--severity-critical-border);
+}
+
+.az-badge--warning {
+  color: var(--severity-medium);
+  background: var(--severity-medium-bg);
+  border-color: var(--severity-medium-border);
+}
+
+.az-badge--primary {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(92, 124, 250, 0.3);
+}
+
+.az-badge--success {
+  color: var(--severity-low);
+  background: var(--severity-low-bg);
+  border-color: var(--severity-low-border);
+}
+
+.az-badge--default {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
+}
+
+.az-badge--hollow {
+  color: var(--text-secondary);
+  background: transparent;
+  border-color: var(--border);
+}
+
+/* ─── Chips (targets, entities, MITRE) ───────────────────────────────── */
+
+.az-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ds-text-label);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Code / JSON ────────────────────────────────────────────────────── */
+
+.az-code {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.az-code--wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ─── Rendered markdown ─────────────────────────────────────────────── */
+
+.markdown-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.markdown-body > :first-child { margin-top: 0; }
+.markdown-body > :last-child { margin-bottom: 0; }
+.markdown-body p { margin: 0 0 0.75em; }
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: 1em 0 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.markdown-body h1 { font-size: 1.35em; }
+.markdown-body h2 { font-size: 1.2em; }
+.markdown-body h3 { font-size: 1.1em; }
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 { font-size: 1em; }
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0 0 0.75em;
+  padding-left: 1.5em;
+}
+
+.markdown-body li { margin: 0.15em 0; }
+.markdown-body li > p { margin: 0; }
+
+.markdown-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-dim);
+}
+
+.markdown-body strong { color: var(--text-primary); }
+
+.markdown-body code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 1px 5px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.markdown-body pre {
+  margin: 0 0 0.75em;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  line-height: 1.5;
+}
+
+.markdown-body blockquote {
+  margin: 0 0 0.75em;
+  padding: 2px 12px;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0 0 0.75em;
+  font-size: 0.95em;
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+}
+
+.markdown-body th {
+  background: var(--bg-elevated);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.markdown-body hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 4px;
+}

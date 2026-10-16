@@ -7,6 +7,7 @@
 
 import { vi } from "vitest";
 import type { AlertsClient } from "../../elastic/client/alertsClient.js";
+import type { AlertZeroClient } from "../../elastic/client/alertZeroClient.js";
 import type { AttackDiscoveryClient } from "../../elastic/client/attackDiscoveryClient.js";
 import type { CasesClient } from "../../elastic/client/casesClient.js";
 import type { EntityDetailClient } from "../../elastic/client/entityDetailClient.js";
@@ -105,6 +106,28 @@ export function createMockSampleDataClient(): SampleDataClient {
     "count",
     "searchAlertsAggregation",
   ]);
+}
+
+export function createMockAlertZeroClient(): AlertZeroClient {
+  const client = mockClient<AlertZeroClient>([
+    "getInvestigationsCount",
+    "getCapabilities",
+    "spaceExists",
+    "getProposalsByCategory",
+    "getProposal",
+    "listProposalsByConversation",
+    "getConversation",
+    "getConversationAttachments",
+    "getCurrentUserProfile",
+    "bulkGetUserProfiles",
+    "approveProposal",
+    "dismissProposal",
+    "getRuleById",
+    "getRuleByRuleId",
+    "searchAlertsByIds",
+  ]);
+  vi.mocked(client.spaceExists).mockResolvedValue(true);
+  return client;
 }
 
 export function createMockRulesService(): RulesService {

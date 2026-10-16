@@ -8,6 +8,7 @@
 import type {
   AttackDiscoveryFinding,
 } from "./types.js";
+import type { AlertZeroBootstrapPayload } from "./alert-zero-types.js";
 import { VIEW_IDS, type ViewId } from "./analytics-events.js";
 import { extractToolText } from "./extract-tool-text.js";
 
@@ -170,6 +171,7 @@ export interface ThreatHuntBootstrapPayload {
 
 export interface ViewBootstrapPayloads {
   "alert-triage": AlertTriageBootstrapPayload;
+  "alert-zero": AlertZeroBootstrapPayload;
   "attack-discovery": AttackDiscoveryBootstrapPayload;
   "case-management": CaseManagementBootstrapPayload;
   "detection-rules": DetectionRulesBootstrapPayload;

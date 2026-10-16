@@ -9,16 +9,17 @@ import axios, { AxiosError } from "axios";
 import type { ClusterCredentials } from "../credential-client/index.js";
 import { createHttpsAgent } from "../shared/https-agent.js";
 import type { KibanaClient } from "./kibana-client.js";
+import { KibanaHttpError } from "./kibana-http-error.js";
 
 const USER_AGENT = "elastic-security-mcp-app";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-function describeError(err: AxiosError, clusterName: string): Error {
-  const status = err.response?.status ?? "network";
+function describeError(err: AxiosError, clusterName: string): KibanaHttpError {
+  const status = err.response?.status;
   const body = err.response?.data;
   const detail =
     typeof body === "string" ? body : JSON.stringify(body ?? err.message ?? {});
-  return new Error(`Kibana [${clusterName}] ${status}: ${detail}`);
+  return new KibanaHttpError(`Kibana [${clusterName}] ${status ?? "network"}: ${detail}`, status, body);
 }
 
 /**

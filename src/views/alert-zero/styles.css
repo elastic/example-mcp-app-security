@@ -1,0 +1,541 @@
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the Elastic License
+ * 2.0; you may not use this file except in compliance with the Elastic License
+ * 2.0.
+ */
+
+@import "../../shared/components/base.css";
+@import "./az-base.css";
+
+/* Alert Zero view shell + proposal list. Shared shell, header, two-pane body,
+ * KPI tiles, and loading/empty states come from src/shared/components; badge,
+ * chip, code, and markdown primitives come from az-base.css. */
+
+/* ─── Two-pane body ─── */
+
+/* The list manages its own padding so KPI strip and filters can run edge to edge. */
+.az-app .list-pane.narrow {
+  flex: 0 0 360px;
+  max-width: 360px;
+  padding: 0;
+  border-right: 1px solid var(--border-subtle);
+}
+
+/* MCP hosts are often 400–800px wide: there is no room for both panes, so the
+ * detail takes over and its close button returns to the list. */
+@media (max-width: 760px) {
+  .az-app .list-pane.narrow { display: none; }
+}
+
+/* ─── Header ─── */
+
+.az-header-extras {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.az-header-state {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.az-header-state--clear { color: var(--severity-low); }
+
+.az-refresh-btn:disabled { cursor: default; }
+.az-refresh-btn.is-loading svg { animation: spin 0.8s linear infinite; }
+
+/* ─── List container ─── */
+
+.az-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.az-progress {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 2px;
+  margin-bottom: -2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+/* ─── KPI strip ─── */
+
+/* Two classes to beat KpiStrip.css's wide-screen rule, which reserves a
+ * summary column this view doesn't render. */
+.kpi-strip.az-kpi-strip {
+  grid-template-columns: repeat(var(--kpi-tiles, 5), minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .kpi-strip.az-kpi-strip { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+  .az-kpi-strip .kpi-tile {
+    min-height: 72px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .az-kpi-strip .kpi-tile:nth-child(3n) { border-right: none; }
+}
+
+/* ─── Filters ─── */
+
+.az-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.az-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-width: 0;
+}
+
+.az-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.az-filter-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.az-pill-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  max-width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.az-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.az-pill:hover { color: var(--text-primary); }
+
+.az-pill--active {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 1px var(--border) inset;
+}
+
+.az-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.az-pill-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.az-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+
+.az-pill-dot--danger { background: var(--severity-critical); }
+.az-pill-dot--warning { background: var(--severity-medium); }
+.az-pill-dot--primary { background: var(--accent); }
+
+/* ─── Notices + buttons ─── */
+
+.az-notice {
+  margin: 12px 16px 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--accent-dim);
+  border: 1px solid rgba(92, 124, 250, 0.3);
+  border-radius: var(--radius-md);
+}
+
+.az-link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.az-link-btn:hover { color: var(--accent-hover); }
+
+.az-list-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.az-list-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+}
+
+.az-list-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.az-list-btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.az-list-btn:disabled { opacity: 0.55; cursor: default; }
+
+.az-list-btn:focus-visible,
+.az-link-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.az-empty-action { margin-top: 16px; }
+
+/* ─── Groups ─── */
+
+.az-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px;
+}
+
+.az-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.az-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.az-section-title {
+  margin: 0;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.az-section-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.az-section-impact { margin-left: auto; flex-shrink: 0; }
+
+.az-section-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── Proposal card ─── */
+
+.az-card {
+  --az-card-accent: var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px 12px 16px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: inset 3px 0 0 0 var(--az-card-accent);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.az-card--respond { --az-card-accent: var(--severity-critical); }
+.az-card--investigate { --az-card-accent: var(--severity-medium); }
+.az-card--configure { --az-card-accent: var(--accent); }
+
+.az-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.az-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.az-card--selected,
+.az-card--selected:hover {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 0 var(--accent), 0 0 0 1px var(--accent);
+}
+
+.az-card-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+
+.az-card-meta-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.az-card-age,
+.az-card-expiry { white-space: nowrap; }
+
+.az-card-investigation {
+  display: block;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.az-card-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.az-card-title--primary {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-primary);
+}
+
+.az-card-action { color: var(--text-muted); }
+
+.az-card-title--primary .az-card-action { font-weight: 400; }
+
+.az-card-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.az-card-badges .az-chip { max-width: 180px; }
+
+/* ─── Assignees ─── */
+
+.az-assignees {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-height: 18px;
+}
+
+.az-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: -5px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg-elevated);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.2px;
+  color: #ffffff;
+}
+
+.az-avatar:first-child { margin-left: 0; }
+
+.az-avatar--more {
+  background: var(--bg-active);
+  color: var(--text-secondary);
+}
+
+.az-assignees--none {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* ─── State panels (unavailable, load error) ─── */
+
+.az-state-panel {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100%;
+  padding: 32px 16px;
+}
+
+.az-state-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 560px;
+  padding: 24px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  animation: fadeInUp 0.3s ease-out both;
+}
+
+.az-state-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--text-primary);
+}
+
+.az-state-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.az-state-remediation {
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.az-state-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.az-state-facts dt {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 18px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.az-state-facts dd {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-mono);
+  line-height: 18px;
+  color: var(--ds-text-label);
+  word-break: break-all;
+}
+
+.az-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ─── Narrow ─── */
+
+@media (max-width: 480px) {
+  .az-filters { padding: 10px 12px; }
+  .az-groups { padding: 12px; gap: 16px; }
+  .az-card { padding: 10px 12px 10px 14px; }
+  .az-state-card { padding: 18px; }
+  .az-notice { margin: 10px 12px 0; }
+}

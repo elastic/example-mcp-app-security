@@ -134,6 +134,15 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "generate-attack-discovery",
           "get-generation-status",
           "list-ai-connectors",
+          // alert-zero
+          "review-alert-zero-proposals",
+          "get-alert-zero-proposal",
+          "check-alert-zero-status",
+          "list-alert-zero-proposals",
+          "get-alert-zero-proposal-detail",
+          "get-alert-zero-investigation",
+          "approve-alert-zero-proposal",
+          "dismiss-alert-zero-proposal",
           // analytics
           "report-analytics-event",
         ].sort()
@@ -156,6 +165,7 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "ui://threat-hunt/mcp-app.html",
           "ui://generate-sample-data/mcp-app.html",
           "ui://triage-attack-discoveries/mcp-app.html",
+          "ui://review-alert-zero-proposals/mcp-app.html",
         ].sort()
       );
     } finally {

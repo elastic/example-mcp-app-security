@@ -15,6 +15,7 @@ import type { IndicesService } from "../../elastic/service/indicesService.js";
 import type { InvestigateService } from "../../elastic/service/investigateService.js";
 import type { RulesService } from "../../elastic/service/rulesService.js";
 import type { SampleDataService } from "../../elastic/service/sampleDataService.js";
+import type { AlertZeroServiceApi } from "../../shared/alert-zero-types.js";
 
 /**
  * Build a mocked service where every named method is a `vi.fn()`. The
@@ -107,4 +108,21 @@ export function createMockSampleDataService(): SampleDataService {
     "createRulesForScenario",
     "setRuleIdMap",
   ]);
+}
+
+export function createMockAlertZeroService(
+  kibanaUrl = "https://kb.example.com",
+): AlertZeroServiceApi {
+  return {
+    ...mockService<Omit<AlertZeroServiceApi, "kibanaUrl">>([
+      "getStatus",
+      "listOpenProposals",
+      "getProposal",
+      "getProposalDetail",
+      "getInvestigation",
+      "approveProposal",
+      "dismissProposal",
+    ]),
+    kibanaUrl,
+  };
 }

@@ -76,3 +76,16 @@ export { SampleDataClient } from "./sampleDataClient.js";
 
 export type { TelemetryConfig } from "./telemetryConfigClient.js";
 export { TelemetryConfigClient } from "./telemetryConfigClient.js";
+
+export type {
+  ApproveProposalBody,
+  ConversationAttachmentsResponse,
+  DetectionRule,
+  DismissProposalBody,
+  InvestigationsCountResponse,
+  KibanaCapabilities,
+  PageParams,
+  ProposalsPage,
+  UserProfileSummary,
+} from "./alertZeroClient.js";
+export { AlertZeroClient } from "./alertZeroClient.js";
