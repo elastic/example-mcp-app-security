@@ -54,6 +54,10 @@ The MCP App emits anonymised usage events via `@elastic/ebt`. Shipping is mirror
 
 The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/overview) — `SKILL.md` files that teach Claude *when* and *how* to use the tools. See [docs/setup-skills.md](docs/setup-skills.md) for installation instructions.
 
+### Profile Environment (IPB/IPOE)
+
+The `profile-environment` tool + skill inspect the connected stack and produce a refreshable `environment-profile.md` (data sources, integrations, endpoint posture, response/SOAR capabilities, populated-field terrain, coverage gaps, and advanced capabilities in use) so other skills tailor queries to what is actually deployed rather than assuming a Showroom stack. See [docs/profile-environment.md](docs/profile-environment.md).
+
 ## Installation
 
 | Guide | Description |

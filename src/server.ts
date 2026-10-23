@@ -11,6 +11,7 @@ import {
   AttackDiscoveryClient,
   CasesClient,
   EntityDetailClient,
+  EnvironmentClient,
   EsqlClient,
   IndicesClient,
   InvestigateClient,
@@ -28,6 +29,7 @@ import {
   AttackDiscoveryService,
   CasesService,
   EntityDetailService,
+  EnvironmentService,
   EsqlService,
   IndicesService,
   InvestigateService,
@@ -39,6 +41,8 @@ import { registerAnalyticsTools } from "./tools/analytics.js";
 import { registerAttackDiscoveryTools } from "./tools/attack-discovery.js";
 import { registerCaseManagementTools } from "./tools/case-management.js";
 import { registerDetectionRuleTools } from "./tools/detection-rules.js";
+import { registerEnvironmentProfilerTools } from "./tools/environment-profiler.js";
+import { FileClassificationCatalog } from "./shared/classification-catalog.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
 import { noopAnalyticsClient, type AnalyticsClient } from "./elastic/analytics/index.js";
@@ -105,6 +109,14 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     sampleDataClient: new SampleDataClient({ esClient }),
     rulesService,
   });
+  const environmentService = new EnvironmentService({
+    environmentClient: new EnvironmentClient({ esClient, kibanaClient }),
+    // Sticky classification verdicts persist here across runs. Path overridable
+    // so multi-cluster/MSSP setups can keep a catalog per environment.
+    catalog: new FileClassificationCatalog(
+      process.env.ENVIRONMENT_CATALOG_FILE ?? "environment-catalog.json"
+    ),
+  });
 
   const server = new McpServer({
     name: "elastic-security",
@@ -128,6 +140,7 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     analytics,
   });
   registerAnalyticsTools(server, { analytics });
+  registerEnvironmentProfilerTools(server, { environmentService, analytics });
 
   return server;
 }
