@@ -12,6 +12,9 @@ export const VIEW_IDS = [
   "detection-rules",
   "sample-data",
   "threat-hunt",
+  "correlation",
+  "correlation-input",
+  "correlation-report",
 ] as const;
 
 export type ViewId = (typeof VIEW_IDS)[number];

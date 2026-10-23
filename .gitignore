@@ -4,6 +4,7 @@ dist/
 .mcp.json
 .vscode/mcp.json
 .env
+clusters.json
 .DS_Store
 *.code-workspace
 *.backup

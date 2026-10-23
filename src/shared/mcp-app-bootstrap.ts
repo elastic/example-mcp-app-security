@@ -175,6 +175,9 @@ export interface ViewBootstrapPayloads {
   "detection-rules": DetectionRulesBootstrapPayload;
   "sample-data": SampleDataBootstrapPayload;
   "threat-hunt": ThreatHuntBootstrapPayload;
+  "correlation": never;
+  "correlation-input": never;
+  "correlation-report": never;
 }
 
 export interface McpAppBootstrapEnvelope<V extends ViewId = ViewId> {

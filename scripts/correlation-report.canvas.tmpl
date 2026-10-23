@@ -1,0 +1,719 @@
+import {
+  Divider,
+  Grid,
+  H2,
+  H3,
+  Link,
+  Pill,
+  Row,
+  Stack,
+  Stat,
+  Table,
+  Text,
+  useCanvasState,
+  useHostTheme,
+} from "cursor/canvas";
+
+// ---------------------------------------------------------------------------
+// Data contract: the exact `findings` object returned by the elastic-security
+// MCP app's get_correlation_run (== render_correlation input). This canvas is
+// run-driven — the FINDINGS below is a REAL ti-correlation run (depth: full)
+// dropped in verbatim. To refresh for another run: call `correlate`, poll
+// `get_correlation_run`, and replace FINDINGS with its `findings` payload.
+// ---------------------------------------------------------------------------
+
+interface Evidence { vertex: string; weight: string; text: string }
+interface Lead {
+  title: string;
+  relationship: string;
+  confidence: string;
+  vertex_signal: Record<string, string>;
+  bluf: string;
+  evidence: Evidence[];
+  gaps: string;
+  candidate_ids: string[];
+  consolidated_candidates?: unknown[];
+}
+interface Stage {
+  stage: string;
+  tier: "sonnet" | "opus" | null;
+  input_tokens: number;
+  output_tokens: number;
+  candidates?: number;
+  anchors?: number;
+  started_at?: string;
+  ended_at?: string;
+}
+interface Findings {
+  synthesis: {
+    case_title?: string;
+    bluf: string;
+    correlation_signal: string;
+    reasoning: string;
+    gaps: string;
+    next_steps: Array<{ priority: string; text: string }>;
+    inferential_hops?: number;
+    atomic_ioc_overlap?: { assessed: boolean; note?: string };
+  };
+  case_vertex_signal?: Record<string, string>;
+  leads: Lead[];
+  no_match: Array<{ id: string; title: string; vendor?: string }>;
+  candidate_meta?: Record<string, { title?: string; vendor?: string; url?: string }>;
+  counts?: Record<string, number>;
+  trace?: { total_input_tokens?: number | string; total_output_tokens?: number | string; stages?: Stage[] };
+  run_meta?: { run_id?: string; depth?: string; status?: string };
+  anchors_searched?: { hashes: string[]; network: string[]; artifacts: string[]; techniques: string[]; code_tokens?: string[] };
+  anchor_trail?: AnchorTrailEntry[];
+  phrase_anchor_trail?: AnchorTrailEntry[];
+}
+interface AnchorTrailEntry {
+  fp: string;
+  anchor_score: number;
+  overlap: number;
+  title?: string;
+  vendor?: string;
+  url?: string;
+  triage_confidence?: number;
+  justification?: string;
+  outcome: "lead" | "picked_no_lead" | "dropped_at_triage";
+  lead_title?: string;
+  relationship?: string;
+  lead_confidence?: string;
+}
+
+// Data injected by scripts/gen-correlation-canvas.ts (render-shape findings from get_correlation_run).
+const FINDINGS: Findings = __FINDINGS_JSON__;
+
+// ---------------------------------------------------------------------------
+// Intentional signal palette (mirrors the threat-intel POC / MCP app diamond):
+// color IS the data — a fixed legend reused across the diamond, confidence
+// badges, and evidence markers so the whole report reads at a glance.
+// ---------------------------------------------------------------------------
+
+const SIG_GREEN = "#40c790"; // high
+const SIG_AMBER = "#f0b840"; // partial / moderate
+const SIG_RED = "#f87171"; // low / counter
+const SIG_GRAY = "#474745"; // none / edges
+const NODE_NONE = "#30302f";
+
+const lc = (s: string | undefined): string => (s ?? "").toLowerCase();
+
+function signalColor(s: string): string {
+  const v = lc(s);
+  if (v === "high") return SIG_GREEN;
+  if (v === "moderate" || v === "partial") return SIG_AMBER;
+  if (v === "low") return SIG_RED;
+  return SIG_GRAY;
+}
+function weightColor(w: string): string {
+  const v = lc(w);
+  if (v === "smoking_gun" || v === "supporting") return SIG_GREEN;
+  if (v === "non_discriminatory") return SIG_AMBER;
+  return SIG_RED;
+}
+const DECISIVE_WEIGHTS = new Set(["smoking_gun", "decisive_counter"]);
+function badgeText(s: string): string {
+  const v = lc(s);
+  if (v === "moderate" || v === "partial") return "#1f1f1e";
+  return "#ffffff";
+}
+function sourceHost(url: string): string {
+  return url.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+}
+function money(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+
+const REL_LABEL: Record<string, string> = {
+  same_campaign: "Same campaign",
+  same_actor: "Same actor",
+  shared_tradecraft: "Shared tradecraft",
+};
+const WEIGHT_LABEL: Record<string, string> = {
+  smoking_gun: "Smoking gun",
+  supporting: "Supporting",
+  non_discriminatory: "Non-discriminatory",
+  counter: "Counter",
+  decisive_counter: "Decisive counter",
+};
+const VERTEX_LABEL: Record<string, string> = {
+  adversary: "Adversary",
+  capability: "Capability",
+  infrastructure: "Infrastructure",
+  victim: "Victim",
+};
+const VERTEX_ABBR: Record<string, string> = {
+  adversary: "ADV",
+  capability: "CAP",
+  infrastructure: "INF",
+  victim: "VIC",
+};
+const VERTEX_ORDER = ["adversary", "capability", "infrastructure", "victim"];
+
+// Anthropic list prices, USD per 1M tokens (in / out). Estimate only — managed
+// EIS billing may differ; captioned as such in the Pipeline & cost card.
+const PRICES: Record<"sonnet" | "opus", { in: number; out: number }> = {
+  sonnet: { in: 3, out: 15 },
+  opus: { in: 15, out: 75 },
+};
+const STAGE_MODEL: Record<string, string> = {
+  extract_core: "Claude Sonnet (raw_text IOCs/behaviors)",
+  extract_diamond: "Claude Opus (raw_text vertices)",
+  retrieval: "Elasticsearch (kNN + BM25 + anchors)",
+  triage: "Claude Sonnet",
+  synthesis: "Claude Opus",
+};
+const STAGE_LABEL: Record<string, string> = {
+  extract_core: "Case extraction",
+  extract_diamond: "Case diamond",
+  retrieval: "Retrieval",
+  triage: "Triage",
+  synthesis: "Synthesis",
+};
+function stageCost(s: Stage): number {
+  if (!s.tier) return 0;
+  const p = PRICES[s.tier];
+  return (s.input_tokens * p.in + s.output_tokens * p.out) / 1_000_000;
+}
+function stageDurationMs(s: Stage): number | null {
+  if (!s.started_at || !s.ended_at) return null;
+  const a = Date.parse(s.started_at);
+  const b = Date.parse(s.ended_at);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return null;
+  return b - a;
+}
+function fmtDuration(ms: number | null): string {
+  if (ms == null) return "—";
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(1)} s`;
+}
+
+// ---------------------------------------------------------------------------
+// Diamond Model graphic — colored vertices encode per-vertex signal.
+// ---------------------------------------------------------------------------
+
+const NODES: Array<{ v: string; cx: number; cy: number }> = [
+  { v: "adversary", cx: 80, cy: 18 },
+  { v: "infrastructure", cx: 18, cy: 80 },
+  { v: "capability", cx: 142, cy: 80 },
+  { v: "victim", cx: 80, cy: 142 },
+];
+const EDGES: Array<[number, number, number, number]> = [
+  [80, 18, 18, 80],
+  [80, 18, 142, 80],
+  [18, 80, 80, 142],
+  [142, 80, 80, 142],
+];
+
+function Diamond({ signal, size = 130 }: { signal: Record<string, string>; size?: number }) {
+  const theme = useHostTheme();
+  const showLabels = size >= 64;
+  const fill = (s: string) => (lc(s) === "high" ? SIG_GREEN : lc(s) === "partial" ? SIG_AMBER : NODE_NONE);
+  const txt = (s: string) => (lc(s) === "high" ? "#ffffff" : lc(s) === "partial" ? "#1f1f1e" : theme.text.quaternary);
+  // Pad the viewBox + scale the pixel size so the r=20 nodes don't clip.
+  const PAD = 12;
+  const vb = 160 + PAD * 2;
+  const px = Math.round(size * (vb / 160));
+  return (
+    <svg width={px} height={px} viewBox={`${-PAD} ${-PAD} ${vb} ${vb}`} role="img" aria-label="Diamond Model correlation signal">
+      {EDGES.map(([x1, y1, x2, y2], i) => (
+        <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={SIG_GRAY} strokeWidth={1.5} />
+      ))}
+      {NODES.map(({ v, cx, cy }) => {
+        const s = signal[v] ?? "none";
+        return (
+          <g key={v}>
+            <circle cx={cx} cy={cy} r={20} fill={fill(s)} stroke={SIG_GRAY} strokeWidth={lc(s) === "none" ? 1 : 0} />
+            {showLabels && (
+              <text x={cx} y={cy + 3.5} textAnchor="middle" fontSize={11} fontWeight={700} fill={txt(s)}>
+                {VERTEX_ABBR[v]}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  const theme = useHostTheme();
+  return (
+    <svg width={14} height={14} viewBox="0 0 16 16" style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 120ms" }}>
+      <path d="M6 4l4 4-4 4" fill="none" stroke={theme.text.tertiary} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CalloutIcon({ tone }: { tone: "info" | "success" | "warning" }) {
+  const theme = useHostTheme();
+  const bg = tone === "info" ? theme.accent.primary : tone === "success" ? SIG_GREEN : SIG_AMBER;
+  const fg = tone === "warning" ? "#1f1f1e" : "#ffffff";
+  return (
+    <span
+      style={{
+        width: 22, height: 22, borderRadius: 6, background: bg, color: fg,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0, fontSize: 15, fontWeight: 800, lineHeight: 1,
+      }}
+      aria-hidden="true"
+    >
+      {tone === "success" ? (
+        <svg width={14} height={14} viewBox="0 0 16 16">
+          <path d="M3.5 8.5l3 3 6-7" fill="none" stroke={fg} strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : tone === "info" ? (
+        <span style={{ fontStyle: "italic", fontFamily: "Georgia, serif" }}>i</span>
+      ) : (
+        "!"
+      )}
+    </span>
+  );
+}
+
+function SignalCallout({
+  tone, title, children, emphasis = false,
+}: {
+  tone: "info" | "success" | "warning";
+  title: string;
+  children: string;
+  emphasis?: boolean;
+}) {
+  const theme = useHostTheme();
+  const accent = tone === "info" ? theme.accent.primary : tone === "success" ? SIG_GREEN : SIG_AMBER;
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: 14, borderRadius: 8, background: theme.fill.tertiary, borderLeft: `3px solid ${accent}` }}>
+      <CalloutIcon tone={tone} />
+      <Stack gap={emphasis ? 6 : 4} style={{ flex: 1, minWidth: 0 }}>
+        <Text weight="semibold" style={{ color: theme.text.primary }}>{title}</Text>
+        <Text weight={emphasis ? "medium" : "normal"} style={emphasis ? { color: theme.text.primary, fontSize: 15, lineHeight: "23px" } : { color: theme.text.secondary }}>
+          {children}
+        </Text>
+      </Stack>
+    </div>
+  );
+}
+
+function SignalLegend() {
+  const theme = useHostTheme();
+  const items: Array<[string, string]> = [
+    [SIG_GREEN, "High"],
+    [SIG_AMBER, "Partial / moderate"],
+    [SIG_RED, "Low / counter"],
+    [SIG_GRAY, "None"],
+  ];
+  return (
+    <Row gap={14} wrap>
+      {items.map(([color, label]) => (
+        <span key={label} style={{ display: "contents" }}>
+          <Row gap={6} align="center">
+            <span style={{ width: 12, height: 12, borderRadius: 3, background: color, display: "inline-block" }} />
+            <Text as="span" size="small" tone="tertiary" style={{ color: theme.text.tertiary }}>{label}</Text>
+          </Row>
+        </span>
+      ))}
+    </Row>
+  );
+}
+
+function EvidenceGroups({ evidence }: { evidence: Evidence[] }) {
+  const theme = useHostTheme();
+  const groups = VERTEX_ORDER.map((v) => ({ v, items: evidence.filter((e) => e.vertex === v) })).filter((g) => g.items.length > 0);
+  return (
+    <Stack gap={14}>
+      {groups.map(({ v, items }) => (
+        <span key={v} style={{ display: "contents" }}>
+          <Stack gap={7}>
+            <Text weight="semibold" size="small" style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>{VERTEX_LABEL[v] ?? v}</Text>
+            <Stack gap={7}>
+              {items.map((e, i) => {
+                const wc = weightColor(e.weight);
+                const decisive = DECISIVE_WEIGHTS.has(lc(e.weight));
+                return (
+                  <span key={i} style={{ display: "contents" }}>
+                    <Row gap={10} align="start">
+                      <span style={{ width: decisive ? 5 : 3, alignSelf: "stretch", borderRadius: 2, background: wc, opacity: decisive ? 1 : 0.45, flexShrink: 0 }} />
+                      <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
+                        {decisive ? (
+                          <span style={{ alignSelf: "flex-start", background: wc, color: "#ffffff", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5, padding: "2px 8px", borderRadius: 4 }}>
+                            {WEIGHT_LABEL[lc(e.weight)] ?? e.weight}
+                          </span>
+                        ) : (
+                          <span style={{ alignSelf: "flex-start", color: wc, opacity: 0.85, fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, border: `1px solid ${wc}`, padding: "1px 7px", borderRadius: 4 }}>
+                            {WEIGHT_LABEL[lc(e.weight)] ?? e.weight}
+                          </span>
+                        )}
+                        <Text size="small" tone="secondary" style={{ color: theme.text.secondary }}>{e.text}</Text>
+                      </Stack>
+                    </Row>
+                  </span>
+                );
+              })}
+            </Stack>
+          </Stack>
+        </span>
+      ))}
+    </Stack>
+  );
+}
+
+function ConfidenceBadge({ confidence }: { confidence: string }) {
+  const c = signalColor(confidence);
+  return (
+    <span style={{ background: c, color: badgeText(confidence), fontSize: 12, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", padding: "5px 12px", borderRadius: 6, whiteSpace: "nowrap" }}>
+      {lc(confidence)} confidence
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const theme = useHostTheme();
+  const high = lc(priority) === "high";
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: high ? SIG_AMBER : "transparent", color: high ? "#1f1f1e" : theme.text.tertiary, border: high ? "none" : `1px solid ${theme.stroke.primary}`, padding: "6px 12px", borderRadius: 7, fontSize: 12.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+      <span style={{ width: 10, height: 10, borderRadius: 999, background: high ? "#1f1f1e" : theme.text.quaternary, display: "inline-block" }} />
+      {lc(priority)}
+    </span>
+  );
+}
+
+const CM = FINDINGS.candidate_meta ?? {};
+function leadVendor(lead: Lead): string | undefined {
+  for (const id of lead.candidate_ids) { const v = CM[id]?.vendor; if (v) return v; }
+  return undefined;
+}
+function leadUrl(lead: Lead): string | undefined {
+  for (const id of lead.candidate_ids) { const u = CM[id]?.url; if (u) return u; }
+  return undefined;
+}
+
+function LeadAccordion({ lead, open, onToggle }: { lead: Lead; open: boolean; onToggle: () => void }) {
+  const theme = useHostTheme();
+  const vendor = leadVendor(lead);
+  const url = leadUrl(lead);
+  return (
+    <div style={{ border: `1px solid ${theme.stroke.primary}`, borderRadius: 10, background: theme.bg.elevated, overflow: "hidden" }}>
+      <div onClick={onToggle} style={{ display: "flex", gap: 14, alignItems: "center", padding: 14, cursor: "pointer" }}>
+        <div style={{ flexShrink: 0 }}>
+          <Diamond signal={lead.vertex_signal} size={54} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text weight="semibold" style={{ color: theme.text.primary }}>{lead.title}</Text>
+          <Row gap={8} align="center" wrap style={{ marginTop: 6 }}>
+            {vendor && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: theme.text.secondary, background: theme.fill.tertiary, padding: "3px 9px", borderRadius: 5 }}>{vendor}</span>
+            )}
+            <span style={{ fontSize: 12, color: theme.text.tertiary }}>{REL_LABEL[lc(lead.relationship)] ?? lead.relationship}</span>
+          </Row>
+        </div>
+        <div style={{ flexShrink: 0 }}>
+          <ConfidenceBadge confidence={lead.confidence} />
+        </div>
+        <Chevron open={open} />
+      </div>
+      {open && (
+        <div style={{ padding: "0 16px 18px", borderTop: `1px solid ${theme.stroke.tertiary}` }}>
+          <Stack gap={14} style={{ paddingTop: 16 }}>
+            <Text style={{ color: theme.text.primary }}>{lead.bluf}</Text>
+            <EvidenceGroups evidence={lead.evidence} />
+          </Stack>
+          <Stack gap={6} style={{ marginTop: 14 }}>
+            <Text as="span" size="small" weight="semibold" tone="tertiary" style={{ textTransform: "uppercase", letterSpacing: 0.4 }}>Gaps</Text>
+            <Text size="small" tone="secondary" italic={lc(lead.gaps) === "none found"}>{lead.gaps}</Text>
+          </Stack>
+          {url && (
+            <Row gap={12} align="center" wrap style={{ marginTop: 14 }}>
+              <Link href={url}>{sourceHost(url)} — source report ↗</Link>
+            </Row>
+          )}
+          <Text size="small" tone="quaternary" truncate style={{ marginTop: 6 }}>report_id: {lead.candidate_ids.join(", ")}</Text>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PipelineCost() {
+  const theme = useHostTheme();
+  const [open, setOpen] = useCanvasState("pipelineOpen", false);
+  const stages = FINDINGS.trace?.stages ?? [];
+  if (stages.length === 0) return null;
+  const totalIn = stages.reduce((a, s) => a + s.input_tokens, 0);
+  const totalOut = stages.reduce((a, s) => a + s.output_tokens, 0);
+  const totalCost = stages.reduce((a, s) => a + stageCost(s), 0);
+  const totalMs = stages.reduce((a, s) => a + (stageDurationMs(s) ?? 0), 0);
+  const anyDuration = stages.some((s) => stageDurationMs(s) != null);
+  const numf = (n: number) => (n === 0 ? "—" : n.toLocaleString());
+  const rows = stages.map((s) => [
+    <Stack gap={2}>
+      <Text as="span" weight="semibold" size="small">{STAGE_LABEL[s.stage] ?? s.stage}</Text>
+      <Text as="span" size="small" tone="quaternary">
+        {s.stage === "retrieval" ? `${s.candidates ?? 0} candidates · ${s.anchors ?? 0} anchor hits` : STAGE_MODEL[s.stage] ?? ""}
+      </Text>
+    </Stack>,
+    numf(s.input_tokens),
+    numf(s.output_tokens),
+    fmtDuration(stageDurationMs(s)),
+    s.tier ? money(stageCost(s)) : "$0.00",
+  ]);
+  rows.push([
+    <Text as="span" weight="bold" size="small">Total</Text>,
+    <Text as="span" weight="bold" size="small">{totalIn.toLocaleString()}</Text>,
+    <Text as="span" weight="bold" size="small">{totalOut.toLocaleString()}</Text>,
+    <Text as="span" weight="bold" size="small">{anyDuration ? fmtDuration(totalMs) : "—"}</Text>,
+    <Text as="span" weight="bold" size="small">{money(totalCost)}</Text>,
+  ]);
+  return (
+    <div style={{ border: `1px solid ${theme.stroke.primary}`, borderRadius: 10, background: theme.bg.elevated, overflow: "hidden" }}>
+      <div onClick={() => setOpen((v) => !v)} style={{ display: "flex", gap: 12, alignItems: "center", padding: 14, cursor: "pointer" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text weight="semibold" style={{ color: theme.text.primary }}>Pipeline & cost</Text>
+          <Text size="small" tone="tertiary" style={{ marginTop: 3 }}>
+            {(FINDINGS.run_meta?.depth ?? "full")} depth · {(totalIn + totalOut).toLocaleString()} tokens · ~{money(totalCost)} est.{anyDuration ? ` · ${fmtDuration(totalMs)}` : ""}
+          </Text>
+        </div>
+        <Chevron open={open} />
+      </div>
+      {open && (
+        <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${theme.stroke.tertiary}` }}>
+          <div style={{ paddingTop: 14 }}>
+            <Table headers={["Stage", "Tokens in", "Tokens out", "Duration", "Est. cost"]} columnAlign={["left", "right", "right", "right", "right"]} rows={rows} />
+          </div>
+          <Text size="small" tone="quaternary" style={{ marginTop: 10 }}>
+            Est. cost at Anthropic list prices (Sonnet $3 / $15, Opus $15 / $75 per 1M in / out) — managed EIS
+            billing may differ. Retrieval is Elasticsearch-only. Source: ti-correlations trace.
+          </Text>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const OUTCOME_STYLE: Record<AnchorTrailEntry["outcome"], { label: string; fg: string; bg: string }> = {
+  lead: { label: "Lead", fg: "#0b0b0a", bg: "#7fd18b" },
+  picked_no_lead: { label: "Triaged, no lead", fg: "#e6d27f", bg: "#3a3620" },
+  dropped_at_triage: { label: "Dropped at triage", fg: "#918f88", bg: "#2b2b29" },
+};
+
+function AnchorChipRow({ label, values, theme }: { label: string; values: string[]; theme: ReturnType<typeof useHostTheme> }) {
+  if (!values || values.length === 0) return null;
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: 6 }}>
+      <Text as="span" size="small" tone="quaternary" style={{ flex: "0 0 64px", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{label}</Text>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {values.map((v, i) => (
+          <span key={`${v}-${i}`} style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 11, color: theme.text.secondary, background: theme.bg.chrome, border: `1px solid ${theme.stroke.tertiary}`, borderRadius: 5, padding: "2px 7px", wordBreak: "break-all" }}>{v}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TrailRowList({ rows, scoreLabel, theme }: { rows: AnchorTrailEntry[]; scoreLabel: string; theme: any }) {
+  return (
+    <Stack gap={10}>
+      {rows.map((r, i) => {
+        const os = OUTCOME_STYLE[r.outcome];
+        return (
+          <div key={r.fp || i} style={{ padding: "10px 12px", background: theme.bg.chrome, border: `1px solid ${theme.stroke.tertiary}`, borderRadius: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", padding: "2px 7px", borderRadius: 4, color: os.fg, background: os.bg, whiteSpace: "nowrap" }}>{os.label}</span>
+              <Text as="span" weight="semibold" style={{ color: theme.text.primary }}>
+                {r.url ? <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "#7fb0e6", textDecoration: "none" }}>{r.title ?? r.fp}</a> : (r.title ?? r.fp)}
+              </Text>
+              {r.vendor && <Text as="span" size="small" tone="quaternary" style={{ textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>{r.vendor}</Text>}
+            </div>
+            <div style={{ marginTop: 5, fontSize: 11 }}>
+              <Text as="span" size="small" tone="tertiary">
+                {scoreLabel} {r.anchor_score} · diamond overlap {r.overlap}
+                {r.triage_confidence != null ? ` · triage ${(r.triage_confidence * 100).toFixed(0)}%` : ""}
+                {r.outcome === "lead" && r.relationship ? ` · synthesis: ${r.relationship.replace(/_/g, " ")} (${r.lead_confidence})` : ""}
+              </Text>
+            </div>
+            {r.justification && (
+              <Text size="small" tone="secondary" style={{ marginTop: 6, fontStyle: "italic", lineHeight: 1.5 }}>“{r.justification}”</Text>
+            )}
+          </div>
+        );
+      })}
+    </Stack>
+  );
+}
+
+function AnchorTrail() {
+  const theme = useHostTheme();
+  const [open, setOpen] = useCanvasState("anchorTrailOpen", false);
+  const anchors = FINDINGS.anchors_searched;
+  const trail = FINDINGS.anchor_trail ?? [];
+  const phraseTrail = FINDINGS.phrase_anchor_trail ?? [];
+  const codeTokens = anchors?.code_tokens ?? [];
+  const searched = anchors ? anchors.hashes.length + anchors.network.length + anchors.artifacts.length + anchors.techniques.length + codeTokens.length : 0;
+  if (searched === 0 && trail.length === 0 && phraseTrail.length === 0) return null;
+  const matched = trail.length + phraseTrail.length;
+  const leadCount = [...trail, ...phraseTrail].filter((r) => r.outcome === "lead").length;
+  const subhead = (label: string) => (
+    <Text size="small" tone="quaternary" style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>{label}</Text>
+  );
+  return (
+    <div style={{ border: `1px solid ${theme.stroke.primary}`, borderRadius: 10, background: theme.bg.elevated, overflow: "hidden" }}>
+      <div onClick={() => setOpen((v) => !v)} style={{ display: "flex", gap: 12, alignItems: "center", padding: 14, cursor: "pointer" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text weight="semibold" style={{ color: theme.text.primary }}>Anchor trail</Text>
+          <Text size="small" tone="tertiary" style={{ marginTop: 3 }}>
+            {searched} anchor{searched !== 1 ? "s" : ""} searched · {matched} matched · {leadCount} in a lead
+          </Text>
+        </div>
+        <Chevron open={open} />
+      </div>
+      {open && (
+        <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${theme.stroke.tertiary}` }}>
+          {anchors && searched > 0 && (
+            <div style={{ paddingTop: 14, paddingBottom: 12, marginBottom: 12, borderBottom: `1px solid ${theme.stroke.tertiary}` }}>
+              <Text size="small" tone="quaternary" style={{ marginBottom: 8 }}>Case anchors backfilled into the exact-match retrieval clause:</Text>
+              <AnchorChipRow label="hashes" values={anchors.hashes} theme={theme} />
+              <AnchorChipRow label="network" values={anchors.network} theme={theme} />
+              <AnchorChipRow label="artifacts" values={anchors.artifacts} theme={theme} />
+              <AnchorChipRow label="techniques" values={anchors.techniques} theme={theme} />
+              <AnchorChipRow label="code tokens" values={codeTokens} theme={theme} />
+            </div>
+          )}
+
+          <div style={{ marginBottom: 8 }}>{subhead("IOC / artifact anchors")}</div>
+          {trail.length > 0 ? (
+            <TrailRowList rows={trail} scoreLabel="anchor weight" theme={theme} />
+          ) : (
+            <Text size="small" tone="tertiary">No corpus report shared an exact IOC/artifact anchor with the case.</Text>
+          )}
+
+          <div style={{ marginTop: 14, marginBottom: 8 }}>{subhead("Code-token (phrase) anchors")}</div>
+          {phraseTrail.length > 0 ? (
+            <TrailRowList rows={phraseTrail} scoreLabel="phrase weight" theme={theme} />
+          ) : (
+            <Text size="small" tone="tertiary">
+              {codeTokens.length > 0 ? "No corpus report shared a distinctive code token with the case." : "The case exposed no distinctive code tokens to phrase-match."}
+            </Text>
+          )}
+
+          <Text size="small" tone="quaternary" style={{ marginTop: 10 }}>
+            Anchors = shared file-hash IOCs + discriminating artifacts (network IOCs / techniques are boosts). Code-token
+            anchors match distinctive execution tokens (e.g. [Class]::Method()) exactly against corpus extracted.code_tokens.
+            Trail joins retrieval hits → triage picks → synthesis leads. Source: ti-correlations run record.
+          </Text>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CorrelationReport() {
+  const theme = useHostTheme();
+  const S = FINDINGS.synthesis;
+  const counts = FINDINGS.counts ?? {};
+  const leads = FINDINGS.leads ?? [];
+
+  const relOptions = ["all", "same_campaign", "same_actor", "shared_tradecraft"];
+  const [rel, setRel] = useCanvasState<string>("relFilter", "all");
+  const [openMap, setOpenMap] = useCanvasState<Record<string, boolean>>(
+    "leadsOpen",
+    Object.fromEntries(leads.map((l) => [l.title, lc(l.confidence) === "high"]))
+  );
+  const relCounts = leads.reduce<Record<string, number>>((acc, l) => {
+    acc[lc(l.relationship)] = (acc[lc(l.relationship)] ?? 0) + 1;
+    return acc;
+  }, {});
+  const shown = rel === "all" ? leads : leads.filter((l) => lc(l.relationship) === rel);
+  const toggle = (title: string) => setOpenMap((prev) => ({ ...prev, [title]: !prev[title] }));
+
+  const totalTokens =
+    Number(FINDINGS.trace?.total_input_tokens ?? 0) + Number(FINDINGS.trace?.total_output_tokens ?? 0);
+
+  return (
+    <Stack gap={22} style={{ padding: 24, maxWidth: 960 }}>
+      <Stack gap={4}>
+        <Text size="small" tone="tertiary">
+          ti-correlation workflow · depth {FINDINGS.run_meta?.depth ?? "full"} · {FINDINGS.run_meta?.status ?? "completed"}
+        </Text>
+        <H2 style={{ margin: 0 }}>{S.case_title ?? "Correlation report"}</H2>
+      </Stack>
+
+      <Row gap={24} align="stretch" wrap>
+        <div style={{ border: `1px solid ${theme.stroke.primary}`, borderRadius: 12, background: theme.bg.elevated, padding: 18, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, minWidth: 210 }}>
+          <Text size="small" weight="semibold" tone="tertiary" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>Case signal</Text>
+          <Diamond signal={FINDINGS.case_vertex_signal ?? {}} size={170} />
+          <SignalLegend />
+        </div>
+        <Stack gap={14} style={{ flex: 1, minWidth: 280 }}>
+          <Grid columns={3} gap={12}>
+            {counts.candidates !== undefined && <Stat value={counts.candidates} label="Candidates" />}
+            {counts.picks !== undefined && <Stat value={counts.picks} label="Triage picks" />}
+            {counts.leads !== undefined && <Stat value={counts.leads} label="Leads" tone="info" />}
+            {counts.no_match !== undefined && <Stat value={counts.no_match} label="No-match" />}
+            <Stat value={lc(S.correlation_signal)} label="Correlation signal" tone="success" />
+            <Stat value={`${Math.round(Number(FINDINGS.trace?.total_input_tokens ?? 0) / 1000)}k`} label="Total input tokens" />
+          </Grid>
+          <SignalCallout tone="info" title="BLUF" emphasis>{S.bluf}</SignalCallout>
+        </Stack>
+      </Row>
+
+      <Divider />
+
+      <Stack gap={14}>
+        <Row gap={10} align="center" justify="space-between" wrap>
+          <H3 style={{ margin: 0 }}>Correlation leads</H3>
+          <Row gap={6} wrap>
+            {relOptions.map((r) => (
+              <span key={r} style={{ display: "contents" }}>
+                <Pill active={rel === r} onClick={() => setRel(r)}>
+                  {r === "all" ? `All (${leads.length})` : `${REL_LABEL[r] ?? r} (${relCounts[r] ?? 0})`}
+                </Pill>
+              </span>
+            ))}
+          </Row>
+        </Row>
+        {shown.map((lead) => (
+          <span key={lead.title} style={{ display: "contents" }}>
+            <LeadAccordion lead={lead} open={!!openMap[lead.title]} onToggle={() => toggle(lead.title)} />
+          </span>
+        ))}
+      </Stack>
+
+      <Divider />
+
+      <Stack gap={10}>
+        <H3 style={{ margin: 0 }}>Analyst synthesis</H3>
+        <Text>{S.reasoning}</Text>
+        {S.atomic_ioc_overlap?.note && (
+          <SignalCallout tone="success" title="Atomic IOC overlap (assessed)">{S.atomic_ioc_overlap.note}</SignalCallout>
+        )}
+        {S.gaps && <SignalCallout tone="warning" title="Gaps & caveats">{S.gaps}</SignalCallout>}
+      </Stack>
+
+      {S.next_steps?.length > 0 && (
+        <Stack gap={8}>
+          <H3 style={{ margin: 0 }}>Recommended next steps</H3>
+          <Table
+            headers={["Priority", "Action"]}
+            columnAlign={["left", "left"]}
+            rows={S.next_steps.map((s) => [<PriorityBadge priority={s.priority} />, s.text])}
+          />
+        </Stack>
+      )}
+
+      {FINDINGS.no_match?.length > 0 && (
+        <Stack gap={8}>
+          <H3 style={{ margin: 0 }}>Reviewed, no meaningful overlap</H3>
+          <Table headers={["Candidate", "Vendor"]} columnAlign={["left", "left"]} rows={FINDINGS.no_match.map((n) => [n.title, n.vendor ?? ""])} />
+        </Stack>
+      )}
+
+      <AnchorTrail />
+
+      <PipelineCost />
+
+      <Text size="small" tone="quaternary">
+        Source: ti-correlation workflow · run {FINDINGS.run_meta?.run_id ?? "—"} ·{" "}
+        {totalTokens.toLocaleString()} total tokens · {S.inferential_hops ?? 0} inferential hop
+      </Text>
+    </Stack>
+  );
+}
