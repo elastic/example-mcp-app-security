@@ -95,6 +95,10 @@ command -v pwsh >/dev/null 2>&1 || {
 pwsh -NoProfile -NonInteractive -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; if (-not (Get-Module -ListAvailable powershell-yaml)) { Install-Module powershell-yaml -Scope AllUsers -Force -AllowClobber }"
 `;
 
+export function pinnedRepositoryRevisionArgs(repositoryPath: string): string[] {
+  return ["sudo", "git", "-C", repositoryPath, "rev-parse", "HEAD"];
+}
+
 export function registerMacosAtomicTargetTool(
   server: McpServer,
   store: AtomicRunStore = createAtomicRunStore()
@@ -294,8 +298,16 @@ async function registerTarget(
   }
   const [sourceRevision, runnerRevision, powershell, sourceAssets, packages, capabilities] =
     await Promise.all([
-      runOnTarget(plan.scope, ["git", "-C", "/opt/atomic-red-team", "rev-parse", "HEAD"], 30_000),
-      runOnTarget(plan.scope, ["git", "-C", "/opt/invoke-atomicredteam", "rev-parse", "HEAD"], 30_000),
+      runOnTarget(
+        plan.scope,
+        pinnedRepositoryRevisionArgs("/opt/atomic-red-team"),
+        30_000
+      ),
+      runOnTarget(
+        plan.scope,
+        pinnedRepositoryRevisionArgs("/opt/invoke-atomicredteam"),
+        30_000
+      ),
       runOnTarget(plan.scope, ["pwsh", "--version"], 30_000),
       verifyApprovedSourceAssets(plan.scope, plan.tests),
       verifyApprovedPackages(plan.scope, plan.target_prerequisites?.packages ?? []),
