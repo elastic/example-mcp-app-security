@@ -801,7 +801,7 @@ export function createAtomicCampaignStore(
           }
           return (
             entry.status === "completed_with_findings" &&
-            entry.coverage_outcome === "not_applicable" &&
+            ["not_applicable", "no_telem"].includes(entry.coverage_outcome ?? "") &&
             entry.result_published === true
           );
         });
@@ -809,7 +809,7 @@ export function createAtomicCampaignStore(
         throw new Error(
           isCleanPreExecutionBlock
             ? "Requeue requires the clean blocked run to remain attached and unpublished"
-            : "Requeue requires the terminal not_applicable result to be synchronized and published first"
+            : "Requeue requires the terminal not_applicable/no_telemetry result to be synchronized and published first"
         );
       }
       const updated: CampaignState = {
