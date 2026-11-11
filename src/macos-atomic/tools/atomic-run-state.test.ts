@@ -109,4 +109,38 @@ describe("digest-gated macOS run state", () => {
     const missing: AtomicPlan = { ...value, scope: { ...value.scope, target_image: undefined } };
     expect(atomicPlanSchema.safeParse(missing).success).toBe(false);
   });
+
+  it("allows a blocked run to mark an existing orphaned resource as cleaned", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "macos-atomic-run-"));
+    roots.push(root);
+    const store = createAtomicRunStore({ baseDir: root });
+    store.init({ name: "Blocked cleanup", run_id: "blocked-cleanup" });
+    const prepared = store.setPlan("blocked-cleanup", plan("blocked-cleanup"));
+    store.approve("blocked-cleanup", prepared.plan_digest!);
+    store.advance("blocked-cleanup");
+    store.recordResource("blocked-cleanup", {
+      id: "art-macos",
+      kind: "target",
+      origin: "orphaned",
+      cleaned: false,
+    });
+    store.block("blocked-cleanup", "Provisioning failed");
+
+    const cleaned = store.recordResource("blocked-cleanup", {
+      id: "art-macos",
+      kind: "target",
+      origin: "orphaned",
+      cleaned: true,
+    });
+
+    expect(cleaned.allowed_actions).toEqual(["status", "record_resource"]);
+    expect(store.getLoaded("blocked-cleanup").resources).toEqual([
+      {
+        id: "art-macos",
+        kind: "target",
+        origin: "orphaned",
+        cleaned: true,
+      },
+    ]);
+  });
 });

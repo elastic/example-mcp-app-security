@@ -236,7 +236,7 @@ export function registerMacosAtomicTargetTool(
           });
         }
 
-        store.assertPhase(parsed.run_id, ["cleaning"]);
+        store.assertPhase(parsed.run_id, ["cleaning", "blocked"]);
         if (plan.scope.lifecycle === "existing" || plan.scope.target_kind !== "tart") {
           return textResult(
             { error: "Automatic destruction is refused for existing SSH targets" },

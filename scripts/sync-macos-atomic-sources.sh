@@ -24,8 +24,10 @@ sync_repo() {
   local ref="$3"
   local sparse="$4"
 
+  local new_clone=false
   if [[ ! -d "$destination/.git" ]]; then
     git clone --filter=blob:none --no-checkout "$url" "$destination"
+    new_clone=true
   fi
   if [[ "$(git -C "$destination" remote get-url origin)" != "$url" ]]; then
     echo "Refusing cache with unexpected origin: $destination" >&2
@@ -39,7 +41,11 @@ sync_repo() {
     git -C "$destination" sparse-checkout set atomics
   fi
   git -C "$destination" fetch --depth 1 origin "$ref"
-  git -C "$destination" checkout --detach FETCH_HEAD
+  if [[ "$new_clone" == "true" ]]; then
+    git -C "$destination" checkout --detach --force FETCH_HEAD
+  else
+    git -C "$destination" checkout --detach FETCH_HEAD
+  fi
   synced_revision="$(git -C "$destination" rev-parse HEAD)"
 }
 

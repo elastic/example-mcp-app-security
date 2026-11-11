@@ -795,7 +795,22 @@ export function createAtomicRunStore(
 
     recordResource(runId: string, resource: AtomicResource): AtomicRunSnapshot {
       const loaded = load(runId);
-      requirePhase(loaded, ["provisioning", "executing", "cleaning"]);
+      requirePhase(loaded, ["provisioning", "executing", "cleaning", "blocked"]);
+      if (loaded.state.phase === "blocked") {
+        const existing = loaded.resources.find((candidate) => candidate.id === resource.id);
+        if (
+          !existing ||
+          existing.cleaned ||
+          resource.cleaned !== true ||
+          resource.kind !== existing.kind ||
+          resource.origin !== existing.origin
+        ) {
+          reject(
+            loaded,
+            "Blocked runs may only mark an existing unclean resource as cleaned"
+          );
+        }
+      }
       const resources = [
         ...loaded.resources.filter((candidate) => candidate.id !== resource.id),
         resource,
@@ -1020,7 +1035,9 @@ export function createAtomicRunStore(
 export type AtomicRunStore = ReturnType<typeof createAtomicRunStore>;
 
 function allowedActions(phase: AtomicPhase): string[] {
-  if (TERMINAL_PHASES.has(phase)) return ["status"];
+  if (TERMINAL_PHASES.has(phase)) {
+    return phase === "blocked" ? ["status", "record_resource"] : ["status"];
+  }
   const actions = ["status"];
   if (phase === "planning" || phase === "awaiting_approval") actions.push("set_plan");
   if (phase === "awaiting_approval") actions.push("approve");
