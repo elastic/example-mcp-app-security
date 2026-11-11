@@ -136,6 +136,13 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "list-ai-connectors",
           // analytics
           "report-analytics-event",
+          // Linux Atomic emulation
+          "atomic-run",
+          "atomic-campaign",
+          "atomic-catalog",
+          "atomic-target",
+          "atomic-exec",
+          "atomic-elastic",
         ].sort()
       );
     } finally {

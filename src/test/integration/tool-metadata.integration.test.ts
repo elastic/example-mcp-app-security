@@ -68,6 +68,8 @@ const READ_ONLY_TOOLS = [
   "get-mapping",
   "get-entity-detail",
   "investigate-entity",
+  // Linux Atomic emulation
+  "atomic-catalog",
 ];
 
 const DESTRUCTIVE_TOOLS = [
@@ -77,6 +79,9 @@ const DESTRUCTIVE_TOOLS = [
   "manage-exceptions",
   "create-rules-for-scenario",
   "cleanup-sample-data",
+  // Linux Atomic emulation
+  "atomic-exec",
+  "atomic-target",
 ];
 
 /** Spec default when `_meta.ui.visibility` is omitted. */

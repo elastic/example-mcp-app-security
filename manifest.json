@@ -57,6 +57,30 @@
     {
       "name": "generate-sample-data",
       "description": "Generate ECS-compliant security events for demos"
+    },
+    {
+      "name": "atomic-run",
+      "description": "Manage digest-approved Linux Atomic run state"
+    },
+    {
+      "name": "atomic-campaign",
+      "description": "Manage resumable full-catalog Linux Atomic campaigns"
+    },
+    {
+      "name": "atomic-catalog",
+      "description": "Inspect the pinned Atomic Red Team Linux catalog"
+    },
+    {
+      "name": "atomic-target",
+      "description": "Provision and clean approved disposable Linux targets"
+    },
+    {
+      "name": "atomic-exec",
+      "description": "Execute one approved Atomic test in its target"
+    },
+    {
+      "name": "atomic-elastic",
+      "description": "Discover Fleet, verify coverage, and publish outcomes"
     }
   ],
   "tools_generated": true,

@@ -42,6 +42,14 @@ import { registerDetectionRuleTools } from "./tools/detection-rules.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
 import { noopAnalyticsClient, type AnalyticsClient } from "./elastic/analytics/index.js";
+import { configureAtomicElasticEnvironment } from "./execution/elastic-fleet.js";
+import { registerAtomicCampaignTool } from "./tools/atomic-campaign.js";
+import { registerAtomicCatalogTool } from "./tools/atomic-catalog.js";
+import { registerAtomicElasticTool } from "./tools/atomic-elastic.js";
+import { registerAtomicExecTool } from "./tools/atomic-exec.js";
+import { createAtomicRunStore } from "./tools/atomic-run-state.js";
+import { registerAtomicRunTool } from "./tools/atomic-run.js";
+import { registerAtomicTargetTool } from "./tools/atomic-target.js";
 
 export interface CreateServerDeps {
   /**
@@ -73,6 +81,11 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
   const credentialClient = deps.credentialClient ?? createCredentialClient();
   const credentials = credentialClient.get();
   const analytics = deps.analytics ?? noopAnalyticsClient;
+
+  configureAtomicElasticEnvironment({
+    kibanaUrl: credentials.kibanaUrl,
+    apiKey: credentials.elasticsearchApiKey,
+  });
 
   const esClient = createEsClient(credentials);
   const kibanaClient = createKibanaClient(credentials);
@@ -128,6 +141,14 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     analytics,
   });
   registerAnalyticsTools(server, { analytics });
+
+  const atomicStore = createAtomicRunStore();
+  registerAtomicRunTool(server, atomicStore);
+  registerAtomicCampaignTool(server, atomicStore);
+  registerAtomicCatalogTool(server);
+  registerAtomicTargetTool(server, atomicStore);
+  registerAtomicExecTool(server, atomicStore);
+  registerAtomicElasticTool(server, atomicStore);
 
   return server;
 }

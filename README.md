@@ -27,6 +27,13 @@ This project provides six interactive security operations tools, each with a ric
 
 See [docs/features.md](docs/features.md) for a full breakdown of each tool's capabilities.
 
+It also includes a JSON-only
+[Linux Atomic Red Team emulation runtime](docs/linux-atomic-emulation.md) for
+digest-approved execution in disposable targets, automatic Fleet enrollment,
+Elastic coverage verification, result publication, and cleanup. The emulation
+runtime requires a source build plus local Git and Multipass; it is not part of
+the one-click demo workflow.
+
 ## Quick Start
 
 > [!TIP]
@@ -65,6 +72,7 @@ The `skills/` directory contains [Claude Skills](https://claude.com/docs/skills/
 | [Add to Claude.ai](docs/setup-claude-ai.md) | Expose the MCP app via a cloudflared tunnel |
 | [Build and run locally](docs/setup-local.md) | Build the MCP server from source and run it on your machine |
 | [Install skills](docs/setup-skills.md) | Install skills via npx, local clone, or zip upload |
+| [Run Linux Atomic Red Team tests](docs/linux-atomic-emulation.md) | Build the fail-closed runtime, connect Claude, and execute one test or the full Linux-tagged catalog |
 | [Updating](docs/setup-claude-desktop.md#updating) | How to update to a newer release |
 
 ## Development
