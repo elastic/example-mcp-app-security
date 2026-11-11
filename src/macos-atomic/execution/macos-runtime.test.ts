@@ -31,7 +31,7 @@ describe("macOS runtime helpers", () => {
 
   it("resolves official Darwin Elastic Agent artifacts for both architectures", () => {
     expect(elasticAgentArtifact("9.5.6", "arm64").filename)
-      .toBe("elastic-agent-9.5.6-darwin-arm64.tar.gz");
+      .toBe("elastic-agent-9.5.6-darwin-aarch64.tar.gz");
     expect(elasticAgentArtifact("9.5.6", "x86_64").filename)
       .toBe("elastic-agent-9.5.6-darwin-x86_64.tar.gz");
   });

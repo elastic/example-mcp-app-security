@@ -37,7 +37,7 @@ machine = platform.machine().lower()
 if machine in ("x86_64", "amd64"):
     arch = "x86_64"
 elif machine in ("aarch64", "arm64"):
-    arch = "arm64"
+    arch = "aarch64"
 else:
     emit({"ok": False, "error": "unsupported architecture", "machine": machine}, 2)
 
@@ -118,7 +118,8 @@ export function elasticAgentArtifact(version: string, machine: string): {
       ? "arm64"
       : undefined;
   if (!architecture) throw new Error(`Unsupported Elastic Agent architecture: ${machine}`);
-  const filename = `elastic-agent-${version}-darwin-${architecture}.tar.gz`;
+  const artifactArchitecture = architecture === "arm64" ? "aarch64" : architecture;
+  const filename = `elastic-agent-${version}-darwin-${artifactArchitecture}.tar.gz`;
   const url = `${ARTIFACT_BASE}/${filename}`;
   return { architecture, filename, url, checksumUrl: `${url}.sha512` };
 }
