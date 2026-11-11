@@ -12,7 +12,8 @@ import { runProcess, type ProcessResult } from "./process.js";
 import { runOnTarget } from "./target.js";
 
 export async function cloneAndStartTartTarget(
-  scope: AtomicPlan["scope"]
+  scope: AtomicPlan["scope"],
+  ttlMinutes: number
 ): Promise<{ readonly clone: ProcessResult; readonly transport: "tart-exec" }> {
   if (scope.target_kind !== "tart" || scope.lifecycle !== "ephemeral") {
     throw new Error("Tart provisioning requires an ephemeral tart target");
@@ -25,7 +26,7 @@ export async function cloneAndStartTartTarget(
   const clone = await runProcess(
     "tart",
     ["clone", scope.target_image, scope.target_id],
-    { timeoutMs: 30 * 60_000 }
+    { timeoutMs: tartCloneTimeoutMs(ttlMinutes) }
   );
   if (clone.exitCode !== 0 || clone.timedOut) return { clone, transport: "tart-exec" };
 
@@ -50,6 +51,13 @@ export async function cloneAndStartTartTarget(
     await new Promise((resolve) => setTimeout(resolve, 5_000));
   }
   throw new Error(`Timed out waiting for Tart VM ${scope.target_id}: ${lastError}`);
+}
+
+export function tartCloneTimeoutMs(ttlMinutes: number): number {
+  if (!Number.isInteger(ttlMinutes) || ttlMinutes < 1) {
+    throw new Error("Tart clone timeout requires a positive integer TTL");
+  }
+  return Math.min(ttlMinutes, 240) * 60_000;
 }
 
 export function tartRunArgs(scope: AtomicPlan["scope"]): string[] {

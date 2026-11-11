@@ -147,7 +147,10 @@ export function registerMacosAtomicTargetTool(
           }
           let launched: Awaited<ReturnType<typeof cloneAndStartTartTarget>>;
           try {
-            launched = await cloneAndStartTartTarget(plan.scope);
+            launched = await cloneAndStartTartTarget(
+              plan.scope,
+              plan.controls.ttl_minutes
+            );
           } catch (error) {
             store.recordResource(parsed.run_id, {
               id: plan.scope.target_id,

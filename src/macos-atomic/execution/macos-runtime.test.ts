@@ -12,7 +12,7 @@ import {
 } from "./approved-packages.js";
 import { elasticAgentArtifact, isElasticAgentHealthy } from "./elastic-agent.js";
 import { shellQuoteArg, sshTargetDestination } from "./target.js";
-import { tartListContains, tartRunArgs } from "./tart.js";
+import { tartCloneTimeoutMs, tartListContains, tartRunArgs } from "./tart.js";
 import type { AtomicPlan } from "../tools/atomic-run-state.js";
 
 describe("macOS runtime helpers", () => {
@@ -61,5 +61,11 @@ describe("macOS runtime helpers", () => {
     expect(tartRunArgs(base)).toEqual(["run", "art-macos"]);
     expect(tartRunArgs({ ...base, target_profile: "server" }))
       .toEqual(["run", "--no-graphics", "art-macos"]);
+  });
+
+  it("bounds a Tart clone by the approved run TTL instead of thirty minutes", () => {
+    expect(tartCloneTimeoutMs(120)).toBe(120 * 60_000);
+    expect(tartCloneTimeoutMs(300)).toBe(240 * 60_000);
+    expect(() => tartCloneTimeoutMs(0)).toThrow("positive integer TTL");
   });
 });
