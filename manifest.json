@@ -57,6 +57,30 @@
     {
       "name": "generate-sample-data",
       "description": "Generate ECS-compliant security events for demos"
+    },
+    {
+      "name": "macos-atomic-run",
+      "description": "Manage digest-approved macOS Atomic run state"
+    },
+    {
+      "name": "macos-atomic-campaign",
+      "description": "Manage resumable full-catalog macOS Atomic campaigns"
+    },
+    {
+      "name": "macos-atomic-catalog",
+      "description": "Inspect the pinned Atomic Red Team macOS catalog"
+    },
+    {
+      "name": "macos-atomic-target",
+      "description": "Provision and clean approved disposable macOS targets"
+    },
+    {
+      "name": "macos-atomic-exec",
+      "description": "Execute one approved Atomic test in its macOS target"
+    },
+    {
+      "name": "macos-atomic-elastic",
+      "description": "Discover Fleet, verify macOS coverage, and publish outcomes"
     }
   ],
   "tools_generated": true,

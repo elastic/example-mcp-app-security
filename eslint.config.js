@@ -10,7 +10,12 @@ import { requireLicenseHeader } from './lint-license-rule.mjs';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**'],
+    ignores: [
+      '.macos-atomic-cache/**',
+      'macos-atomic-runs/**',
+      'dist/**',
+      'node_modules/**',
+    ],
   },
   {
     files: [

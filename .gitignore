@@ -14,3 +14,5 @@ dist/
 .cursor/
 coverage/
 openspec/
+macos-atomic-runs/
+.macos-atomic-cache/

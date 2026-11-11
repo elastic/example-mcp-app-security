@@ -42,6 +42,14 @@ import { registerDetectionRuleTools } from "./tools/detection-rules.js";
 import { registerSampleDataTools } from "./tools/sample-data.js";
 import { registerThreatHuntTools } from "./tools/threat-hunt.js";
 import { noopAnalyticsClient, type AnalyticsClient } from "./elastic/analytics/index.js";
+import { configureAtomicElasticEnvironment as configureMacosAtomicElasticEnvironment } from "./macos-atomic/execution/elastic-fleet.js";
+import { registerAtomicCampaignTool as registerMacosAtomicCampaignTool } from "./macos-atomic/tools/atomic-campaign.js";
+import { registerAtomicCatalogTool as registerMacosAtomicCatalogTool } from "./macos-atomic/tools/atomic-catalog.js";
+import { registerAtomicElasticTool as registerMacosAtomicElasticTool } from "./macos-atomic/tools/atomic-elastic.js";
+import { registerAtomicExecTool as registerMacosAtomicExecTool } from "./macos-atomic/tools/atomic-exec.js";
+import { createAtomicRunStore as createMacosAtomicRunStore } from "./macos-atomic/tools/atomic-run-state.js";
+import { registerAtomicRunTool as registerMacosAtomicRunTool } from "./macos-atomic/tools/atomic-run.js";
+import { registerMacosAtomicTargetTool } from "./macos-atomic/tools/atomic-target.js";
 
 export interface CreateServerDeps {
   /**
@@ -73,6 +81,11 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
   const credentialClient = deps.credentialClient ?? createCredentialClient();
   const credentials = credentialClient.get();
   const analytics = deps.analytics ?? noopAnalyticsClient;
+
+  configureMacosAtomicElasticEnvironment({
+    kibanaUrl: credentials.kibanaUrl,
+    apiKey: credentials.elasticsearchApiKey,
+  });
 
   const esClient = createEsClient(credentials);
   const kibanaClient = createKibanaClient(credentials);
@@ -128,6 +141,14 @@ export function createServer(deps: CreateServerDeps = {}): McpServer {
     analytics,
   });
   registerAnalyticsTools(server, { analytics });
+
+  const macosAtomicStore = createMacosAtomicRunStore();
+  registerMacosAtomicRunTool(server, macosAtomicStore);
+  registerMacosAtomicCampaignTool(server, macosAtomicStore);
+  registerMacosAtomicCatalogTool(server);
+  registerMacosAtomicTargetTool(server, macosAtomicStore);
+  registerMacosAtomicExecTool(server, macosAtomicStore);
+  registerMacosAtomicElasticTool(server, macosAtomicStore);
 
   return server;
 }
