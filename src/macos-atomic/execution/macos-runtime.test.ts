@@ -10,7 +10,12 @@ import {
   approvedPackageInstallSpec,
   parseBrewQuery,
 } from "./approved-packages.js";
-import { elasticAgentArtifact, isElasticAgentHealthy } from "./elastic-agent.js";
+import {
+  elasticAgentArtifact,
+  elasticEndpointInstallTestPassed,
+  isElasticAgentHealthy,
+  isElasticSystemExtensionActiveAndEnabled,
+} from "./elastic-agent.js";
 import { shellQuoteArg, sshTargetDestination } from "./target.js";
 import { tartCloneTimeoutMs, tartListContains, tartRunArgs } from "./tart.js";
 import type { AtomicPlan } from "../tools/atomic-run-state.js";
@@ -42,6 +47,28 @@ describe("macOS runtime helpers", () => {
       timedOut: false,
       stdout: "elastic-agent (HEALTHY) Running\n",
     })).toBe(true);
+  });
+
+  it("requires the Elastic system extension to be both active and enabled", () => {
+    const header =
+      "enabled\tactive\tteamID\tbundleID (version)\tname\t[state]\n";
+    expect(isElasticSystemExtensionActiveAndEnabled(
+      header +
+        "*\t*\t2BT3HPN62Z\tco.elastic.systemextension (9.5.6)\tElasticEndpoint\t[activated enabled]\n"
+    )).toBe(true);
+    expect(isElasticSystemExtensionActiveAndEnabled(
+      header +
+        "\t*\t2BT3HPN62Z\tco.elastic.systemextension (9.5.6)\tElasticEndpoint\t[activated waiting for user]\n"
+    )).toBe(false);
+  });
+
+  it("rejects Elastic Endpoint install tests that still need macOS approvals", () => {
+    expect(elasticEndpointInstallTestPassed("all required permissions are enabled"))
+      .toBe(true);
+    expect(elasticEndpointInstallTestPassed("Enable Full Disk Access to continue"))
+      .toBe(false);
+    expect(elasticEndpointInstallTestPassed("Approve the network content filter"))
+      .toBe(false);
   });
 
   it("quotes remote commands and parses Tart inventories", () => {

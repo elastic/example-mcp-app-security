@@ -105,6 +105,21 @@ export type ElasticAgentPlan = NonNullable<
   AtomicPlan["instrumentation"]
 >["elastic_agent"];
 
+export type ElasticEndpointReadiness = {
+  readonly ok: boolean;
+  readonly agent_healthy: boolean;
+  readonly system_extension_active_enabled: boolean;
+  readonly endpoint_install_test_passed: boolean;
+  readonly system_extension: Pick<
+    ProcessResult,
+    "exitCode" | "timedOut" | "stdout" | "stderr"
+  >;
+  readonly endpoint_install_test: Pick<
+    ProcessResult,
+    "exitCode" | "timedOut" | "stdout" | "stderr"
+  >;
+};
+
 export function elasticAgentArtifact(version: string, machine: string): {
   architecture: "x86_64" | "arm64";
   filename: string;
@@ -132,6 +147,7 @@ export async function installAndVerifyElasticAgent(
   ok: boolean;
   installation: Record<string, unknown>;
   status: Pick<ProcessResult, "exitCode" | "timedOut" | "stdout" | "stderr">;
+  endpoint_readiness?: ElasticEndpointReadiness;
 }> {
   const install = await runOnTarget(
     scope,
@@ -164,17 +180,80 @@ export async function installAndVerifyElasticAgent(
 
   const deadline = Date.now() + plan.health_timeout_seconds * 1_000;
   let status = await agentStatus(scope);
-  while (!isElasticAgentHealthy(status) && Date.now() < deadline) {
+  let endpointReadiness = await getElasticEndpointReadiness(scope, status);
+  while (!endpointReadiness.ok && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 5_000));
     status = await agentStatus(scope);
+    endpointReadiness = await getElasticEndpointReadiness(scope, status);
   }
-  return { ok: isElasticAgentHealthy(status), installation, status };
+  return {
+    ok: endpointReadiness.ok,
+    installation,
+    status,
+    endpoint_readiness: endpointReadiness,
+  };
 }
 
 export async function getElasticAgentStatus(
   scope: AtomicPlan["scope"]
 ): Promise<Pick<ProcessResult, "exitCode" | "timedOut" | "stdout" | "stderr">> {
   return agentStatus(scope);
+}
+
+export async function getElasticEndpointReadiness(
+  scope: AtomicPlan["scope"],
+  status?: Pick<ProcessResult, "exitCode" | "timedOut" | "stdout" | "stderr">
+): Promise<ElasticEndpointReadiness> {
+  const agentStatusResult = status ?? (await agentStatus(scope));
+  const [systemExtension, endpointInstallTest] = await Promise.all([
+    runOnTarget(scope, ["sudo", "systemextensionsctl", "list"], 30_000),
+    runOnTarget(
+      scope,
+      [
+        "sudo",
+        "/Library/Elastic/Endpoint/elastic-endpoint",
+        "test",
+        "install",
+      ],
+      60_000
+    ),
+  ]);
+  const systemExtensionStatus = pickStatus(systemExtension);
+  const endpointInstallTestStatus = pickStatus(endpointInstallTest);
+  const agentHealthy = isElasticAgentHealthy(agentStatusResult);
+  const systemExtensionActiveEnabled =
+    systemExtension.exitCode === 0 &&
+    !systemExtension.timedOut &&
+    isElasticSystemExtensionActiveAndEnabled(systemExtension.stdout);
+  const endpointInstallTestPassed =
+    endpointInstallTest.exitCode === 0 &&
+    !endpointInstallTest.timedOut &&
+    elasticEndpointInstallTestPassed(
+      `${endpointInstallTest.stdout}\n${endpointInstallTest.stderr}`
+    );
+  return {
+    ok: agentHealthy && systemExtensionActiveEnabled && endpointInstallTestPassed,
+    agent_healthy: agentHealthy,
+    system_extension_active_enabled: systemExtensionActiveEnabled,
+    endpoint_install_test_passed: endpointInstallTestPassed,
+    system_extension: systemExtensionStatus,
+    endpoint_install_test: endpointInstallTestStatus,
+  };
+}
+
+export function isElasticSystemExtensionActiveAndEnabled(output: string): boolean {
+  const row = output
+    .split(/\r?\n/)
+    .find((line) => line.includes("co.elastic.systemextension"));
+  if (!row) return false;
+  const columns = row.split("\t");
+  return columns[0]?.trim() === "*" && columns[1]?.trim() === "*";
+}
+
+export function elasticEndpointInstallTestPassed(output: string): boolean {
+  return !/(?:enable|grant).*Full Disk Access|Full Disk Access.*(?:required|missing|disabled)|(?:approve|allow).*content filter|Connect Kernel has failed/i.test(
+    output
+  );
 }
 
 function parseInstallerResult(stdout: string): Record<string, unknown> {

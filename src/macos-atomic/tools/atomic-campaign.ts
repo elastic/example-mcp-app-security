@@ -741,6 +741,9 @@ export function createAtomicCampaignStore(
       const isPublishedNotApplicable =
         loaded.state.phase === "completed_with_findings" &&
         loaded.state.coverage_outcome === "not_applicable";
+      const isPublishedNoTelemetry =
+        loaded.state.phase === "completed_with_findings" &&
+        loaded.state.coverage_outcome === "no_telem";
       const isCleanPreExecutionBlock =
         loaded.state.phase === "blocked" &&
         loaded.state.coverage_outcome === "pending" &&
@@ -758,15 +761,17 @@ export function createAtomicCampaignStore(
         );
       if (
         !isPublishedNotApplicable &&
+        !isPublishedNoTelemetry &&
         !isCleanPreExecutionBlock &&
         !isCleanCompatibilityBlock
       ) {
         throw new Error(
-          "Only a published not_applicable finding or a clean blocked compatibility attempt can be requeued"
+          "Only a published not_applicable/no_telemetry finding or a clean blocked compatibility attempt can be requeued"
         );
       }
       if (
-        (isPublishedNotApplicable && loaded.state.residual_count !== 0) ||
+        ((isPublishedNotApplicable || isPublishedNoTelemetry) &&
+          loaded.state.residual_count !== 0) ||
         loaded.resources.some((resource) => !resource.cleaned)
       ) {
         throw new Error("Finish cleanup with zero residuals before requeueing the finding");

@@ -9,6 +9,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
   getElasticAgentStatus,
+  getElasticEndpointReadiness,
   installAndVerifyElasticAgent,
   isElasticAgentHealthy,
 } from "../execution/elastic-agent.js";
@@ -129,8 +130,11 @@ export function registerMacosAtomicTargetTool(
             return textResult({ error: "The approved plan has no Elastic Agent instrumentation" }, true);
           }
           const status = await getElasticAgentStatus(plan.scope);
-          const ok = isElasticAgentHealthy(status);
-          return textResult({ ok, status }, !ok);
+          const endpointReadiness = await getElasticEndpointReadiness(plan.scope, status);
+          return textResult(
+            { ok: endpointReadiness.ok, status, endpoint_readiness: endpointReadiness },
+            !endpointReadiness.ok
+          );
         }
         if (parsed.action === "register") {
           store.assertPhase(parsed.run_id, ["provisioning"]);
@@ -370,7 +374,13 @@ async function registerTarget(
       status = await getElasticAgentStatus(plan.scope);
     }
     if (!isElasticAgentHealthy(status)) throw new Error("Elastic Agent is not healthy");
-    instrumentation = instrumentation ?? status;
+    const endpointReadiness = await getElasticEndpointReadiness(plan.scope, status);
+    if (!endpointReadiness.ok) {
+      throw new Error(
+        "Elastic Endpoint is not telemetry-ready; require an active and enabled co.elastic.systemextension plus successful Full Disk Access and network-filter install checks"
+      );
+    }
+    instrumentation = instrumentation ?? { status, endpoint_readiness: endpointReadiness };
   }
 
   const snapshot = store.recordResource(runId, {
