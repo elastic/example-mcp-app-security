@@ -336,7 +336,10 @@ function classifyRisk(input: {
   }
   if (/\b(kextload|kmutil|kernel extension|system extension|dtrace|bpftrace|sysctl)\b/.test(text)) flags.add("kernel");
   if (/\b(osascript|open\s+-a|system events|gui|desktop|finder|safari)\b/.test(text)) flags.add("gui");
-  if (/\b(tccutil|full disk access|privacy & security|accessibility)\b/.test(text)) flags.add("tcc");
+  if (
+    /\b(tccutil|full disk access|privacy & security|accessibility)\b/.test(text) ||
+    (/\bosascript\b/.test(text) && /\b(tell application|system events|finder)\b/.test(text))
+  ) flags.add("tcc");
   if (/\b(csrutil|system integrity protection|authenticated-root)\b/.test(text)) flags.add("sip");
   if (/\b(ioreg|nvram|firmware|secure enclave|touch id)\b/.test(text)) flags.add("real_hardware");
   if (/\b(terraform|kubectl|kubernetes|docker|podman|containerd)\b/.test(text)) flags.add("special_runtime");

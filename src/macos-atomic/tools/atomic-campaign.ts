@@ -121,6 +121,8 @@ type BatchApproval = {
     readonly allow_reboot_only_for_reboot_lane: true;
     readonly allow_destructive_only_for_high_risk_lane: true;
     readonly allow_external_only_for_external_target_lane: true;
+    readonly allow_tcc_only_for_tcc_lane: true;
+    readonly allow_sip_only_for_sip_lane: true;
   };
 };
 
@@ -549,6 +551,8 @@ export function createAtomicCampaignStore(
           allow_reboot_only_for_reboot_lane: true as const,
           allow_destructive_only_for_high_risk_lane: true as const,
           allow_external_only_for_external_target_lane: true as const,
+          allow_tcc_only_for_tcc_lane: true as const,
+          allow_sip_only_for_sip_lane: true as const,
         },
       };
       const digest = sha256(payload);
@@ -1021,7 +1025,12 @@ function routeTest(test: MacosAtomicTest): CampaignRoute {
 
 function approvalLane(test: MacosAtomicTest): ApprovalLane {
   if (test.risk_flags.includes("external_target")) return "external_target";
-  if (test.risk_flags.includes("destructive") || test.risk_flags.includes("reboot")) {
+  if (
+    test.risk_flags.includes("destructive") ||
+    test.risk_flags.includes("reboot") ||
+    test.risk_flags.includes("tcc") ||
+    test.risk_flags.includes("sip")
+  ) {
     return "high_risk";
   }
   if (test.manual) return "operator";
@@ -1126,6 +1135,18 @@ function assertBatchApprovedPlan(
     entries.some((entry) => entry.approval_lane !== "external_target")
   ) {
     throw new Error("Run requests external-target authority outside an external-target lane");
+  }
+  if (
+    plan.controls.allow_tcc_changes &&
+    entries.some((entry) => !entry.risk_flags.includes("tcc"))
+  ) {
+    throw new Error("Run requests TCC authority outside a TCC campaign lane");
+  }
+  if (
+    plan.controls.allow_sip_changes &&
+    entries.some((entry) => !entry.risk_flags.includes("sip"))
+  ) {
+    throw new Error("Run requests SIP authority outside a SIP campaign lane");
   }
   if ((plan.setup_steps?.length ?? 0) > 0 && plan.controls.allow_setup_commands !== true) {
     throw new Error("Digest-bound setup steps require allow_setup_commands");

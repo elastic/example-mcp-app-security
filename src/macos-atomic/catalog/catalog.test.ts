@@ -43,16 +43,26 @@ atomic_tests:
     executor:
       name: sh
       command: id
+  - name: AppleScript Finder access
+    auto_generated_guid: 33333333-3333-4333-8333-333333333333
+    supported_platforms: [macos]
+    executor:
+      name: sh
+      command: osascript -e 'tell application "Finder" to get name of startup disk'
 `,
       "utf8"
     );
 
     const catalog = loadMacosCatalog(root);
-    expect(catalog.tests).toHaveLength(1);
+    expect(catalog.tests).toHaveLength(2);
     expect(catalog.tests[0]).toMatchObject({
       target_platform: "macos",
       preferred_architecture: "x86_64",
       executor: "sh",
+    });
+    expect(catalog.tests[1]).toMatchObject({
+      test_guid: "33333333-3333-4333-8333-333333333333",
+      risk_flags: expect.arrayContaining(["gui", "tcc"]),
     });
     expect(catalog.catalog_digest).toMatch(/^[0-9a-f]{64}$/);
     expect(listTestAssets(catalog, catalog.tests[0]!.test_guid)).toEqual([
