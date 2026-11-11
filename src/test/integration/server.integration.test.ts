@@ -136,6 +136,13 @@ describe("MCP server integration (in-process Client + Server)", () => {
           "list-ai-connectors",
           // analytics
           "report-analytics-event",
+          // macOS Atomic emulation
+          "macos-atomic-run",
+          "macos-atomic-campaign",
+          "macos-atomic-catalog",
+          "macos-atomic-target",
+          "macos-atomic-exec",
+          "macos-atomic-elastic",
         ].sort()
       );
     } finally {

@@ -68,6 +68,8 @@ const READ_ONLY_TOOLS = [
   "get-mapping",
   "get-entity-detail",
   "investigate-entity",
+  // macOS Atomic emulation
+  "macos-atomic-catalog",
 ];
 
 const DESTRUCTIVE_TOOLS = [
@@ -77,6 +79,9 @@ const DESTRUCTIVE_TOOLS = [
   "manage-exceptions",
   "create-rules-for-scenario",
   "cleanup-sample-data",
+  // macOS Atomic emulation
+  "macos-atomic-exec",
+  "macos-atomic-target",
 ];
 
 /** Spec default when `_meta.ui.visibility` is omitted. */
